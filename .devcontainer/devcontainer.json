@@ -1,6 +1,6 @@
 {
   "name": "Family Meal Planner",
-  "image": "mcr.microsoft.com/devcontainers/typescript-node:1-24-bookworm",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:24-bookworm",
   "features": {
     "ghcr.io/devcontainers/features/github-cli:1": {}
   },
@@ -11,7 +11,7 @@
       "onAutoForward": "openPreview"
     }
   },
-  "postCreateCommand": "corepack enable && pnpm install --frozen-lockfile && pnpm exec playwright install --with-deps chromium",
+  "postCreateCommand": "sudo corepack enable && pnpm install --frozen-lockfile && pnpm exec playwright install --with-deps chromium",
   "customizations": {
     "vscode": {
       "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode"],

@@ -8,6 +8,7 @@ export default tseslint.config(
   {
     ignores: [
       'dist',
+      '.pnpm-store',
       'coverage',
       'playwright-report',
       'test-results',

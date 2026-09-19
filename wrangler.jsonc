@@ -31,14 +31,14 @@
       "d1_databases": [
         {
           "binding": "DB",
-          "database_name": "family-meal-planner-development",
-          "database_id": "REPLACE_WITH_DEVELOPMENT_D1_DATABASE_ID",
+          "database_name": "family-meal-planner-dev-d1",
+          "database_id": "5f5e98ba-7b27-4fcf-8c2b-ab1605461082",
         },
       ],
       "r2_buckets": [
         {
           "binding": "UPLOADS",
-          "bucket_name": "family-meal-planner-development",
+          "bucket_name": "family-meal-planner-dev-uploads-r2",
         },
       ],
     },
@@ -48,14 +48,14 @@
       "d1_databases": [
         {
           "binding": "DB",
-          "database_name": "family-meal-planner-production",
-          "database_id": "REPLACE_WITH_PRODUCTION_D1_DATABASE_ID",
+          "database_name": "family-meal-planner-prod-d1",
+          "database_id": "d944b652-580f-437e-b7ce-21818525c46c",
         },
       ],
       "r2_buckets": [
         {
           "binding": "UPLOADS",
-          "bucket_name": "family-meal-planner-production",
+          "bucket_name": "family-meal-planner-prod-uploads-r2",
         },
       ],
     },
