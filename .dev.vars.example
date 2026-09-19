@@ -1,0 +1,2 @@
+# Copy to .dev.vars for local Worker secrets when a future feature needs them.
+# Never commit .dev.vars. Phase 0 requires no secrets.

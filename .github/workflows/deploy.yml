@@ -1,0 +1,97 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Cloudflare environment to deploy
+        type: choice
+        required: true
+        options:
+          - development
+          - production
+      production_confirmation:
+        description: Type DEPLOY_PRODUCTION when selecting production
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  validate-production-intent:
+    name: Validate production intent
+    if: inputs.environment == 'production'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require explicit confirmation
+        env:
+          CONFIRMATION: ${{ inputs.production_confirmation }}
+        run: test "$CONFIRMATION" = "DEPLOY_PRODUCTION"
+
+  deploy-development:
+    name: Deploy development
+    if: inputs.environment == 'development'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: development
+    env:
+      CI: true
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+          run_install: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm run setup
+      - run: ./scripts/verify.sh
+      - name: Build development configuration
+        run: pnpm build
+        env:
+          CLOUDFLARE_ENV: development
+      - name: Deploy development
+        run: pnpm wrangler deploy
+        env:
+          CLOUDFLARE_ENV: development
+
+  deploy-production:
+    name: Deploy production
+    if: inputs.environment == 'production'
+    needs: validate-production-intent
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    env:
+      CI: true
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+          run_install: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm run setup
+      - run: ./scripts/verify.sh
+      - name: Build production configuration
+        run: pnpm build
+        env:
+          CLOUDFLARE_ENV: production
+      - name: Deploy production
+        run: pnpm wrangler deploy
+        env:
+          CLOUDFLARE_ENV: production
