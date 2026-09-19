@@ -6,6 +6,9 @@
 - [ENVIRONMENTS.md](./ENVIRONMENTS.md): local, development, and production setup.
 - [CI_CD.md](./CI_CD.md): quality gates and deployment controls.
 - [SECURITY.md](./SECURITY.md): threat model and operating rules.
+- [FEATURE_LIFECYCLE.md](./FEATURE_LIFECYCLE.md): feature discovery, design,
+  implementation, verification, release, and change workflow.
+- [features/](./features/): living feature designs and acceptance traceability.
 - [DECISIONS/](./DECISIONS/): durable architecture decisions and their rationale.
 
 Documentation is part of the implementation. Update the relevant document in the
