@@ -1,6 +1,7 @@
 dist
 node_modules
 .pnpm-store
+.devcontainer/devcontainer-lock.json
 coverage
 playwright-report
 test-results
