@@ -13,8 +13,8 @@ pnpm lint
 echo "Type checking"
 pnpm typecheck
 
-echo "Running unit and Worker tests"
-pnpm test
+echo "Running unit and Worker tests with coverage"
+pnpm test:coverage
 
 echo "Building"
 pnpm build

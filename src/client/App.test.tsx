@@ -38,4 +38,23 @@ describe('App', () => {
       await screen.findByText('Kitchen service is unavailable'),
     ).toBeInTheDocument();
   });
+
+  it('aborts an in-flight health check when unmounted', () => {
+    const fetchMock = vi.fn(
+      (_input: RequestInfo | URL, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            reject(new DOMException('aborted', 'AbortError'));
+          });
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { unmount } = render(<App />);
+    const signal = fetchMock.mock.calls[0]?.[1]?.signal;
+
+    unmount();
+
+    expect(signal?.aborted).toBe(true);
+  });
 });
