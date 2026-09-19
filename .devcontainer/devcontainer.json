@@ -11,7 +11,7 @@
       "onAutoForward": "openPreview"
     }
   },
-  "postCreateCommand": "sudo corepack enable && pnpm install --frozen-lockfile && pnpm exec playwright install --with-deps chromium",
+  "postCreateCommand": "sudo corepack enable && pnpm run setup",
   "customizations": {
     "vscode": {
       "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode"],

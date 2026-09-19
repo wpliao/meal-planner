@@ -13,9 +13,12 @@ D1, and R2 for each named environment. This makes accidental sharing visible.
 
 ## Local
 
-Use the Dev Container or Node 24 and pnpm 10. Run `pnpm install`, optionally copy
-`.dev.vars.example` to `.dev.vars`, then run `pnpm dev`. Phase 0 needs no secrets.
-Local D1/R2 state is stored under ignored `.wrangler/` paths.
+Use the Dev Container or Node 24 and pnpm 10. Dev Containers and GitHub
+Codespaces run `pnpm run setup` automatically during creation. For a native setup,
+run `pnpm run setup` yourself. This installs the locked packages and the Chromium
+binary required by Playwright. Optionally copy `.dev.vars.example` to
+`.dev.vars`, then run `pnpm dev`. Phase 0 needs no secrets. Local D1/R2 state is
+stored under ignored `.wrangler/` paths.
 
 ## One-time Cloudflare setup
 

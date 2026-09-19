@@ -38,11 +38,8 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Install Chromium
-        run: pnpm exec playwright install --with-deps chromium
+      - name: Set up repository dependencies
+        run: pnpm run setup
 
       - name: Run repository verification
         run: ./scripts/verify.sh

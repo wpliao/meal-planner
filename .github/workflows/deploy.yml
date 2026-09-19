@@ -53,8 +53,7 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm run setup
       - run: ./scripts/verify.sh
       - name: Build development configuration
         run: pnpm build
@@ -86,8 +85,7 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm run setup
       - run: ./scripts/verify.sh
       - name: Build production configuration
         run: pnpm build

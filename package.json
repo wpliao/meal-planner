@@ -16,6 +16,8 @@
     "format:check": "prettier --check .",
     "lint": "eslint . --max-warnings 0",
     "preview": "vite preview --host 0.0.0.0",
+    "setup": "CI=true pnpm install --frozen-lockfile && pnpm run setup:browsers",
+    "setup:browsers": "playwright install --with-deps chromium",
     "test": "pnpm test:unit && pnpm test:worker",
     "test:coverage": "pnpm test:coverage:unit && pnpm test:coverage:worker",
     "test:coverage:unit": "vitest run --config vitest.config.ts --coverage",

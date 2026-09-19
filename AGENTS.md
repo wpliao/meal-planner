@@ -49,7 +49,8 @@ scripts/              Cross-environment repository scripts
 
 Use pnpm only. Do not hand-edit `pnpm-lock.yaml`.
 
-- `pnpm install --frozen-lockfile`: reproducible dependency installation.
+- `pnpm run setup`: reproducible dependency and Playwright Chromium installation.
+- `pnpm install --frozen-lockfile`: install locked JavaScript dependencies only.
 - `pnpm dev`: full local Vite + Worker development server.
 - `pnpm build`: production build.
 - `pnpm lint` / `pnpm format:check` / `pnpm typecheck`: static checks.
