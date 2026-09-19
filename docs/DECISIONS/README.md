@@ -7,3 +7,4 @@ decisions.
 
 - [0001 — Integrated React and Worker deployment](./0001-integrated-worker-and-client.md)
 - [0002 — Explicit environment isolation](./0002-environment-isolation.md)
+- [0003 — Repository-centered feature traceability](./0003-feature-traceability.md)

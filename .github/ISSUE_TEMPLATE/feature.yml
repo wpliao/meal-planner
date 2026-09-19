@@ -1,0 +1,71 @@
+name: Feature
+description: Propose a user-facing feature for the staged product roadmap
+title: '[Feature] '
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This issue is the canonical statement of feature intent. After it is accepted, add a design document under `docs/features/` before implementation begins.
+  - type: dropdown
+    id: phase
+    attributes:
+      label: Phase
+      options:
+        - Unscheduled — roadmap review required
+        - Phase 1 — trusted family boundary
+        - Phase 2 — pantry
+        - Phase 3 — recipes
+        - Phase 4 — meal planning
+        - Phase 5 — suggestions
+        - Phase 6 — nutrition
+        - Phase 7 — AI assistance
+        - Phase 8 — photo ingestion
+        - Phase 9 — PWA and operations
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and desired outcome
+      description: Describe the user problem and observable outcome, not an implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: scenarios
+    attributes:
+      label: Primary user scenarios
+      description: Describe who acts, the context, and the expected result.
+    validations:
+      required: true
+  - type: textarea
+    id: criteria
+    attributes:
+      label: Initial acceptance criteria
+      description: Use stable identifiers such as AC-01 and describe observable behavior.
+      placeholder: |
+        - AC-01: ...
+        - AC-02: ...
+    validations:
+      required: true
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Non-goals
+      description: State what this feature deliberately will not do.
+    validations:
+      required: true
+  - type: textarea
+    id: risks
+    attributes:
+      label: Security, privacy, data, and operational considerations
+      description: Identify sensitive data, authorization, migrations, external services, cost, retention, or failure risks.
+    validations:
+      required: true
+  - type: input
+    id: design
+    attributes:
+      label: Feature design document
+      description: Add the repository path or PR after creating the design document. Use Pending until then.
+      value: Pending
+    validations:
+      required: true

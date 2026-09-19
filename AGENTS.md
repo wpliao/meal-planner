@@ -8,9 +8,9 @@ documents, and available CI and Sonar results.
 ## Product and scope
 
 This is a private family meal-planning web application. The product direction is
-in `docs/PRODUCT.md`. Phase 0 is infrastructure only. Do not add pantry, recipe,
-nutrition, image analysis, AI, or meal-planning features unless a later issue
-explicitly asks for them.
+in `docs/PRODUCT.md`. Phase 0 is complete. Do not add pantry, recipe, nutrition,
+image analysis, AI, or meal-planning features unless an accepted feature issue
+and its design document explicitly ask for them.
 
 ## Architecture
 
@@ -39,11 +39,34 @@ src/shared/           Runtime-neutral contracts shared by client and Worker
 src/worker/           Cloudflare Worker entry point and API code
 tests/e2e/            Playwright browser tests
 docs/                 Product and engineering documentation
+docs/features/        Versioned feature designs and traceability records
 migrations/           Ordered, immutable D1 migrations
 scripts/              Cross-environment repository scripts
 .github/workflows/    CI and manually gated deployments
 .devcontainer/        Reproducible development environment
 ```
+
+## Feature lifecycle and traceability
+
+Follow `docs/FEATURE_LIFECYCLE.md` for every product feature. The GitHub issue is
+the canonical statement of intent; its versioned design lives in
+`docs/features/<issue-number>-<slug>.md`. Do not begin feature implementation
+until both exist and the design status is `Accepted`.
+
+- Give every acceptance criterion a stable identifier such as `AC-01`. Do not
+  silently renumber or delete accepted criteria; mark changed criteria and record
+  the reason.
+- Keep the feature document's traceability table current. Map each criterion to
+  implementation files or named symbols, exact automated test files and test
+  names, and release evidence when available.
+- Update the design document in the same pull request whenever behavior or design
+  changes. Append the change to its decision log. Add or supersede an ADR when a
+  change affects durable architecture across features.
+- Link the issue, design document, pull request, migrations, CI/Sonar results,
+  development validation, and production release so a successor can reconstruct
+  the feature without conversation history.
+- Bugs, dependency updates, and repository maintenance may use a lighter issue or
+  pull request record when no product behavior or durable design changes.
 
 ## Development commands
 
@@ -115,8 +138,10 @@ security issue.
 Work is done only when implementation, tests, documentation, migrations, and
 tooling are consistent; `./scripts/verify.sh` passes; the PR CI and enabled Sonar
 Quality Gate pass; security review has no unresolved high-severity finding; and
-the PR explains manual configuration or deployment steps. A local pass does not
-substitute for required remote gates.
+the PR explains manual configuration or deployment steps. For a product feature,
+all acceptance criteria must also be mapped to implementation and passing tests
+in its feature document, and the decision and release logs must be current. A
+local pass does not substitute for required remote gates.
 
 ## Agent handoff
 
