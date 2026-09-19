@@ -1,0 +1,360 @@
+# Feature: Trusted family boundary
+
+- Status: Designing
+- Phase: 1
+- Issue: [#7](https://github.com/wpliao/meal-planner/issues/7)
+- Product owner: Repository owner
+- Last updated: 2026-09-19
+- Pull requests: Pending
+
+## Problem and outcome
+
+Cloudflare Access protects the deployed hostnames, but the Worker does not yet
+validate the signed Access assertion or decide whether an authenticated person
+belongs to the family. Adding product data before that boundary exists would
+make authorization depend entirely on external policy configuration.
+
+Phase 1 establishes a small application identity and household-membership
+boundary. A person must pass both layers before any future household data is
+returned:
+
+1. Cloudflare Access authenticates the person and applies the perimeter policy.
+2. The Worker validates the signed application token and requires an active D1
+   membership with the necessary role.
+
+Later pantry, recipe, and planning features receive a trusted application member
+context and do not read Cloudflare headers directly.
+
+## User scenarios
+
+1. Given an active family member who passed Cloudflare Access, when they open the
+   application, then they see their family space and current role.
+2. Given the household owner, when they add a verified email, then that person
+   can become active on their first valid Access-authenticated visit.
+3. Given a revoked family member, when they make their next protected request,
+   then the application denies access even if their Access session remains valid.
+4. Given an authenticated person who was not added to the household, when they
+   reach a protected API, then they receive no household data.
+5. Given a local contributor or CI run, when the application is tested, then a
+   deterministic local identity adapter works without Cloudflare or another
+   remote service.
+
+## Scope
+
+- Included: Access JWT verification for protected APIs; one household per member;
+  first-owner bootstrap; owner/member roles; member list, add, role change,
+  revoke, reactivate, and deletion; minimal session UI; D1 migration; environment
+  configuration and deployment guidance.
+- Not included: public registration, passwords, invitation email delivery,
+  multiple households per person, granular permissions, pantry, recipes,
+  preferences, meal plans, nutrition, uploads, or AI.
+- Cloudflare Access policy membership remains a separate perimeter control. An
+  application invitation does not alter the Access policy or send a message.
+
+## Acceptance criteria
+
+Identifiers are stable after the design is accepted. Changed or superseded
+criteria remain in this document and are explained in the decision log.
+
+- [ ] `AC-01`: Every non-health product API rejects a missing, invalid, expired,
+      wrong-issuer, wrong-audience, or non-user Cloudflare Access application token.
+- [ ] `AC-02`: A valid Access identity must map to exactly one active household
+      membership before a protected API returns household data.
+- [ ] `AC-03`: An active member can retrieve a minimal session containing their
+      application member ID, verified email, role, and household ID/name; it contains
+      no token or unnecessary Access claims.
+- [ ] `AC-04`: The initial owner can be created only while the installation is
+      empty and only when the verified Access email matches the environment-scoped
+      bootstrap secret.
+- [ ] `AC-05`: An owner can list, add, change the role of, revoke, reactivate, and
+      delete eligible household members; a regular member cannot, and an operation
+      cannot leave the household without an active owner.
+- [ ] `AC-06`: Revocation takes effect on the next protected API request and does
+      not depend on the Cloudflare Access session expiring.
+- [ ] `AC-07`: The responsive client presents accessible loading, setup,
+      signed-in, unauthorized, validation, empty, success, and failure states.
+- [ ] `AC-08`: Identity assertions, tokens, secrets, and member email addresses
+      are excluded from application logs; persistence uses prepared,
+      household-scoped D1 statements.
+- [ ] `AC-09`: Local and automated tests cover token validation, household
+      isolation, role authorization, bootstrap safety, revocation, migrations, and
+      the primary owner/member browser journeys without remote services.
+- [ ] `AC-10`: Development and production use distinct audience settings,
+      bootstrap secrets, D1 data, and explicitly tested migration/deployment steps.
+
+## Experience design
+
+### Application entry
+
+The client requests `GET /api/session` on startup and renders one of these states:
+
+- `loading`: a semantic status announces that the family space is being checked.
+- `setup-required`: shown only to the matching bootstrap owner when the
+  installation is empty; a button creates the family space after confirmation.
+- `ready`: shows the household name, verified email, and role. Owners also see
+  member administration.
+- `not-a-member`: explains that Access authentication succeeded but the identity
+  has not been added to this family. It reveals no membership information.
+- `unavailable`: provides a retry action without exposing token or configuration
+  details.
+
+Cloudflare handles its own login and logout experience. The application does not
+store a browser token or implement a password form.
+
+### Member administration
+
+Owners see a compact member table and an add-member form:
+
+- Adding a normalized email creates an `invited` membership. It does not send an
+  email or change the Access policy.
+- The first valid Access request with the matching verified email binds the
+  Access subject and activates the membership.
+- Revoking an active member immediately blocks their next protected request.
+- Reactivation retains the bound subject; deleting is permitted only for invited
+  or revoked members and permanently removes their stored email and subject.
+- Owners may promote an active member or demote an owner only if at least one
+  other active owner remains. The same invariant applies to revocation.
+
+Forms use explicit labels and inline error summaries. Status is conveyed in text,
+not color alone. Keyboard focus moves to the result message after a mutation, and
+destructive actions require a confirmation dialog with a clear member label.
+Desktop and narrow mobile layouts expose the same actions in the same reading
+order.
+
+## Technical design
+
+### Boundaries and contracts
+
+`src/worker/auth/` owns identity verification. Cloudflare-specific headers and
+claims must not escape this boundary. It returns this internal shape after token
+validation:
+
+```ts
+interface VerifiedIdentity {
+  subject: string;
+  email: string;
+}
+```
+
+For development and production, the adapter reads
+`Cf-Access-Jwt-Assertion`, verifies `RS256` signature and time claims against the
+team's remote JWKS, and checks the exact issuer, environment-specific audience,
+`type: "app"`, non-empty `sub`, and a syntactically valid email. Service tokens
+are not user identities. The implementation should use `jose` and a module-level
+remote JWKS cache so signing-key rotation is handled without hard-coded keys.
+
+The top-level local environment uses a deterministic local adapter selected only
+when `APP_ENV === "local"`. It never accepts a caller-supplied production identity
+header. Worker tests inject identity fixtures at the adapter boundary. Named
+development and production environments explicitly set non-local `APP_ENV`
+values, preventing the local adapter from being deployed accidentally.
+
+The authorization service converts `VerifiedIdentity` into:
+
+```ts
+interface MemberContext {
+  memberId: string;
+  householdId: string;
+  householdName: string;
+  email: string;
+  role: 'owner' | 'member';
+}
+```
+
+All later domain services accept `MemberContext` or its `householdId`; they do
+not accept an email or request headers as authorization evidence.
+
+Shared JSON contracts and stable error codes live in `src/shared/api.ts` or
+focused files under `src/shared/`. Expected endpoints are:
+
+| Method   | Route                              | Authorization                              | Purpose                                       |
+| -------- | ---------------------------------- | ------------------------------------------ | --------------------------------------------- |
+| `GET`    | `/api/health`                      | None in Worker                             | Existing non-sensitive liveness check         |
+| `GET`    | `/api/session`                     | Valid identity; membership optional        | Return ready, setup-required, or not-a-member |
+| `POST`   | `/api/bootstrap`                   | Matching bootstrap identity; empty install | Atomically create household and first owner   |
+| `GET`    | `/api/household/members`           | Owner                                      | List this household's members                 |
+| `POST`   | `/api/household/members`           | Owner                                      | Add or re-invite a normalized email           |
+| `PATCH`  | `/api/household/members/:memberId` | Owner                                      | Change an eligible member's role or status    |
+| `DELETE` | `/api/household/members/:memberId` | Owner                                      | Delete invited or revoked membership data     |
+
+Unknown APIs remain JSON `404` responses. Validation failures use `400`, missing
+or invalid identity uses `401`, insufficient membership or role uses `403`, and
+state/invariant conflicts use `409`. Configuration or JWKS availability failures
+fail closed with a generic `503`. Responses remain cache-disabled and do not
+include raw verification errors.
+
+### Data and migrations
+
+Migration `0001_create_household_identity.sql` will create:
+
+- `households`: opaque ID, display name, and creation/update timestamps.
+- `household_members`: opaque ID, household ID, normalized verified email,
+  nullable Access subject, role (`owner` or `member`), status (`invited`,
+  `active`, or `revoked`), and lifecycle timestamps.
+- `app_installation`: a single row pointing to the bootstrapped household. Its
+  primary-key constraint makes bootstrap uniqueness explicit while leaving the
+  household tables structurally testable for isolation.
+
+Foreign keys and check constraints enforce valid roles/statuses. The Access
+subject and normalized email are globally unique in Phase 1, which implements
+one household per identity. Every member operation includes `household_id` in
+its predicate even when a member ID is globally unique.
+
+Bootstrap pre-generates opaque IDs and uses one transactional `D1Database.batch`
+containing household, guarded installation, and owner inserts. A concurrent or
+repeated bootstrap conflicts and rolls back the complete batch. All runtime input
+uses bound prepared statements.
+
+Email normalization trims surrounding whitespace and applies Unicode-compatible
+lowercasing. It does not remove dots, plus-address tags, or otherwise rewrite
+provider-specific addresses. The verified email from the Access token must match
+an invitation after this normalization. Once activated, the Access `sub` is the
+primary lookup key; Cloudflare documents it as unique to an email per Zero Trust
+account, while noting it changes if a user is removed and re-added.
+
+Member identity data is retained while the membership exists. Owners may delete
+invited or revoked memberships, which removes the stored email and subject. An
+active membership must first be revoked. Phase 1 stores no product activity or
+audit event containing the email, so member deletion is complete for application
+data. Decommissioning the only household remains an operational D1 deletion;
+later product-data features must design household deletion and ownership transfer
+before adding dependent records.
+
+### Security and privacy
+
+- Treat `Cf-Access-Authenticated-User-Email` as untrusted; it is not an
+  authorization source. Verify the signed assertion and use its validated claims.
+- Verify exact issuer and audience per environment. Development and production
+  Access applications have different audience tags.
+- Declare `CF_ACCESS_AUD` and `BOOTSTRAP_OWNER_EMAIL` as required encrypted Worker
+  secrets in named environments. Keep the non-secret team-domain URL in repeated
+  environment vars.
+- Return generic authentication errors. Do not log assertions, claims, emails,
+  request bodies, secrets, or remote JWKS response bodies.
+- Validate request content type, size, exact fields, IDs, roles, statuses, and
+  email syntax before persistence. Add restrictive response security headers.
+- Require `application/json` and an `Origin` exactly matching the request origin
+  for every browser mutation. Reject missing or cross-origin browser mutation
+  requests to prevent cookie-backed cross-site request forgery.
+- Re-query membership for every protected request. Do not cache authorization
+  across requests, so revocation is immediate.
+- Owner mutations use both actor household scope and target household scope.
+  Database constraints plus service checks protect the final-owner invariant.
+- JWKS retrieval is the only new runtime network dependency. Verification fails
+  closed if no valid cached signing key is available.
+
+Cloudflare references used by this design:
+
+- [Validate Access JWTs](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/)
+- [Access application-token claims](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/application-token/)
+- [Wrangler secrets and required bindings](https://developers.cloudflare.com/workers/wrangler/configuration/#secrets)
+- [D1 transactional batches](https://developers.cloudflare.com/d1/worker-api/d1-database/#batch)
+
+### Accessibility
+
+- Use headings, lists, tables, forms, buttons, and status/output elements for
+  their native semantics; do not recreate them with ARIA roles.
+- Associate every field with visible instructions and its validation message.
+- Announce async session and mutation results without unexpectedly stealing focus.
+- Keep confirmation dialogs focus-trapped, labelled, dismissible by keyboard, and
+  restored to the invoking control.
+- Meet WCAG AA contrast, visible-focus, zoom/reflow, and reduced-motion behavior.
+- Manually check the primary owner and denied-member journeys with keyboard-only
+  navigation and a screen reader at desktop and mobile widths.
+
+### Reliability and observability
+
+- Remote JWKS keys are cached by the verifier and refreshed for unknown key IDs,
+  supporting Access key rotation. A cold-start fetch failure returns `503` and a
+  retryable UI state rather than bypassing verification.
+- Bootstrap and final-owner changes are transactional and safe to retry. Member
+  add operations return an existing eligible invitation rather than duplicating
+  it; incompatible state returns `409`.
+- Logs may contain a generated request ID, route template, response class,
+  duration, and non-sensitive error code. They must not contain identity or
+  household values.
+- Client mutations disable duplicate submission while pending and reconcile from
+  a fresh server response.
+
+## Test strategy
+
+### Unit and component
+
+- Verify claim-shape validation and email normalization with table-driven cases.
+- Verify client rendering and focus behavior for every session and mutation state.
+- Mock the API boundary; client tests do not construct Access tokens.
+
+### Worker-runtime integration
+
+- Generate ephemeral RSA keys and signed JWT fixtures in tests. Stub only the
+  remote JWKS fetch; do not call Cloudflare.
+- Apply the real migration to a fresh local D1 database for each relevant suite.
+- Exercise missing, malformed, expired, future, wrong-issuer, wrong-audience,
+  service-token, and valid-user assertions.
+- Seed two households directly in isolated tests and prove cross-household actor
+  and target IDs cannot escape the actor's scope.
+- Test bootstrap races/retries, invitation activation, roles, revocation,
+  reactivation, deletion, and final-owner constraints.
+- Test missing and cross-origin mutation origins and unsupported content types.
+
+### Browser/E2E and manual
+
+- Use the local identity adapter and local D1 only.
+- Cover first-owner setup and subsequent ready state on desktop and mobile.
+- Cover owner adding a member and a denied/non-owner management attempt.
+- In development, manually confirm a real Access login, app membership denial,
+  invitation activation, revocation on the next request, keyboard flow, and that
+  logs contain no identity values.
+
+## Traceability
+
+Paths and symbols are planned until implementation begins. Pull requests and
+release evidence will be added as work progresses.
+
+| Criterion | Implementation                                                | Automated tests                                                                                                      | Release evidence |
+| --------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `AC-01`   | `src/worker/auth/access-identity.ts` — `verifyAccessIdentity` | `test/worker/access-identity.test.ts` — token rejection matrix                                                       | Pending          |
+| `AC-02`   | `src/worker/auth/member-context.ts` — `requireMemberContext`  | `test/worker/authorization.test.ts` — “denies identities without an active membership” and household-isolation cases | Pending          |
+| `AC-03`   | `GET /api/session`; shared `SessionResponse`                  | Worker session contract tests; `src/client/App.test.tsx` — ready state                                               | Pending          |
+| `AC-04`   | `POST /api/bootstrap`; migration installation constraint      | `test/worker/bootstrap.test.ts` — empty, mismatch, repeat, and concurrent cases                                      | Pending          |
+| `AC-05`   | household member routes and owner service                     | `test/worker/members.test.ts` — owner/member role matrix and final-owner invariant                                   | Pending          |
+| `AC-06`   | per-request membership lookup                                 | `test/worker/authorization.test.ts` — “denies the next request after revocation”                                     | Pending          |
+| `AC-07`   | `src/client/App.tsx` and focused family components            | client state/focus tests; `tests/e2e/family-boundary.spec.ts`                                                        | Pending          |
+| `AC-08`   | repository/query boundary and safe request logging            | Worker query-scope tests and log-spy negative assertions                                                             | Pending          |
+| `AC-09`   | test fixtures, migration harness, and CI verification         | complete unit, Worker-runtime, migration, and Playwright suites                                                      | Pending          |
+| `AC-10`   | `wrangler.jsonc`, environment docs, and deployment runbook    | config assertions plus development/production checklist                                                              | Pending          |
+
+## Rollout and rollback
+
+1. Add the migration and implementation, then apply the migration to a clean local
+   D1 database and run `./scripts/verify.sh`.
+2. Obtain each Access application's **Application Audience (AUD) tag**; do not
+   confuse it with the Access application ID previously recorded during setup.
+3. Configure distinct `CF_ACCESS_AUD` and `BOOTSTRAP_OWNER_EMAIL` Worker secrets
+   for development. Confirm the Access team-domain variable.
+4. Apply migration `0001` to the development D1 database before deploying code.
+   Wrangler captures a backup before applying migrations.
+5. Deploy development, bootstrap the owner, run the manual acceptance scenarios,
+   and record evidence here.
+6. Repeat secret configuration and migration for production only after explicit
+   approval. Deploy the exact reviewed commit, bootstrap, and verify.
+
+Code rollback redeploys the last known-good Phase 0 revision. The additive schema
+may remain unused; do not edit or reverse the applied migration. Before any
+product data exists, a failed bootstrap can be recovered by restoring the D1
+pre-migration backup or adding a reviewed forward-recovery migration. After
+member data exists, use forward recovery and preserve authorization records until
+the owner explicitly deletes them.
+
+## Decision and change log
+
+| Date       | Change                                                                                                                 | Reason                                                          | Evidence                                                    |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------- |
+| 2026-09-19 | Initial design: verified Access identity plus D1 membership, owner/member administration, and one-time owner bootstrap | Establish defense in depth before accepting family product data | [Issue #7](https://github.com/wpliao/meal-planner/issues/7) |
+
+## Release record
+
+- Development validation: Pending
+- Production release: Pending explicit approval
+- Known follow-up work: Household-data deletion/transfer must be designed with the
+  first feature that stores product data.
