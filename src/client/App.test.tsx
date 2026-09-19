@@ -19,9 +19,9 @@ describe('App', () => {
 
     render(<App />);
 
-    expect(
-      await screen.findByText('Kitchen service ready · test'),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Kitchen service ready · test',
+    );
     expect(
       screen.getByRole('heading', {
         name: 'Good meals start with a simple plan.',
@@ -34,9 +34,9 @@ describe('App', () => {
 
     render(<App />);
 
-    expect(
-      await screen.findByText('Kitchen service is unavailable'),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Kitchen service is unavailable',
+    );
   });
 
   it('aborts an in-flight health check when unmounted', () => {

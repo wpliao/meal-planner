@@ -38,13 +38,13 @@ export function App() {
           The table is being set. Pantry, recipes, and weekly planning will
           arrive in a future phase.
         </p>
-        <div className={`status status--${apiState.kind}`} role="status">
+        <output className={`status status--${apiState.kind}`}>
           <span className="status__dot" aria-hidden="true" />
           {apiState.kind === 'loading' && 'Checking the kitchen service…'}
           {apiState.kind === 'ready' &&
             `Kitchen service ready · ${apiState.environment}`}
           {apiState.kind === 'error' && 'Kitchen service is unavailable'}
-        </div>
+        </output>
       </section>
       <aside className="card" aria-label="Foundation status">
         <p className="card__number">Phase 0</p>
