@@ -1,10 +1,10 @@
 # Feature: Trusted family boundary
 
-- Status: Designing
+- Status: Accepted
 - Phase: 1
 - Issue: [#7](https://github.com/wpliao/meal-planner/issues/7)
 - Product owner: Repository owner
-- Last updated: 2026-09-19
+- Last updated: 2026-09-20
 - Pull requests: [#8 — design](https://github.com/wpliao/meal-planner/pull/8)
 
 ## Problem and outcome
@@ -348,9 +348,10 @@ the owner explicitly deletes them.
 
 ## Decision and change log
 
-| Date       | Change                                                                                                                 | Reason                                                          | Evidence                                                    |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------- |
-| 2026-09-19 | Initial design: verified Access identity plus D1 membership, owner/member administration, and one-time owner bootstrap | Establish defense in depth before accepting family product data | [Issue #7](https://github.com/wpliao/meal-planner/issues/7) |
+| Date       | Change                                                                                                                 | Reason                                                                                                       | Evidence                                                                                   |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| 2026-09-19 | Initial design: verified Access identity plus D1 membership, owner/member administration, and one-time owner bootstrap | Establish defense in depth before accepting family product data                                              | [Issue #7](https://github.com/wpliao/meal-planner/issues/7)                                |
+| 2026-09-20 | Product owner accepted the Phase 1 design and authorized implementation                                                | The proposed experience, security, data, rollout, and test boundaries match the intended first product phase | [Approval record](https://github.com/wpliao/meal-planner/issues/7#issuecomment-5743365523) |
 
 ## Release record
 

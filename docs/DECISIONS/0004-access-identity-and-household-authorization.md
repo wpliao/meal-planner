@@ -1,7 +1,7 @@
 # ADR 0004: Access identity and household authorization
 
-- Status: Proposed
-- Date: 2026-09-19
+- Status: Accepted
+- Date: 2026-09-20
 - Feature: [Trusted family boundary](../features/0007-trusted-family-boundary.md)
 
 ## Context
