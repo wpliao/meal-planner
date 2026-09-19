@@ -21,23 +21,35 @@ plan meals from a phone, tablet, or desktop browser.
 
 ## Phases
 
-### Phase 0 — engineering foundation (current)
+### Phase 0 — engineering foundation (complete)
 
 Establish the client/Worker architecture, environments, tests, documentation,
 security baseline, reproducible development setup, and gated delivery. The only
 application behavior is a placeholder screen and health endpoint.
 
-### Candidate later phases
+### Planned product phases
 
-1. Family access and a minimal structured pantry.
-2. Recipe storage and meal planning.
-3. Preference-aware suggestions and recipe transformations.
-4. Structured nutrition calculation and provenance.
-5. Assisted fridge-photo ingestion with human confirmation.
-6. Carefully bounded multi-provider AI support through AI Gateway.
+1. Trusted family boundary: validate identity, household membership, roles, and
+   authorization before accepting personal product data.
+2. Lightweight pantry: record useful availability and shopping signals without
+   requiring exact consumption tracking.
+3. Recipe library: create and edit household recipes and import an editable copy
+   from an external website while retaining its original link and provenance.
+4. Meal planning: place recipes and flexible meal entries onto a family plan.
+5. Deterministic suggestions: rank explainable options from pantry, recipes,
+   preferences, and recent plans before adding generative behavior.
+6. Structured nutrition: calculate values from authoritative, cited data and
+   explicit quantities rather than model-generated estimates.
+7. Bounded AI assistance: add provider-neutral suggestion or transformation
+   workflows through AI Gateway with human confirmation.
+8. Photo ingestion: propose pantry updates from images and require review before
+   changing structured records.
+9. PWA and operations: add offline behavior only where consistency rules are
+   defined, and mature backup, recovery, retention, and support workflows.
 
-Sequence and scope require product-owner decisions. This list is not permission
-to implement features during Phase 0.
+Each phase requires one or more accepted feature issues and designs. The sequence
+may change through the documented feature lifecycle; this roadmap alone is not
+permission to implement a feature.
 
 ## Out of scope for now
 

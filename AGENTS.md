@@ -68,6 +68,10 @@ until both exist and the design status is `Accepted`.
 - Bugs, dependency updates, and repository maintenance may use a lighter issue or
   pull request record when no product behavior or durable design changes.
 
+When using multiple agents, follow `docs/AGENT_ORCHESTRATION.md`. Coordinate
+shared-worktree stages explicitly, keep overlapping files under one owner, and
+require the root agent to review and integrate every delegated result.
+
 ## Development commands
 
 Use pnpm only. Do not hand-edit `pnpm-lock.yaml`.
