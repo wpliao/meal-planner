@@ -1,0 +1,26 @@
+{
+  "name": "Family Meal Planner",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:1-24-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "forwardPorts": [5173],
+  "portsAttributes": {
+    "5173": {
+      "label": "Meal Planner",
+      "onAutoForward": "openPreview"
+    }
+  },
+  "postCreateCommand": "corepack enable && pnpm install --frozen-lockfile && pnpm exec playwright install --with-deps chromium",
+  "customizations": {
+    "vscode": {
+      "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode"],
+      "settings": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true,
+        "eslint.useFlatConfig": true
+      }
+    }
+  },
+  "remoteUser": "node"
+}

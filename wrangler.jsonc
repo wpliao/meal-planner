@@ -1,0 +1,63 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "family-meal-planner",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "assets": {
+    "not_found_handling": "single-page-application",
+  },
+  "vars": {
+    "APP_ENV": "local",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "family-meal-planner-local",
+      "database_id": "local",
+    },
+  ],
+  "r2_buckets": [
+    {
+      "binding": "UPLOADS",
+      "bucket_name": "family-meal-planner-local",
+    },
+  ],
+  "env": {
+    "development": {
+      "name": "family-meal-planner-development",
+      "vars": { "APP_ENV": "development" },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "family-meal-planner-development",
+          "database_id": "REPLACE_WITH_DEVELOPMENT_D1_DATABASE_ID",
+        },
+      ],
+      "r2_buckets": [
+        {
+          "binding": "UPLOADS",
+          "bucket_name": "family-meal-planner-development",
+        },
+      ],
+    },
+    "production": {
+      "name": "family-meal-planner-production",
+      "vars": { "APP_ENV": "production" },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "family-meal-planner-production",
+          "database_id": "REPLACE_WITH_PRODUCTION_D1_DATABASE_ID",
+        },
+      ],
+      "r2_buckets": [
+        {
+          "binding": "UPLOADS",
+          "bucket_name": "family-meal-planner-production",
+        },
+      ],
+    },
+  },
+}
