@@ -5,7 +5,7 @@
 - Issue: [#7](https://github.com/wpliao/meal-planner/issues/7)
 - Product owner: Repository owner
 - Last updated: 2026-09-20
-- Pull requests: [#8 — design](https://github.com/wpliao/meal-planner/pull/8); [#9 — implementation](https://github.com/wpliao/meal-planner/pull/9); [#10 — bootstrap failure classification and traceability](https://github.com/wpliao/meal-planner/pull/10); [#11 — development validation and initial action discoverability correction](https://github.com/wpliao/meal-planner/pull/11)
+- Pull requests: [#8 — design](https://github.com/wpliao/meal-planner/pull/8); [#9 — implementation](https://github.com/wpliao/meal-planner/pull/9); [#10 — bootstrap failure classification and traceability](https://github.com/wpliao/meal-planner/pull/10); [#11 — development validation and initial action discoverability correction](https://github.com/wpliao/meal-planner/pull/11); [#12 — balanced responsive member layout](https://github.com/wpliao/meal-planner/pull/12)
 
 ## Problem and outcome
 
@@ -452,7 +452,8 @@ the owner explicitly deletes them.
   [#11](https://github.com/wpliao/meal-planner/pull/11) merged on 2026-09-20 as
   `c7af9ca`; CI and the Sonar Quality Gate passed. Owner review then identified
   that the pinned action region overcorrected the original discoverability issue;
-  the balanced desktop and stacked mobile refinement is pending review.
+  the balanced desktop and stacked mobile refinement is under review in
+  [#12](https://github.com/wpliao/meal-planner/pull/12).
 - Development deployment: `V-DEV-01` complete; migration `0001` and the Phase 1
   Worker are deployed with the required values restored as encrypted secrets.
 - Development validation: `V-DEV-02` and `V-DEV-03` partially complete;
