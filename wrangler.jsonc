@@ -5,6 +5,12 @@
   "compatibility_date": "2026-09-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  // The top-level configuration selects the deterministic local identity
+  // adapter (APP_ENV "local"). It exists for local development and tests only,
+  // so it must never be publishable. These are inheritable keys; both named
+  // environments re-enable them explicitly below.
+  "workers_dev": false,
+  "preview_urls": false,
   "assets": {
     "not_found_handling": "single-page-application",
   },
@@ -27,6 +33,7 @@
   "env": {
     "development": {
       "name": "family-meal-planner-development",
+      "workers_dev": true,
       "vars": {
         "APP_ENV": "development",
         "CF_ACCESS_TEAM_DOMAIN": "https://dannyliao.cloudflareaccess.com",
@@ -50,6 +57,7 @@
     },
     "production": {
       "name": "family-meal-planner-production",
+      "workers_dev": true,
       "vars": {
         "APP_ENV": "production",
         "CF_ACCESS_TEAM_DOMAIN": "https://dannyliao.cloudflareaccess.com",

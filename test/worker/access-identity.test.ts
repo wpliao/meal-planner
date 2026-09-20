@@ -10,7 +10,10 @@ import {
 } from 'jose';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { verifyAccessIdentity } from '../../src/worker/auth/access-identity';
+import {
+  getVerifiedIdentity,
+  verifyAccessIdentity,
+} from '../../src/worker/auth/access-identity';
 import { ApiError } from '../../src/worker/errors';
 import { createWorker } from '../../src/worker/index';
 import { applyMigrations, testEnv } from './helpers';
@@ -234,5 +237,51 @@ describe('Cloudflare Access identity verification', () => {
     await expect(response.json()).resolves.toMatchObject({
       error: { code: 'invalid_identity' },
     });
+  });
+  describe('identity adapter selection', () => {
+    const deployed = ['development', 'production'] as const;
+
+    it('uses the deterministic local identity only for the local environment', async () => {
+      await expect(
+        getVerifiedIdentity(new Request('https://example.test/api/session'), {
+          APP_ENV: 'local',
+        }),
+      ).resolves.toStrictEqual({
+        subject: 'local-owner',
+        email: 'owner@example.test',
+      });
+    });
+
+    it.each(deployed)(
+      'never falls back to the local identity in the %s environment',
+      async (appEnv) => {
+        await expect(
+          getVerifiedIdentity(new Request('https://example.test/api/session'), {
+            APP_ENV: appEnv,
+            CF_ACCESS_AUD: audience,
+            CF_ACCESS_TEAM_DOMAIN: issuer,
+          }),
+        ).rejects.toMatchObject({ status: 401, code: 'invalid_identity' });
+      },
+    );
+
+    it.each(deployed)(
+      'fails closed in the %s environment when Access configuration is absent',
+      async (appEnv) => {
+        const assertion = await token();
+
+        await expect(
+          getVerifiedIdentity(
+            new Request('https://example.test/api/session', {
+              headers: { 'Cf-Access-Jwt-Assertion': assertion },
+            }),
+            { APP_ENV: appEnv },
+          ),
+        ).rejects.toMatchObject({
+          status: 503,
+          code: 'service_unavailable',
+        });
+      },
+    );
   });
 });

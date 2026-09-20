@@ -81,6 +81,17 @@ pnpm wrangler secret put CF_ACCESS_AUD --env production
 pnpm wrangler secret put BOOTSTRAP_OWNER_EMAIL --env production
 ```
 
+Set both values **before** running the deployment workflow. The
+`secrets.required` list in `wrangler.jsonc` drives type generation and local
+development warnings; it does **not** block a deploy whose secrets are unset. A
+deploy without them succeeds and then fails closed at runtime, returning `503`
+from every identity-dependent API until the secrets exist.
+
+The top-level Wrangler configuration is deliberately not publishable
+(`workers_dev` and `preview_urls` are `false`) because it selects the
+deterministic local identity adapter. Always deploy through the workflow, which
+sets `CLOUDFLARE_ENV` for the named environment.
+
 Configure and validate development first. Do not set the production values or
 run the production workflow until production rollout is explicitly approved.
 

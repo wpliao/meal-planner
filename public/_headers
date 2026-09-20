@@ -1,0 +1,11 @@
+# Security headers for documents and static assets served by the Cloudflare
+# asset pipeline. API responses set their own headers in src/worker/http.ts;
+# those never cover this path because static requests bypass the Worker.
+/*
+  X-Frame-Options: DENY
+  Content-Security-Policy: default-src 'self'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'
+  Referrer-Policy: no-referrer
+  X-Content-Type-Options: nosniff
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Resource-Policy: same-origin
