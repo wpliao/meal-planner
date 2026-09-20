@@ -47,10 +47,15 @@ export default defineConfig({
       timeout: 120_000,
     },
     {
-      // Rebuild so the served assets always match the working tree.
-      command: 'pnpm build && pnpm exec vite preview --port 4175',
+      // Rebuild so the served assets always match the working tree. Bind the
+      // host explicitly: the default `localhost` can resolve to ::1 on CI
+      // while Playwright polls 127.0.0.1. `--strictPort` fails loudly instead
+      // of silently drifting to another port.
+      command:
+        'pnpm build && pnpm exec vite preview --host 127.0.0.1 --port 4175 --strictPort',
       url: 'http://127.0.0.1:4175/',
       reuseExistingServer: false,
+      stdout: 'pipe',
       timeout: 120_000,
     },
   ],
