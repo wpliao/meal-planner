@@ -9,6 +9,7 @@ import {
   testEnv,
 } from './helpers';
 import { readJsonObject } from '../../src/worker/http';
+import { bootstrapHousehold } from '../../src/worker/data/household-repository';
 
 describe('session and bootstrap APIs', () => {
   beforeEach(applyMigrations);
@@ -185,5 +186,58 @@ describe('session and bootstrap APIs', () => {
       code: 'payload_too_large',
     });
     expect(canceled).toBe(true);
+  });
+  describe('bootstrap failure classification', () => {
+    const identity = {
+      subject: 'access-subject',
+      email: 'owner@example.test',
+    };
+
+    // A batch that always fails, with a configurable installation lookup.
+    const failingDatabase = (installed: boolean | 'unavailable'): D1Database =>
+      ({
+        batch: () => Promise.reject(new Error('D1 unavailable')),
+        prepare: () => {
+          if (installed === 'unavailable') {
+            throw new Error('D1 unavailable');
+          }
+          return {
+            bind: () => ({}),
+            first: () =>
+              Promise.resolve(installed ? { singleton_id: 1 } : null),
+          };
+        },
+      }) as unknown as D1Database;
+
+    it('does not report an incomplete setup as an existing family space', async () => {
+      await expect(
+        bootstrapHousehold(failingDatabase(false), identity, 'Liao Family'),
+      ).rejects.toMatchObject({
+        status: 503,
+        code: 'service_unavailable',
+      });
+    });
+
+    it('stays generic when the installation check cannot run either', async () => {
+      await expect(
+        bootstrapHousehold(
+          failingDatabase('unavailable'),
+          identity,
+          'Liao Family',
+        ),
+      ).rejects.toMatchObject({
+        status: 503,
+        code: 'service_unavailable',
+      });
+    });
+
+    it('still reports a genuine conflict when the installation exists', async () => {
+      await expect(
+        bootstrapHousehold(failingDatabase(true), identity, 'Liao Family'),
+      ).rejects.toMatchObject({
+        status: 409,
+        code: 'state_conflict',
+      });
+    });
   });
 });
