@@ -5,7 +5,7 @@
 - Issue: [#7](https://github.com/wpliao/meal-planner/issues/7)
 - Product owner: Repository owner
 - Last updated: 2026-09-20
-- Pull requests: [#8 — design](https://github.com/wpliao/meal-planner/pull/8); [#9 — implementation](https://github.com/wpliao/meal-planner/pull/9)
+- Pull requests: [#8 — design](https://github.com/wpliao/meal-planner/pull/8); [#9 — implementation](https://github.com/wpliao/meal-planner/pull/9); [#10 — bootstrap failure classification and traceability](https://github.com/wpliao/meal-planner/pull/10)
 
 ## Problem and outcome
 
@@ -314,22 +314,24 @@ Cloudflare references used by this design:
 
 Implementation merged to `main` in
 [#9](https://github.com/wpliao/meal-planner/pull/9) as `410a10e` on 2026-09-20,
-with CI and the Sonar Quality Gate passing on the merge commit. Acceptance
-checkboxes remain open until the required development validation is recorded;
-deployment evidence is still outstanding.
+followed by the correction in
+[#10](https://github.com/wpliao/meal-planner/pull/10) as `81fb6d3`. CI and the
+Sonar Quality Gate passed for both. Development deployment and initial-owner
+bootstrap evidence are recorded below; acceptance checkboxes remain open until
+the outstanding manual scenarios are complete.
 
 | Criterion | Implementation                                                                                                                                              | Automated tests                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Release evidence                               |
 | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| `AC-01`   | `src/worker/auth/access-identity.ts` — `verifyAccessIdentity`                                                                                               | `test/worker/access-identity.test.ts` — invalid-claim matrix; “returns 503 when the signing key service…”; “keeps an unknown signing key classified as an invalid identity”; “does not accept caller-supplied identity hints in a deployed environment”; “uses the deterministic local identity only for the local environment”; “never falls back to the local identity in the %s environment”; “fails closed in the %s environment when Access configuration is absent” | `V-LOCAL-01`; CI and Sonar passed in #9        |
+| `AC-01`   | `src/worker/auth/access-identity.ts` — `verifyAccessIdentity`                                                                                               | `test/worker/access-identity.test.ts` — invalid-claim matrix; “returns 503 when the signing key service…”; “keeps an unknown signing key classified as an invalid identity”; “does not accept caller-supplied identity hints in a deployed environment”; “uses the deterministic local identity only for the local environment”; “never falls back to the local identity in the %s environment”; “fails closed in the %s environment when Access configuration is absent” | `V-LOCAL-01`; `V-DEV-01`; `V-DEV-02`           |
 | `AC-02`   | `src/worker/auth/member-context.ts` — `requireMemberContext`; `src/worker/data/household-repository.ts`                                                     | `test/worker/members.test.ts` — “returns the activated membership to concurrent first requests”; “denies non-members and regular members from owner operations”; “keeps target operations scoped to the actor household”                                                                                                                                                                                                                                                  | `V-LOCAL-01`; CI and Sonar passed in #9        |
-| `AC-03`   | `src/worker/index.ts` — `GET /api/session`; `src/shared/api.ts` — session contracts                                                                         | `test/worker/session-bootstrap.test.ts` — “atomically creates the first household owner and returns a minimal session”; `src/client/App.test.tsx` — “shows the member-only family view without management controls”                                                                                                                                                                                                                                                       | `V-LOCAL-01`; CI and Sonar passed in #9        |
-| `AC-04`   | `src/worker/index.ts` — `POST /api/bootstrap`; `migrations/0001_create_household_identity.sql`                                                              | `test/worker/session-bootstrap.test.ts` — “allows only the configured verified identity to bootstrap”; “creates exactly one family space under concurrent bootstrap requests”; repeated-bootstrap test; “does not report an incomplete setup as an existing family space”; “stays generic when the installation check cannot run either”; “still reports a genuine conflict when the installation exists”                                                                 | `V-LOCAL-01`; CI and Sonar passed in #9        |
+| `AC-03`   | `src/worker/index.ts` — `GET /api/session`; `src/shared/api.ts` — session contracts                                                                         | `test/worker/session-bootstrap.test.ts` — “atomically creates the first household owner and returns a minimal session”; `src/client/App.test.tsx` — “shows the member-only family view without management controls”                                                                                                                                                                                                                                                       | `V-LOCAL-01`; `V-DEV-02`                       |
+| `AC-04`   | `src/worker/index.ts` — `POST /api/bootstrap`; `migrations/0001_create_household_identity.sql`                                                              | `test/worker/session-bootstrap.test.ts` — “allows only the configured verified identity to bootstrap”; “creates exactly one family space under concurrent bootstrap requests”; repeated-bootstrap test; “does not report an incomplete setup as an existing family space”; “stays generic when the installation check cannot run either”; “still reports a genuine conflict when the installation exists”                                                                 | `V-LOCAL-01`; `V-DEV-01`; `V-DEV-02`           |
 | `AC-05`   | `src/worker/index.ts` — member routes; `src/worker/data/household-repository.ts` — owner mutations                                                          | `test/worker/members.test.ts` — full regular-member mutation denial; lifecycle/deletion tests; “preserves an active owner under concurrent owner demotions”                                                                                                                                                                                                                                                                                                               | `V-LOCAL-01`; CI and Sonar passed in #9        |
 | `AC-06`   | `src/worker/auth/member-context.ts` — per-request membership lookup                                                                                         | `test/worker/members.test.ts` — “supports role, revocation, reactivation, and immediate denial”                                                                                                                                                                                                                                                                                                                                                                           | `V-LOCAL-01`; CI and Sonar passed in #9        |
 | `AC-07`   | `src/client/App.tsx`; `src/client/styles.css`                                                                                                               | `src/client/App.test.tsx` — setup, validation, lifecycle, destructive confirmation, reconciliation, failure, and focus tests; `tests/e2e/family-boundary.spec.ts` — owner bootstrap/invite/remove, member-only, and denied journeys                                                                                                                                                                                                                                       | `V-LOCAL-01`; development manual check pending |
 | `AC-08`   | `src/worker/http.ts`; `public/_headers` — static-document headers; `src/worker/data/household-repository.ts` — validation, headers, prepared scoped queries | `test/worker/members.test.ts` — no identity logging and household scope; `test/worker/session-bootstrap.test.ts` — origin/content-type/body-size validation, including streamed bodies without a trustworthy content length; `tests/e2e/security-headers.spec.ts` — “serves the application document with the static security headers”; “serves built assets with the same framing protection”; “does not serve the headers configuration file itself”                    | `V-LOCAL-01`; security review passed           |
 | `AC-09`   | `test/worker/helpers.ts`; `scripts/dev-e2e.sh`; `vitest.worker.config.ts`                                                                                   | Complete client, Worker-runtime, migration, and isolated desktop/mobile Playwright suites                                                                                                                                                                                                                                                                                                                                                                                 | `V-LOCAL-01`; CI and Sonar passed in #9        |
-| `AC-10`   | `wrangler.jsonc`; `.github/workflows/deploy.yml`; `scripts/dev.sh`; `docs/ENVIRONMENTS.md`                                                                  | `test/worker/migration.test.ts`; generated binding check; named-environment builds; fresh local migration/startup check                                                                                                                                                                                                                                                                                                                                                   | `V-LOCAL-02`; development deployment pending   |
+| `AC-10`   | `wrangler.jsonc`; `.github/workflows/deploy.yml`; `scripts/dev.sh`; `docs/ENVIRONMENTS.md`                                                                  | `test/worker/migration.test.ts`; generated binding check; named-environment builds; fresh local migration/startup check                                                                                                                                                                                                                                                                                                                                                   | `V-LOCAL-02`; `V-DEV-01`; production pending   |
 
 ### Verification evidence
 
@@ -355,9 +357,25 @@ deployment evidence is still outstanding.
 - `V-LOCAL-05` (2026-09-20): `./scripts/verify.sh` passed after the bootstrap
   failure-classification fix — 16 client tests, 48 Worker-runtime tests, and 13
   browser tests.
+- `V-DEV-01` (2026-09-20): the protected development workflow ran from `main`
+  at `81fb6d3`. Its verification and named-environment build passed, migration
+  `0001_create_household_identity.sql` was applied to the development D1
+  database, and Worker version `b3634357-06a2-4fda-93e6-f9904b7ae9e5` was
+  deployed. The original workflow run was deleted after a configuration warning
+  exposed values that had mistakenly been entered as plaintext variables;
+  sanitized evidence and the exact cleanup are recorded in
+  [PR #10](https://github.com/wpliao/meal-planner/pull/10#issuecomment-5748492937).
+- `V-DEV-02` (2026-09-20): the owner passed real Cloudflare Access, bootstrapped
+  `Liao Family (Development)` with the configured identity, and observed the
+  signed-in owner and member-management state. The remaining real-identity and
+  accessibility scenarios are pending because the owner temporarily lacks a
+  stable connection. Evidence is recorded in
+  [issue #7](https://github.com/wpliao/meal-planner/issues/7#issuecomment-5748528535).
 - Independent security review found no unresolved high-severity issue after all
-  review findings were corrected. PR CI, Sonar, real Access validation, and the
-  protected development deployment remain pending.
+  review findings were corrected. CI and the Sonar Quality Gate passed for
+  [PR #9](https://github.com/wpliao/meal-planner/pull/9) and
+  [PR #10](https://github.com/wpliao/meal-planner/pull/10). The remaining
+  development Access scenarios and production rollout remain pending.
 
 ## Rollout and rollback
 
@@ -404,7 +422,13 @@ the owner explicitly deletes them.
 - Implementation review: [#9](https://github.com/wpliao/meal-planner/pull/9)
   merged on 2026-09-20 as `410a10e`. CI and the Sonar Quality Gate passed on the
   pull request and again on `main` after the merge.
-- Development validation: Pending (remote migration, deployment, and real Access acceptance scenarios not yet recorded)
+- Follow-up correction: [#10](https://github.com/wpliao/meal-planner/pull/10)
+  merged on 2026-09-20 as `81fb6d3`; CI and the Sonar Quality Gate passed.
+- Development deployment: `V-DEV-01` complete; migration `0001` and the Phase 1
+  Worker are deployed with the required values restored as encrypted secrets.
+- Development validation: `V-DEV-02` partially complete; non-member denial,
+  invitation activation, next-request revocation, accessibility, edge-header,
+  and log-privacy checks remain pending.
 - Production release: Pending explicit approval
 - Known follow-up work: Household-data deletion/transfer must be designed with the
   first feature that stores product data.

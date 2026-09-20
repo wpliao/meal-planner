@@ -71,6 +71,11 @@ The non-secret team-domain URL is configured per environment. Local development
 uses the deterministic local identity and does not need a live Access JWT. Do
 not commit `.dev.vars`; use `.dev.vars.example` only as a names-only template.
 
+When using the Cloudflare dashboard, select type **Secret** for both bindings.
+Do not use Text or Plaintext: Wrangler may print plaintext values while comparing
+dashboard and repository configuration, and a later deploy may overwrite them.
+Encrypted secrets stay hidden and are preserved across ordinary deployments.
+
 Set each value through an authenticated Wrangler session, entering the value at
 the prompt so it does not appear in shell history:
 
