@@ -59,6 +59,10 @@ jobs:
         run: pnpm build
         env:
           CLOUDFLARE_ENV: development
+      - name: Apply development D1 migrations
+        run: pnpm wrangler d1 migrations apply DB --remote
+        env:
+          CLOUDFLARE_ENV: development
       - name: Deploy development
         run: pnpm wrangler deploy
         env:
@@ -89,6 +93,10 @@ jobs:
       - run: ./scripts/verify.sh
       - name: Build production configuration
         run: pnpm build
+        env:
+          CLOUDFLARE_ENV: production
+      - name: Apply production D1 migrations
+        run: pnpm wrangler d1 migrations apply DB --remote
         env:
           CLOUDFLARE_ENV: production
       - name: Deploy production

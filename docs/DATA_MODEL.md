@@ -1,7 +1,24 @@
 # Data model
 
-Phase 0 defines no product tables. This is deliberate: schema should follow
-validated workflows rather than encode speculative pantry or recipe concepts.
+Phase 1 introduces only the identity and household-boundary tables needed to
+authorize future product data. Schema still deliberately excludes speculative
+pantry, recipe, nutrition, and meal-plan concepts.
+
+## Phase 1 tables
+
+- `households` stores the opaque household ID, display name, and lifecycle
+  timestamps.
+- `household_members` stores the normalized verified email, optional Cloudflare
+  Access subject, role (`owner` or `member`), status (`invited`, `active`, or
+  `revoked`), and lifecycle timestamps. Email and Access subject are globally
+  unique for the one-household-per-identity Phase 1 rule.
+- `app_installation` is a singleton pointer to the bootstrapped household. Its
+  primary key makes first-owner creation explicit and race-safe.
+
+All member reads and writes are scoped by the actor's household ID, even though
+member IDs are opaque and globally unique. Prepared statements, foreign keys,
+and role/status checks enforce the same boundary in the database and service
+layers.
 
 ## Durable principles
 

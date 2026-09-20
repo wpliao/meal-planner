@@ -1,8 +1,8 @@
 # Family Meal Planner
 
-A private, responsive family meal-planning application. Phase 0 establishes the
-engineering foundation only; pantry, recipe, nutrition, and AI features have not
-been implemented yet.
+A private, responsive family meal-planning application. Phase 1 is implementing
+the trusted household boundary; pantry, recipe, nutrition, and AI features have
+not been implemented yet.
 
 ## Quick start
 
@@ -19,8 +19,9 @@ pnpm dev
 Run `pnpm run setup` again after a Playwright version update. If the Dev Container
 configuration changes, rebuild the container so its setup lifecycle runs again.
 
-Open <http://localhost:5173>. The Vite development server runs the React client
-and Cloudflare Worker together.
+Open <http://localhost:5173>. `pnpm dev` applies pending migrations to the
+ignored local D1 database, then runs the React client and Cloudflare Worker
+together through Vite.
 
 ## Verification
 
@@ -37,7 +38,7 @@ environment, security, and delivery decisions.
 | Command             | Purpose                                           |
 | ------------------- | ------------------------------------------------- |
 | `pnpm run setup`    | Install locked packages and Playwright Chromium   |
-| `pnpm dev`          | Start the full local application                  |
+| `pnpm dev`          | Migrate and start the full local application      |
 | `pnpm build`        | Create a production Worker and client build       |
 | `pnpm test`         | Run React/unit tests and Worker integration tests |
 | `pnpm test:e2e`     | Run Playwright against the local application      |
@@ -45,5 +46,5 @@ environment, security, and delivery decisions.
 | `pnpm typecheck`    | Check all TypeScript projects                     |
 | `pnpm format:check` | Check Prettier formatting                         |
 
-Cloudflare account setup is intentionally deferred. Before deploying, follow
+Before configuring or deploying a named Cloudflare environment, follow
 [docs/ENVIRONMENTS.md](./docs/ENVIRONMENTS.md).

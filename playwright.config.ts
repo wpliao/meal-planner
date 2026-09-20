@@ -7,18 +7,56 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI ? 'github' : 'list',
-  use: {
-    baseURL: 'http://127.0.0.1:5173',
-    trace: 'on-first-retry',
-  },
+  use: { trace: 'on-first-retry' },
   projects: [
-    { name: 'chromium-desktop', use: { ...devices['Desktop Chrome'] } },
-    { name: 'chromium-mobile', use: { ...devices['Pixel 7'] } },
+    {
+      name: 'chromium-desktop',
+      testIgnore: /security-headers\.spec\.ts/u,
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: 'http://127.0.0.1:5173',
+      },
+    },
+    {
+      name: 'chromium-mobile',
+      testIgnore: /security-headers\.spec\.ts/u,
+      use: {
+        ...devices['Pixel 7'],
+        baseURL: 'http://127.0.0.1:5174',
+      },
+    },
+    {
+      // The production build served through the real Cloudflare asset
+      // pipeline, which is the only place `public/_headers` takes effect.
+      name: 'asset-pipeline',
+      testMatch: /security-headers\.spec\.ts/u,
+      use: { baseURL: 'http://127.0.0.1:4175' },
+    },
   ],
-  webServer: {
-    command: 'pnpm dev',
-    url: 'http://127.0.0.1:5173/api/health',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  webServer: [
+    {
+      command: 'pnpm dev:e2e -- --port 5173',
+      url: 'http://127.0.0.1:5173/api/health',
+      reuseExistingServer: false,
+      timeout: 120_000,
+    },
+    {
+      command: 'pnpm dev:e2e -- --port 5174',
+      url: 'http://127.0.0.1:5174/api/health',
+      reuseExistingServer: false,
+      timeout: 120_000,
+    },
+    {
+      // Rebuild so the served assets always match the working tree. Bind the
+      // host explicitly: the default `localhost` can resolve to ::1 on CI
+      // while Playwright polls 127.0.0.1. `--strictPort` fails loudly instead
+      // of silently drifting to another port.
+      command:
+        'pnpm build && pnpm exec vite preview --host 127.0.0.1 --port 4175 --strictPort',
+      url: 'http://127.0.0.1:4175/',
+      reuseExistingServer: false,
+      stdout: 'pipe',
+      timeout: 120_000,
+    },
+  ],
 });

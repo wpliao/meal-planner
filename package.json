@@ -11,7 +11,8 @@
   "scripts": {
     "build": "vite build",
     "cf:typegen": "wrangler types",
-    "dev": "vite --host 0.0.0.0",
+    "dev": "bash ./scripts/dev.sh",
+    "dev:e2e": "bash ./scripts/dev-e2e.sh",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint . --max-warnings 0",
@@ -29,6 +30,7 @@
     "verify": "./scripts/verify.sh"
   },
   "dependencies": {
+    "jose": "6.1.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },

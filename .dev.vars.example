@@ -1,2 +1,6 @@
-# Copy to .dev.vars for local Worker secrets when a future feature needs them.
-# Never commit .dev.vars. Phase 0 requires no secrets.
+# Copy to .dev.vars only for local development. Never commit .dev.vars.
+# The local identity adapter does not require these values, but keeping the
+# names here documents the secrets used by the named Cloudflare environments.
+# Named development and production environments must use distinct real values.
+CF_ACCESS_AUD=replace-with-the-environment-access-application-audience-tag
+BOOTSTRAP_OWNER_EMAIL=owner@example.test
