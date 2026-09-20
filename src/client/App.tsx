@@ -421,6 +421,12 @@ export function App() {
           ) : (
             <div className="member-table-wrap">
               <table>
+                <colgroup>
+                  <col className="member-column" />
+                  <col className="role-column" />
+                  <col className="status-column" />
+                  <col className="actions-column" />
+                </colgroup>
                 <caption className="sr-only">
                   Family members and access controls
                 </caption>
@@ -437,10 +443,10 @@ export function App() {
                 <tbody>
                   {members.map((member) => (
                     <tr key={member.id}>
-                      <td>{member.email}</td>
-                      <td>{member.role}</td>
-                      <td>{member.status}</td>
-                      <td className="member-actions-cell">
+                      <td data-label="Member">{member.email}</td>
+                      <td data-label="Role">{member.role}</td>
+                      <td data-label="Status">{member.status}</td>
+                      <td className="member-actions-cell" data-label="Actions">
                         <div className="member-actions">
                           {member.status === 'active' && (
                             <>

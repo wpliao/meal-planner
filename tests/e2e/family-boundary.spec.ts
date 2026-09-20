@@ -68,10 +68,14 @@ test('active member sees only their family view', async ({ page }) => {
   );
 });
 
-test('keeps owner member actions visible without horizontal discovery', async ({
+test('balances member information and actions without horizontal scrolling', async ({
   page,
-}) => {
-  await page.setViewportSize({ width: 520, height: 800 });
+}, testInfo) => {
+  const isMobile = testInfo.project.name === 'chromium-mobile';
+  await page.setViewportSize({
+    width: isMobile ? 390 : 1100,
+    height: 800,
+  });
   await page.route('**/api/session', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
@@ -114,17 +118,39 @@ test('keeps owner member actions visible without horizontal discovery', async ({
   const memberRow = page.getByRole('row', {
     name: /member-with-a-long-address@example\.test/i,
   });
+  await expect(memberRow).toContainText('member');
+  await expect(memberRow).toContainText('active');
   const revokeButton = memberRow.getByRole('button', { name: 'Revoke' });
   await expect(revokeButton).toBeVisible();
 
   const tableViewportBox = await tableViewport.boundingBox();
-  const revokeButtonBox = await revokeButton.boundingBox();
+  const tableBox = await tableViewport.locator('table').boundingBox();
+  const rowBox = await memberRow.boundingBox();
+  const memberCellBox = await memberRow.locator('td').first().boundingBox();
+  const actionsCellBox = await memberRow
+    .locator('.member-actions-cell')
+    .boundingBox();
   expect(tableViewportBox).not.toBeNull();
-  expect(revokeButtonBox).not.toBeNull();
-  expect(revokeButtonBox!.x).toBeGreaterThanOrEqual(tableViewportBox!.x);
-  expect(revokeButtonBox!.x + revokeButtonBox!.width).toBeLessThanOrEqual(
+  expect(tableBox).not.toBeNull();
+  expect(rowBox).not.toBeNull();
+  expect(memberCellBox).not.toBeNull();
+  expect(actionsCellBox).not.toBeNull();
+  expect(tableBox!.x).toBeGreaterThanOrEqual(tableViewportBox!.x);
+  expect(tableBox!.x + tableBox!.width).toBeLessThanOrEqual(
     tableViewportBox!.x + tableViewportBox!.width + 1,
   );
+  if (isMobile) {
+    expect(actionsCellBox!.y).toBeGreaterThan(memberCellBox!.y);
+    expect(Math.abs(memberCellBox!.x - actionsCellBox!.x)).toBeLessThanOrEqual(
+      1,
+    );
+    expect(
+      Math.abs(memberCellBox!.width - actionsCellBox!.width),
+    ).toBeLessThanOrEqual(1);
+  } else {
+    expect(actionsCellBox!.width).toBeLessThanOrEqual(rowBox!.width * 0.31);
+    expect(memberCellBox!.width).toBeGreaterThan(actionsCellBox!.width);
+  }
 });
 
 test('not-a-member and denied identities have no household management UI', async ({
