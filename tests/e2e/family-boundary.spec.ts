@@ -68,7 +68,7 @@ test('active member sees only their family view', async ({ page }) => {
   );
 });
 
-test('balances member information and actions without horizontal scrolling', async ({
+test('adapts member information and actions to the panel without horizontal scrolling', async ({
   page,
 }, testInfo) => {
   const isMobile = testInfo.project.name === 'chromium-mobile';
@@ -127,6 +127,8 @@ test('balances member information and actions without horizontal scrolling', asy
   const tableBox = await tableViewport.locator('table').boundingBox();
   const rowBox = await memberRow.boundingBox();
   const memberCellBox = await memberRow.locator('td').first().boundingBox();
+  const roleCellBox = await memberRow.locator('td').nth(1).boundingBox();
+  const statusCellBox = await memberRow.locator('td').nth(2).boundingBox();
   const actionsCellBox = await memberRow
     .locator('.member-actions-cell')
     .boundingBox();
@@ -134,23 +136,21 @@ test('balances member information and actions without horizontal scrolling', asy
   expect(tableBox).not.toBeNull();
   expect(rowBox).not.toBeNull();
   expect(memberCellBox).not.toBeNull();
+  expect(roleCellBox).not.toBeNull();
+  expect(statusCellBox).not.toBeNull();
   expect(actionsCellBox).not.toBeNull();
   expect(tableBox!.x).toBeGreaterThanOrEqual(tableViewportBox!.x);
   expect(tableBox!.x + tableBox!.width).toBeLessThanOrEqual(
     tableViewportBox!.x + tableViewportBox!.width + 1,
   );
-  if (isMobile) {
-    expect(actionsCellBox!.y).toBeGreaterThan(memberCellBox!.y);
-    expect(Math.abs(memberCellBox!.x - actionsCellBox!.x)).toBeLessThanOrEqual(
-      1,
-    );
-    expect(
-      Math.abs(memberCellBox!.width - actionsCellBox!.width),
-    ).toBeLessThanOrEqual(1);
-  } else {
-    expect(actionsCellBox!.width).toBeLessThanOrEqual(rowBox!.width * 0.31);
-    expect(memberCellBox!.width).toBeGreaterThan(actionsCellBox!.width);
-  }
+  expect(roleCellBox!.x + roleCellBox!.width).toBeLessThanOrEqual(
+    statusCellBox!.x + 1,
+  );
+  expect(actionsCellBox!.y).toBeGreaterThan(statusCellBox!.y);
+  expect(Math.abs(memberCellBox!.x - actionsCellBox!.x)).toBeLessThanOrEqual(1);
+  expect(
+    Math.abs(memberCellBox!.width - actionsCellBox!.width),
+  ).toBeLessThanOrEqual(1);
 });
 
 test('not-a-member and denied identities have no household management UI', async ({

@@ -196,6 +196,7 @@ h1 {
   margin: 1.5rem 0 0;
 }
 .member-table-wrap {
+  container: member-table / inline-size;
   margin-top: 1.5rem;
 }
 .member-table-wrap table {
@@ -290,9 +291,9 @@ td:first-child {
   .card {
     overflow: hidden;
   }
-  .member-table-wrap {
-    overflow: visible;
-  }
+}
+
+@container member-table (max-width: 44rem) {
   .member-table-wrap table,
   .member-table-wrap tbody,
   .member-table-wrap tr,
