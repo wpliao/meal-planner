@@ -5,7 +5,7 @@
 - Issue: [#7](https://github.com/wpliao/meal-planner/issues/7)
 - Product owner: Repository owner
 - Last updated: 2026-09-20
-- Pull requests: [#8 — design](https://github.com/wpliao/meal-planner/pull/8); implementation PR pending
+- Pull requests: [#8 — design](https://github.com/wpliao/meal-planner/pull/8); [#9 — implementation](https://github.com/wpliao/meal-planner/pull/9)
 
 ## Problem and outcome
 
@@ -308,10 +308,10 @@ Cloudflare references used by this design:
 
 ## Traceability
 
-Implementation is in progress on the Phase 1 branch. The implementation pull
-request and release evidence will be added as they become available. Acceptance
-checkboxes remain open until the complete verification and required development
-validation have been recorded.
+Implementation is open for review in [#9](https://github.com/wpliao/meal-planner/pull/9).
+Release evidence will be added as it becomes available. Acceptance checkboxes
+remain open until the complete verification and required development validation
+have been recorded.
 
 | Criterion | Implementation                                                                                                 | Automated tests                                                                                                                                                                                                                                         | Release evidence                               |
 | --------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
@@ -378,6 +378,8 @@ the owner explicitly deletes them.
 ## Release record
 
 - Local verification: `V-LOCAL-01` and `V-LOCAL-02` passed on 2026-09-20.
+- Implementation review: [#9](https://github.com/wpliao/meal-planner/pull/9)
+  opened on 2026-09-20; CI and the Sonar Quality Gate are pending.
 - Development validation: Pending (remote migration, deployment, and real Access acceptance scenarios not yet recorded)
 - Production release: Pending explicit approval
 - Known follow-up work: Household-data deletion/transfer must be designed with the
