@@ -217,6 +217,21 @@ th {
 td:first-child {
   overflow-wrap: anywhere;
 }
+.member-actions-heading,
+.member-actions-cell {
+  position: sticky;
+  right: 0;
+  min-width: 9rem;
+  border-left: 1px solid rgb(43 41 36 / 16%);
+  background: #fffdf8;
+  box-shadow: -0.75rem 0 0.75rem -0.85rem rgb(43 41 36 / 45%);
+}
+.member-actions-heading {
+  z-index: 2;
+}
+.member-actions-cell {
+  z-index: 1;
+}
 .member-actions,
 .dialog__actions {
   display: flex;

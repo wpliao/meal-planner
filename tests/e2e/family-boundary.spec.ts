@@ -68,6 +68,65 @@ test('active member sees only their family view', async ({ page }) => {
   );
 });
 
+test('keeps owner member actions visible without horizontal discovery', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 520, height: 800 });
+  await page.route('**/api/session', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status: 'ready',
+        member: {
+          id: 'owner-1',
+          email: 'owner@example.test',
+          role: 'owner',
+        },
+        household: { id: 'household-1', name: 'The test family' },
+      }),
+    });
+  });
+  await page.route('**/api/household/members', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        members: [
+          {
+            id: 'owner-1',
+            email: 'owner@example.test',
+            role: 'owner',
+            status: 'active',
+          },
+          {
+            id: 'member-1',
+            email: 'member-with-a-long-address@example.test',
+            role: 'member',
+            status: 'active',
+          },
+        ],
+      }),
+    });
+  });
+
+  await page.goto('/');
+
+  const tableViewport = page.locator('.member-table-wrap');
+  const memberRow = page.getByRole('row', {
+    name: /member-with-a-long-address@example\.test/i,
+  });
+  const revokeButton = memberRow.getByRole('button', { name: 'Revoke' });
+  await expect(revokeButton).toBeVisible();
+
+  const tableViewportBox = await tableViewport.boundingBox();
+  const revokeButtonBox = await revokeButton.boundingBox();
+  expect(tableViewportBox).not.toBeNull();
+  expect(revokeButtonBox).not.toBeNull();
+  expect(revokeButtonBox!.x).toBeGreaterThanOrEqual(tableViewportBox!.x);
+  expect(revokeButtonBox!.x + revokeButtonBox!.width).toBeLessThanOrEqual(
+    tableViewportBox!.x + tableViewportBox!.width + 1,
+  );
+});
+
 test('not-a-member and denied identities have no household management UI', async ({
   page,
 }) => {

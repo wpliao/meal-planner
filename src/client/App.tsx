@@ -429,7 +429,9 @@ export function App() {
                     <th scope="col">Member</th>
                     <th scope="col">Role</th>
                     <th scope="col">Status</th>
-                    <th scope="col">Actions</th>
+                    <th className="member-actions-heading" scope="col">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -438,7 +440,7 @@ export function App() {
                       <td>{member.email}</td>
                       <td>{member.role}</td>
                       <td>{member.status}</td>
-                      <td>
+                      <td className="member-actions-cell">
                         <div className="member-actions">
                           {member.status === 'active' && (
                             <>
