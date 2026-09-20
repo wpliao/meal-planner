@@ -1,11 +1,11 @@
 # Feature: Trusted family boundary
 
-- Status: Accepted
+- Status: Implementing
 - Phase: 1
 - Issue: [#7](https://github.com/wpliao/meal-planner/issues/7)
 - Product owner: Repository owner
 - Last updated: 2026-09-20
-- Pull requests: [#8 — design](https://github.com/wpliao/meal-planner/pull/8)
+- Pull requests: [#8 — design](https://github.com/wpliao/meal-planner/pull/8); implementation PR pending
 
 ## Problem and outcome
 
@@ -185,7 +185,7 @@ include raw verification errors.
 
 ### Data and migrations
 
-Migration `0001_create_household_identity.sql` will create:
+Migration `0001_create_household_identity.sql` creates:
 
 - `households`: opaque ID, display name, and creation/update timestamps.
 - `household_members`: opaque ID, household ID, normalized verified email,
@@ -308,21 +308,38 @@ Cloudflare references used by this design:
 
 ## Traceability
 
-Paths and symbols are planned until implementation begins. Pull requests and
-release evidence will be added as work progresses.
+Implementation is in progress on the Phase 1 branch. The implementation pull
+request and release evidence will be added as they become available. Acceptance
+checkboxes remain open until the complete verification and required development
+validation have been recorded.
 
-| Criterion | Implementation                                                | Automated tests                                                                                                      | Release evidence |
-| --------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| `AC-01`   | `src/worker/auth/access-identity.ts` — `verifyAccessIdentity` | `test/worker/access-identity.test.ts` — token rejection matrix                                                       | Pending          |
-| `AC-02`   | `src/worker/auth/member-context.ts` — `requireMemberContext`  | `test/worker/authorization.test.ts` — “denies identities without an active membership” and household-isolation cases | Pending          |
-| `AC-03`   | `GET /api/session`; shared `SessionResponse`                  | Worker session contract tests; `src/client/App.test.tsx` — ready state                                               | Pending          |
-| `AC-04`   | `POST /api/bootstrap`; migration installation constraint      | `test/worker/bootstrap.test.ts` — empty, mismatch, repeat, and concurrent cases                                      | Pending          |
-| `AC-05`   | household member routes and owner service                     | `test/worker/members.test.ts` — owner/member role matrix and final-owner invariant                                   | Pending          |
-| `AC-06`   | per-request membership lookup                                 | `test/worker/authorization.test.ts` — “denies the next request after revocation”                                     | Pending          |
-| `AC-07`   | `src/client/App.tsx` and focused family components            | client state/focus tests; `tests/e2e/family-boundary.spec.ts`                                                        | Pending          |
-| `AC-08`   | repository/query boundary and safe request logging            | Worker query-scope tests and log-spy negative assertions                                                             | Pending          |
-| `AC-09`   | test fixtures, migration harness, and CI verification         | complete unit, Worker-runtime, migration, and Playwright suites                                                      | Pending          |
-| `AC-10`   | `wrangler.jsonc`, environment docs, and deployment runbook    | config assertions plus development/production checklist                                                              | Pending          |
+| Criterion | Implementation                                                                                                 | Automated tests                                                                                                                                                                                                                                         | Release evidence                               |
+| --------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `AC-01`   | `src/worker/auth/access-identity.ts` — `verifyAccessIdentity`                                                  | `test/worker/access-identity.test.ts` — invalid-claim matrix; “returns 503 when the signing key service…”; “keeps an unknown signing key classified as an invalid identity”; “does not accept caller-supplied identity hints in a deployed environment” | `V-LOCAL-01`; PR CI pending                    |
+| `AC-02`   | `src/worker/auth/member-context.ts` — `requireMemberContext`; `src/worker/data/household-repository.ts`        | `test/worker/members.test.ts` — “returns the activated membership to concurrent first requests”; “denies non-members and regular members from owner operations”; “keeps target operations scoped to the actor household”                                | `V-LOCAL-01`; PR CI pending                    |
+| `AC-03`   | `src/worker/index.ts` — `GET /api/session`; `src/shared/api.ts` — session contracts                            | `test/worker/session-bootstrap.test.ts` — “atomically creates the first household owner and returns a minimal session”; `src/client/App.test.tsx` — “shows the member-only family view without management controls”                                     | `V-LOCAL-01`; PR CI pending                    |
+| `AC-04`   | `src/worker/index.ts` — `POST /api/bootstrap`; `migrations/0001_create_household_identity.sql`                 | `test/worker/session-bootstrap.test.ts` — “allows only the configured verified identity to bootstrap”; “creates exactly one family space under concurrent bootstrap requests”; repeated-bootstrap test                                                  | `V-LOCAL-01`; PR CI pending                    |
+| `AC-05`   | `src/worker/index.ts` — member routes; `src/worker/data/household-repository.ts` — owner mutations             | `test/worker/members.test.ts` — full regular-member mutation denial; lifecycle/deletion tests; “preserves an active owner under concurrent owner demotions”                                                                                             | `V-LOCAL-01`; PR CI pending                    |
+| `AC-06`   | `src/worker/auth/member-context.ts` — per-request membership lookup                                            | `test/worker/members.test.ts` — “supports role, revocation, reactivation, and immediate denial”                                                                                                                                                         | `V-LOCAL-01`; PR CI pending                    |
+| `AC-07`   | `src/client/App.tsx`; `src/client/styles.css`                                                                  | `src/client/App.test.tsx` — setup, validation, lifecycle, destructive confirmation, reconciliation, failure, and focus tests; `tests/e2e/family-boundary.spec.ts` — owner bootstrap/invite/remove, member-only, and denied journeys                     | `V-LOCAL-01`; development manual check pending |
+| `AC-08`   | `src/worker/http.ts`; `src/worker/data/household-repository.ts` — validation, headers, prepared scoped queries | `test/worker/members.test.ts` — no identity logging and household scope; `test/worker/session-bootstrap.test.ts` — origin/content-type/body-size validation, including streamed bodies without a trustworthy content length                             | `V-LOCAL-01`; security review passed           |
+| `AC-09`   | `test/worker/helpers.ts`; `scripts/dev-e2e.sh`; `vitest.worker.config.ts`                                      | Complete client, Worker-runtime, migration, and isolated desktop/mobile Playwright suites                                                                                                                                                               | `V-LOCAL-01`; PR CI pending                    |
+| `AC-10`   | `wrangler.jsonc`; `.github/workflows/deploy.yml`; `scripts/dev.sh`; `docs/ENVIRONMENTS.md`                     | `test/worker/migration.test.ts`; generated binding check; named-environment builds; fresh local migration/startup check                                                                                                                                 | `V-LOCAL-02`; development deployment pending   |
+
+### Verification evidence
+
+- `V-LOCAL-01` (2026-09-20): `./scripts/verify.sh` passed in the Dev
+  Container—formatting, lint, typecheck, 16 client tests, 40 Worker-runtime
+  tests, coverage thresholds, production build, and 10 isolated Playwright
+  tests across desktop and mobile.
+- `V-LOCAL-02` (2026-09-20): `pnpm cf:typegen` reproduced the checked-in
+  bindings; development and production named-environment builds succeeded and
+  reported the intentionally unconfigured local secret values; a fresh local
+  `pnpm dev` applied migration `0001` and returned `setup-required` from
+  `/api/session`.
+- Independent security review found no unresolved high-severity issue after all
+  review findings were corrected. PR CI, Sonar, real Access validation, and the
+  protected development deployment remain pending.
 
 ## Rollout and rollback
 
@@ -332,12 +349,14 @@ release evidence will be added as work progresses.
    confuse it with the Access application ID previously recorded during setup.
 3. Configure distinct `CF_ACCESS_AUD` and `BOOTSTRAP_OWNER_EMAIL` Worker secrets
    for development. Confirm the Access team-domain variable.
-4. Apply migration `0001` to the development D1 database before deploying code.
-   Wrangler captures a backup before applying migrations.
-5. Deploy development, bootstrap the owner, run the manual acceptance scenarios,
+4. Configure the development GitHub environment secrets and run the protected
+   development workflow. It applies migration `0001` to the development D1
+   database immediately before deploying code.
+5. Bootstrap the owner, run the manual acceptance scenarios,
    and record evidence here.
-6. Repeat secret configuration and migration for production only after explicit
-   approval. Deploy the exact reviewed commit, bootstrap, and verify.
+6. Repeat secret configuration for production only after explicit approval. The
+   protected production workflow applies the migration, deploys the exact
+   reviewed commit, then bootstrap and verify.
 
 Code rollback redeploys the last known-good Phase 0 revision. The additive schema
 may remain unused; do not edit or reverse the applied migration. Before any
@@ -348,14 +367,18 @@ the owner explicitly deletes them.
 
 ## Decision and change log
 
-| Date       | Change                                                                                                                 | Reason                                                                                                       | Evidence                                                                                   |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
-| 2026-09-19 | Initial design: verified Access identity plus D1 membership, owner/member administration, and one-time owner bootstrap | Establish defense in depth before accepting family product data                                              | [Issue #7](https://github.com/wpliao/meal-planner/issues/7)                                |
-| 2026-09-20 | Product owner accepted the Phase 1 design and authorized implementation                                                | The proposed experience, security, data, rollout, and test boundaries match the intended first product phase | [Approval record](https://github.com/wpliao/meal-planner/issues/7#issuecomment-5743365523) |
+| Date       | Change                                                                                                                                                                             | Reason                                                                                                                              | Evidence                                                                                   |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| 2026-09-19 | Initial design: verified Access identity plus D1 membership, owner/member administration, and one-time owner bootstrap                                                             | Establish defense in depth before accepting family product data                                                                     | [Issue #7](https://github.com/wpliao/meal-planner/issues/7)                                |
+| 2026-09-20 | Product owner accepted the Phase 1 design and authorized implementation                                                                                                            | The proposed experience, security, data, rollout, and test boundaries match the intended first product phase                        | [Approval record](https://github.com/wpliao/meal-planner/issues/7#issuecomment-5743365523) |
+| 2026-09-20 | Implementation started: added Access verification, local identity, D1 membership authorization, bootstrap/member APIs, responsive session UI, isolated test harness, and migration | Turn the accepted boundary into a testable implementation while preserving the one-household and environment-separation constraints | Implementation branch; verification and PR evidence pending                                |
+| 2026-09-20 | Security hardening added bounded streaming bodies, concurrent activation recovery, JWKS outage classification, session reconciliation, and complete destructive confirmations      | Resolve every finding from the independent authorization and accessibility review before remote review                              | `V-LOCAL-01`; no unresolved high-severity finding                                          |
+| 2026-09-20 | Local startup now applies pending D1 migrations before Vite; the protected deployment workflow applies remote migrations before each named deployment                              | Make fresh local, Codespaces, development, and production startup orders reproducible                                               | `V-LOCAL-02`; development deployment pending                                               |
 
 ## Release record
 
-- Development validation: Pending
+- Local verification: `V-LOCAL-01` and `V-LOCAL-02` passed on 2026-09-20.
+- Development validation: Pending (remote migration, deployment, and real Access acceptance scenarios not yet recorded)
 - Production release: Pending explicit approval
 - Known follow-up work: Household-data deletion/transfer must be designed with the
   first feature that stores product data.

@@ -14,11 +14,12 @@ should be configured as a required GitHub status check.
 
 ## Deployments
 
-Deployment is intentionally manual in Phase 0. `.github/workflows/deploy.yml`
-accepts a target environment, re-runs the common verification gate, and uses the
-matching GitHub environment credentials. Production additionally requires the
-literal confirmation input and must have required reviewers configured on the
-GitHub `production` environment.
+Deployment is intentionally manual. `.github/workflows/deploy.yml` accepts a
+target environment, re-runs the common verification gate, builds the matching
+Wrangler environment, applies pending D1 migrations remotely, and deploys with
+the matching GitHub environment credentials. Production additionally requires
+the literal confirmation input and must have required reviewers configured on
+the GitHub `production` environment.
 
 Development and production jobs target different Wrangler environments and
 therefore different Worker, D1, and R2 resources. The workflows do not create
@@ -29,7 +30,8 @@ approval prevents deployment.
 
 - Pull requests never deploy production.
 - A production deploy is tied to a reviewed Git commit and protected environment.
-- Migrations are separate, explicit rollout steps until a safe automated strategy
-  is designed for a real schema.
+- The protected workflow applies committed migrations immediately before the
+  matching deployment. Owners must configure the environment credentials and
+  review the target environment first; the workflow does not create resources.
 - Rollback means redeploying a known-good Git revision; database forward recovery
   must be documented per migration.

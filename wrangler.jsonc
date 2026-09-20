@@ -27,7 +27,13 @@
   "env": {
     "development": {
       "name": "family-meal-planner-development",
-      "vars": { "APP_ENV": "development" },
+      "vars": {
+        "APP_ENV": "development",
+        "CF_ACCESS_TEAM_DOMAIN": "https://dannyliao.cloudflareaccess.com",
+      },
+      "secrets": {
+        "required": ["CF_ACCESS_AUD", "BOOTSTRAP_OWNER_EMAIL"],
+      },
       "d1_databases": [
         {
           "binding": "DB",
@@ -44,7 +50,13 @@
     },
     "production": {
       "name": "family-meal-planner-production",
-      "vars": { "APP_ENV": "production" },
+      "vars": {
+        "APP_ENV": "production",
+        "CF_ACCESS_TEAM_DOMAIN": "https://dannyliao.cloudflareaccess.com",
+      },
+      "secrets": {
+        "required": ["CF_ACCESS_AUD", "BOOTSTRAP_OWNER_EMAIL"],
+      },
       "d1_databases": [
         {
           "binding": "DB",

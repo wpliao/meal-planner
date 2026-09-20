@@ -28,6 +28,8 @@ describe('Worker API', () => {
     const response = await SELF.fetch('https://example.test/api/unknown');
 
     expect(response.status).toBe(404);
-    await expect(response.json()).resolves.toEqual({ error: 'Not found' });
+    await expect(response.json()).resolves.toEqual({
+      error: { code: 'not_found', message: 'Not found.' },
+    });
   });
 });

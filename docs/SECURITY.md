@@ -10,18 +10,23 @@ resource sharing.
 
 ## Baseline controls
 
-- Cloudflare Access protects non-local entry points. Before product data exists,
-  define application-level identity and authorization as defense in depth.
+- Cloudflare Access protects non-local entry points. The Worker independently
+  verifies the signed application JWT and checks the active D1 household
+  membership on every protected request as defense in depth.
 - Secrets exist only in local ignored `.dev.vars` or environment-scoped Cloudflare
   and GitHub secret stores. `VITE_*` values are always public.
 - Development and production have distinct Workers, D1 databases, R2 buckets,
   access policies, and least-privilege deployment tokens.
+- Named environments require separate `CF_ACCESS_AUD` and
+  `BOOTSTRAP_OWNER_EMAIL` secrets. The Access audience tag and bootstrap email
+  must never be copied between environments accidentally.
 - API clients, uploads, model output, and access headers are untrusted. Validate
   types, sizes, content, and authorization at each boundary.
 - Do not log secrets, authorization assertions, family data, raw prompts, model
   responses containing personal data, or uploaded image content.
 - Use prepared D1 statements. Add response security headers and CSP before rich
-  user content or third-party resources are introduced.
+  user content or third-party resources are introduced. Phase 1 adds strict
+  request content-type and same-origin checks for browser mutations.
 - AI integrations run server-side through AI Gateway, minimize disclosed data,
   and cannot authoritatively calculate nutrition.
 
@@ -38,5 +43,8 @@ If a credential may be exposed: revoke/rotate it first, inspect Git and provider
 audit logs, remove the secret from current content, and assess history cleanup.
 Never paste live credentials into an issue, PR, chat, test fixture, or log.
 
-Before accepting family data, document retention/deletion behavior, backup scope,
-Access policy ownership, and incident contacts.
+Phase 1 retains only household identity records while membership exists. Owners
+can revoke an active member, then delete an invited or revoked membership; the
+delete removes the stored email and Access subject. Before adding meal data,
+document retention/deletion behavior for that data, backup scope, Access policy
+ownership, and incident contacts.

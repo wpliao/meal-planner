@@ -16,9 +16,7 @@ describe('client bootstrap', () => {
       vi.fn(() =>
         Promise.resolve(
           Response.json({
-            status: 'ok',
-            environment: 'test',
-            service: 'family-meal-planner',
+            status: 'not-a-member',
           }),
         ),
       ),
@@ -28,7 +26,7 @@ describe('client bootstrap', () => {
 
     expect(
       await screen.findByRole('heading', {
-        name: 'Good meals start with a simple plan.',
+        name: 'You are not a family member',
       }),
     ).toBeInTheDocument();
   });

@@ -21,8 +21,12 @@ Worker routes /api/*  +  Static Assets routes
           +---- R2 (binary, future)
 ```
 
-Phase 0 implements `GET /api/health` only. D1 and R2 are bound and exercised by
-local Workers-runtime tests, but contain no product data model or upload logic.
+Phase 1 adds a trusted family boundary before product data is introduced. The
+Worker validates Cloudflare Access application JWTs (or uses a deterministic
+local identity adapter), maps the verified identity to a D1 household member,
+and exposes session/bootstrap/member-management APIs. R2 remains reserved for
+future binary objects; no recipe, pantry, meal-plan, or upload workflow is in
+scope yet.
 
 ## Code boundaries
 
@@ -37,8 +41,9 @@ local Workers-runtime tests, but contain no product data model or upload logic.
 
 ## Future boundaries
 
-- Cloudflare Access is the first authentication barrier. A later ADR must define
-  identity mapping and application-level authorization before personal data APIs.
+- Cloudflare Access is the perimeter authentication barrier. The Worker is the
+  application authorization boundary: it verifies the signed Access assertion,
+  then re-queries active D1 membership for every protected request.
 - D1 will store structured family, pantry, recipe, plan, and nutrition references.
 - R2 will store original/derived images with metadata and lifecycle policy in D1.
 - AI calls will originate from the Worker, pass through AI Gateway, use an adapter
