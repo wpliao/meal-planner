@@ -151,7 +151,21 @@ export const bootstrapHousehold = async (
         ),
     ]);
   } catch {
-    throw stateConflict('The family space has already been set up.');
+    // Only a real installation row proves the setup already succeeded. Any
+    // other batch failure — a D1 outage, for example — must not be reported as
+    // a completed setup, because an operator would read that as success at the
+    // one moment it matters. If the check itself cannot run, stay generic.
+    const alreadyInstalled = await installationExists(db).catch(() => false);
+
+    if (alreadyInstalled) {
+      throw stateConflict('The family space has already been set up.');
+    }
+
+    throw new ApiError(
+      503,
+      'service_unavailable',
+      'Family setup is temporarily unavailable.',
+    );
   }
 
   return {
