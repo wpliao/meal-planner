@@ -10,3 +10,5 @@ decisions.
 - [0003 — Repository-centered feature traceability](./0003-feature-traceability.md)
 - [0004 — Access identity and household authorization](./0004-access-identity-and-household-authorization.md)
 - [0005 — Production deployment approval on private GitHub Pro](./0005-production-deployment-approval-on-github-pro.md)
+- [0006 — Component library for the family interface](./0006-component-library.md)
+- [0007 — Navigation and information architecture](./0007-navigation-and-information-architecture.md)
