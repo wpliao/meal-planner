@@ -163,7 +163,7 @@ describe('Pantry', () => {
     render(<Pantry />);
     await screen.findByText('Rice');
 
-    const signals = screen.getByRole('group', { name: 'Signal for Rice' });
+    const signals = screen.getByRole('group', { name: 'Status for Rice' });
     fireEvent.click(within(signals).getByRole('button', { name: 'Available' }));
 
     expect(
@@ -199,7 +199,7 @@ describe('Pantry', () => {
     render(<Pantry />);
     await screen.findByText('Rice');
 
-    const signals = screen.getByRole('group', { name: 'Signal for Rice' });
+    const signals = screen.getByRole('group', { name: 'Status for Rice' });
     fireEvent.click(within(signals).getByRole('button', { name: 'Available' }));
 
     expect(
@@ -207,7 +207,7 @@ describe('Pantry', () => {
         'Someone else changed this item. Reload to see the latest version.',
       ),
     ).toBeInTheDocument();
-    const refreshed = screen.getByRole('group', { name: 'Signal for Rice' });
+    const refreshed = screen.getByRole('group', { name: 'Status for Rice' });
     expect(
       within(refreshed).getByRole('button', { name: 'Needed' }),
     ).toBeDisabled();
@@ -382,7 +382,7 @@ describe('Pantry', () => {
     render(<Pantry />);
     await screen.findByText('Rice');
 
-    const signals = screen.getByRole('group', { name: 'Signal for Rice' });
+    const signals = screen.getByRole('group', { name: 'Status for Rice' });
     fireEvent.click(within(signals).getByRole('button', { name: 'Available' }));
 
     const notice = await screen.findByText('Rice is now marked Available.');

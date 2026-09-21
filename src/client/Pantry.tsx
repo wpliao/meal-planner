@@ -239,7 +239,7 @@ export function Pantry() {
           </p>
         )}
         <fieldset className="pantry-signals">
-          <legend>Signal</legend>
+          <legend>Status</legend>
           {STATUS_ORDER.map((option) => (
             <label key={option} htmlFor={`pantry-status-${option}`}>
               <input
@@ -298,7 +298,7 @@ export function Pantry() {
               <div
                 className="pantry-item__signals"
                 role="group"
-                aria-label={`Signal for ${item.name}`}
+                aria-label={`Status for ${item.name}`}
               >
                 {STATUS_ORDER.map((option) => (
                   <button

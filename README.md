@@ -9,7 +9,7 @@ not been implemented yet.
 Prerequisites: Node.js 24 and pnpm 10. The recommended setup is the included
 Dev Container. Dev Containers and GitHub Codespaces run `pnpm run setup`
 automatically when they are created, installing both the locked JavaScript
-dependencies and the Chromium version required by Playwright.
+dependencies and the Chromium and WebKit browsers required by Playwright.
 
 ```bash
 pnpm run setup
@@ -37,7 +37,7 @@ environment, security, and delivery decisions.
 
 | Command             | Purpose                                           |
 | ------------------- | ------------------------------------------------- |
-| `pnpm run setup`    | Install locked packages and Playwright Chromium   |
+| `pnpm run setup`    | Install locked packages and Playwright browsers   |
 | `pnpm dev`          | Migrate and start the full local application      |
 | `pnpm build`        | Create a production Worker and client build       |
 | `pnpm test`         | Run React/unit tests and Worker integration tests |

@@ -3,7 +3,7 @@
 ## Pull-request quality gate
 
 `.github/workflows/ci.yml` installs the lockfile with Node 24/pnpm 10, installs a
-Chromium test browser, and runs `./scripts/verify.sh`. That script is the single
+Chromium and WebKit test browsers, and runs `./scripts/verify.sh`. That script is the single
 shared gate for local agents, Dev Containers, Codespaces, and CI: formatting,
 linting, type checking, unit tests, Workers-runtime tests, production build, and
 desktop/mobile browser tests.
