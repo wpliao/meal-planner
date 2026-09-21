@@ -1,6 +1,6 @@
 # Feature: Lightweight household pantry
 
-- Status: Designing
+- Status: Accepted
 - Phase: 2
 - Issue: [#16](https://github.com/wpliao/meal-planner/issues/16)
 - Product owner: Repository owner
@@ -241,8 +241,9 @@ paths, named symbols, exact test names, and links to passing runs.
 
 ## Rollout and rollback
 
-1. Review and accept this design in [issue #16](https://github.com/wpliao/meal-planner/issues/16).
-   Do not implement behavior while status remains Designing.
+1. ~~Review and accept this design in
+   [issue #16](https://github.com/wpliao/meal-planner/issues/16).~~ Accepted on
+   2026-09-21; implementation may begin once this status reaches `main`.
 2. Implement migration `0002`, application behavior, tests, and data-model
    documentation together. Run the full local gate, PR CI, Sonar, and security
    review before merge.
@@ -258,22 +259,30 @@ or reverse an applied migration. Preserve pantry rows for a forward fix unless
 the owner explicitly requests deletion. Inspect D1 backup/restore options
 before any destructive recovery. Development and production never share D1.
 
-## Open design decisions for the owner
+## Resolved design decisions
 
-- Confirm that **Available / Low / Needed** are the right three signals and that
-  Low and Needed should both appear in Shopping.
-- Confirm that every active member, not only an owner, may edit the shared pantry.
-- Confirm that quantities and automatic use tracking should stay out of Phase 2.
+The product owner resolved these on 2026-09-21 in the
+[approval record](https://github.com/wpliao/meal-planner/issues/16#issuecomment-5757123841). They are settled for Phase 2; reopening any of them
+requires a design change recorded in the decision log below.
+
+- **Signals**: **Available / Low / Needed** are the correct three manual
+  signals. Both Low and Needed appear in Shopping, with Needed ordered first.
+  Marking an item Available removes it from Shopping.
+- **Edit access**: every **active household member** may add, rename, re-signal,
+  and delete pantry items, not only an owner.
+- **Scope**: quantities, units, expiry dates, and automatic consumption tracking
+  stay out of Phase 2. Signals remain manually maintained.
 
 ## Decision and change log
 
-| Date       | Change                                                      | Reason                                                 | Evidence                                                      |
-| ---------- | ----------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------- |
-| 2026-09-21 | Initial lightweight pantry design proposed for owner review | Keep availability useful without exact-use bookkeeping | [Issue #16](https://github.com/wpliao/meal-planner/issues/16) |
+| Date       | Change                                                                                                               | Reason                                                                                                             | Evidence                                                                                    |
+| ---------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| 2026-09-21 | Initial lightweight pantry design proposed for owner review                                                          | Keep availability useful without exact-use bookkeeping                                                             | [Issue #16](https://github.com/wpliao/meal-planner/issues/16)                               |
+| 2026-09-21 | Product owner accepted the design and authorized implementation; the three open decisions were confirmed as proposed | The signal model, shared member edit access, and the exclusion of quantities match the intended lightweight pantry | [Approval record](https://github.com/wpliao/meal-planner/issues/16#issuecomment-5757123841) |
 
 ## Release record
 
-- Design approval: Pending
+- Design approval: Accepted on 2026-09-21 ([approval record](https://github.com/wpliao/meal-planner/issues/16#issuecomment-5757123841))
 - Local verification: Not run for implementation; design only
 - Development validation: Pending
 - Production release: Pending separate explicit approval
