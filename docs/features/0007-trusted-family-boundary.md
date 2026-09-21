@@ -5,7 +5,7 @@
 - Issue: [#7](https://github.com/wpliao/meal-planner/issues/7)
 - Product owner: Repository owner
 - Last updated: 2026-09-21
-- Pull requests: [#8 — design](https://github.com/wpliao/meal-planner/pull/8); [#9 — implementation](https://github.com/wpliao/meal-planner/pull/9); [#10 — bootstrap failure classification and traceability](https://github.com/wpliao/meal-planner/pull/10); [#11 — development validation and initial action discoverability correction](https://github.com/wpliao/meal-planner/pull/11); [#12 — balanced responsive member layout](https://github.com/wpliao/meal-planner/pull/12); [#13 — panel-width member layout](https://github.com/wpliao/meal-planner/pull/13)
+- Pull requests: [#8 — design](https://github.com/wpliao/meal-planner/pull/8); [#9 — implementation](https://github.com/wpliao/meal-planner/pull/9); [#10 — bootstrap failure classification and traceability](https://github.com/wpliao/meal-planner/pull/10); [#11 — development validation and initial action discoverability correction](https://github.com/wpliao/meal-planner/pull/11); [#12 — balanced responsive member layout](https://github.com/wpliao/meal-planner/pull/12); [#13 — panel-width member layout](https://github.com/wpliao/meal-planner/pull/13); [#14 — development acceptance record](https://github.com/wpliao/meal-planner/pull/14)
 
 ## Problem and outcome
 
@@ -56,27 +56,27 @@ context and do not read Cloudflare headers directly.
 Identifiers are stable after the design is accepted. Changed or superseded
 criteria remain in this document and are explained in the decision log.
 
-- [ ] `AC-01`: Every non-health product API rejects a missing, invalid, expired,
+- [x] `AC-01`: Every non-health product API rejects a missing, invalid, expired,
       wrong-issuer, wrong-audience, or non-user Cloudflare Access application token.
-- [ ] `AC-02`: A valid Access identity must map to exactly one active household
+- [x] `AC-02`: A valid Access identity must map to exactly one active household
       membership before a protected API returns household data.
-- [ ] `AC-03`: An active member can retrieve a minimal session containing their
+- [x] `AC-03`: An active member can retrieve a minimal session containing their
       application member ID, verified email, role, and household ID/name; it contains
       no token or unnecessary Access claims.
-- [ ] `AC-04`: The initial owner can be created only while the installation is
+- [x] `AC-04`: The initial owner can be created only while the installation is
       empty and only when the verified Access email matches the environment-scoped
       bootstrap secret.
-- [ ] `AC-05`: An owner can list, add, change the role of, revoke, reactivate, and
+- [x] `AC-05`: An owner can list, add, change the role of, revoke, reactivate, and
       delete eligible household members; a regular member cannot, and an operation
       cannot leave the household without an active owner.
-- [ ] `AC-06`: Revocation takes effect on the next protected API request and does
+- [x] `AC-06`: Revocation takes effect on the next protected API request and does
       not depend on the Cloudflare Access session expiring.
-- [ ] `AC-07`: The responsive client presents accessible loading, setup,
+- [x] `AC-07`: The responsive client presents accessible loading, setup,
       signed-in, unauthorized, validation, empty, success, and failure states.
-- [ ] `AC-08`: Identity assertions, tokens, secrets, and member email addresses
+- [x] `AC-08`: Identity assertions, tokens, secrets, and member email addresses
       are excluded from application logs; persistence uses prepared,
       household-scoped D1 statements.
-- [ ] `AC-09`: Local and automated tests cover token validation, household
+- [x] `AC-09`: Local and automated tests cover token validation, household
       isolation, role authorization, bootstrap safety, revocation, migrations, and
       the primary owner/member browser journeys without remote services.
 - [ ] `AC-10`: Development and production use distinct audience settings,
@@ -321,10 +321,13 @@ Implementation merged to `main` in
 followed by the correction in
 [#10](https://github.com/wpliao/meal-planner/pull/10) as `81fb6d3` and the first
 member-action discoverability correction in
-[#11](https://github.com/wpliao/meal-planner/pull/11) as `c7af9ca`. CI and the
-Sonar Quality Gate passed for all three. Development deployment and
-initial-owner bootstrap evidence are recorded below; acceptance checkboxes
-remain open until the outstanding manual scenarios are complete.
+[#11](https://github.com/wpliao/meal-planner/pull/11) as `c7af9ca`, the balanced
+layout in [#12](https://github.com/wpliao/meal-planner/pull/12) as `0599cd3`, and
+the panel-width correction in
+[#13](https://github.com/wpliao/meal-planner/pull/13) as `7088fea`. CI and the
+Sonar Quality Gate passed for each. Development validation is complete with the
+manual screen-reader exercise explicitly deferred by the product owner. `AC-10`
+remains open because Phase 1 has not been rolled out to production.
 
 | Criterion | Implementation                                                                                                                                              | Automated tests                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Release evidence                                                               |
 | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
@@ -332,12 +335,12 @@ remain open until the outstanding manual scenarios are complete.
 | `AC-02`   | `src/worker/auth/member-context.ts` — `requireMemberContext`; `src/worker/data/household-repository.ts`                                                     | `test/worker/members.test.ts` — “returns the activated membership to concurrent first requests”; “denies non-members and regular members from owner operations”; “keeps target operations scoped to the actor household”                                                                                                                                                                                                                                                  | `V-LOCAL-01`; `V-DEV-03`                                                       |
 | `AC-03`   | `src/worker/index.ts` — `GET /api/session`; `src/shared/api.ts` — session contracts                                                                         | `test/worker/session-bootstrap.test.ts` — “atomically creates the first household owner and returns a minimal session”; `src/client/App.test.tsx` — “shows the member-only family view without management controls”                                                                                                                                                                                                                                                       | `V-LOCAL-01`; `V-DEV-02`; `V-DEV-03`                                           |
 | `AC-04`   | `src/worker/index.ts` — `POST /api/bootstrap`; `migrations/0001_create_household_identity.sql`                                                              | `test/worker/session-bootstrap.test.ts` — “allows only the configured verified identity to bootstrap”; “creates exactly one family space under concurrent bootstrap requests”; repeated-bootstrap test; “does not report an incomplete setup as an existing family space”; “stays generic when the installation check cannot run either”; “still reports a genuine conflict when the installation exists”                                                                 | `V-LOCAL-01`; `V-DEV-01`; `V-DEV-02`                                           |
-| `AC-05`   | `src/worker/index.ts` — member routes; `src/worker/data/household-repository.ts` — owner mutations                                                          | `test/worker/members.test.ts` — full regular-member mutation denial; lifecycle/deletion tests; “preserves an active owner under concurrent owner demotions”                                                                                                                                                                                                                                                                                                               | `V-LOCAL-01`; CI and Sonar passed in #9                                        |
-| `AC-06`   | `src/worker/auth/member-context.ts` — per-request membership lookup                                                                                         | `test/worker/members.test.ts` — “supports role, revocation, reactivation, and immediate denial”                                                                                                                                                                                                                                                                                                                                                                           | `V-LOCAL-01`; CI and Sonar passed in #9                                        |
-| `AC-07`   | `src/client/App.tsx`; `src/client/styles.css`                                                                                                               | `src/client/App.test.tsx` — setup, validation, lifecycle, destructive confirmation, reconciliation, failure, and focus tests; `tests/e2e/family-boundary.spec.ts` — owner bootstrap/invite/remove, member-only, denied, and “adapts member information and actions to the panel without horizontal scrolling” journeys                                                                                                                                                    | `V-LOCAL-01`; `V-LOCAL-06`; `V-LOCAL-07`; `V-LOCAL-08`; `V-DEV-02`; `V-DEV-03` |
-| `AC-08`   | `src/worker/http.ts`; `public/_headers` — static-document headers; `src/worker/data/household-repository.ts` — validation, headers, prepared scoped queries | `test/worker/members.test.ts` — no identity logging and household scope; `test/worker/session-bootstrap.test.ts` — origin/content-type/body-size validation, including streamed bodies without a trustworthy content length; `tests/e2e/security-headers.spec.ts` — “serves the application document with the static security headers”; “serves built assets with the same framing protection”; “does not serve the headers configuration file itself”                    | `V-LOCAL-01`; security review passed                                           |
+| `AC-05`   | `src/worker/index.ts` — member routes; `src/worker/data/household-repository.ts` — owner mutations                                                          | `test/worker/members.test.ts` — full regular-member mutation denial; lifecycle/deletion tests; “preserves an active owner under concurrent owner demotions”                                                                                                                                                                                                                                                                                                               | `V-LOCAL-01`; `V-DEV-03`; `V-DEV-05`                                           |
+| `AC-06`   | `src/worker/auth/member-context.ts` — per-request membership lookup                                                                                         | `test/worker/members.test.ts` — “supports role, revocation, reactivation, and immediate denial”                                                                                                                                                                                                                                                                                                                                                                           | `V-LOCAL-01`; `V-DEV-05`                                                       |
+| `AC-07`   | `src/client/App.tsx`; `src/client/styles.css`                                                                                                               | `src/client/App.test.tsx` — setup, validation, lifecycle, destructive confirmation, reconciliation, failure, and focus tests; `tests/e2e/family-boundary.spec.ts` — owner bootstrap/invite/remove, member-only, denied, and “adapts member information and actions to the panel without horizontal scrolling” journeys                                                                                                                                                    | `V-LOCAL-01`; `V-LOCAL-06`; `V-LOCAL-07`; `V-LOCAL-08`; `V-DEV-04`; `V-DEV-06` |
+| `AC-08`   | `src/worker/http.ts`; `public/_headers` — static-document headers; `src/worker/data/household-repository.ts` — validation, headers, prepared scoped queries | `test/worker/members.test.ts` — no identity logging and household scope; `test/worker/session-bootstrap.test.ts` — origin/content-type/body-size validation, including streamed bodies without a trustworthy content length; `tests/e2e/security-headers.spec.ts` — “serves the application document with the static security headers”; “serves built assets with the same framing protection”; “does not serve the headers configuration file itself”                    | `V-LOCAL-01`; security review; `V-DEV-07`                                      |
 | `AC-09`   | `test/worker/helpers.ts`; `scripts/dev-e2e.sh`; `vitest.worker.config.ts`                                                                                   | Complete client, Worker-runtime, migration, and isolated desktop/mobile Playwright suites                                                                                                                                                                                                                                                                                                                                                                                 | `V-LOCAL-01`; CI and Sonar passed in #9                                        |
-| `AC-10`   | `wrangler.jsonc`; `.github/workflows/deploy.yml`; `scripts/dev.sh`; `docs/ENVIRONMENTS.md`                                                                  | `test/worker/migration.test.ts`; generated binding check; named-environment builds; fresh local migration/startup check                                                                                                                                                                                                                                                                                                                                                   | `V-LOCAL-02`; `V-DEV-01`; production pending                                   |
+| `AC-10`   | `wrangler.jsonc`; `.github/workflows/deploy.yml`; `scripts/dev.sh`; `docs/ENVIRONMENTS.md`                                                                  | `test/worker/migration.test.ts`; generated binding check; named-environment builds; fresh local migration/startup check                                                                                                                                                                                                                                                                                                                                                   | `V-LOCAL-02`; `V-DEV-01`; `V-DEV-04`; production pending                       |
 
 ### Verification evidence
 
@@ -401,11 +404,41 @@ remain open until the outstanding manual scenarios are complete.
   [the denial record](https://github.com/wpliao/meal-planner/issues/7#issuecomment-5749374636)
   and
   [the activation record](https://github.com/wpliao/meal-planner/issues/7#issuecomment-5749400209).
+- `V-DEV-04` (2026-09-21): the owner approved the final desktop layout from a
+  local screenshot, then [PR #13](https://github.com/wpliao/meal-planner/pull/13)
+  merged as `7088fea`. The protected
+  [development workflow](https://github.com/wpliao/meal-planner/actions/runs/35522109662)
+  passed verification, the named build, migration application, and deployment
+  from that exact commit while production jobs remained skipped. The owner then
+  confirmed the authenticated desktop layout with real member data. Evidence is
+  recorded in [issue #7](https://github.com/wpliao/meal-planner/issues/7#issuecomment-5751029790).
+- `V-DEV-05` (2026-09-21): the owner revoked the active second member while its
+  Cloudflare Access-authenticated browser session remained open. Refreshing that
+  session required no new login but immediately rendered the not-a-member state
+  without household data. Evidence is recorded in
+  [issue #7](https://github.com/wpliao/meal-planner/issues/7#issuecomment-5751047460).
+- `V-DEV-06` (2026-09-21): the owner confirmed visible keyboard focus, initial
+  dialog focus, trapped Tab navigation, Escape dismissal, and restoration to the
+  invoking control. The owner explicitly deferred a separate manual screen-reader
+  exercise; native semantics and automated accessibility coverage remain intact.
+  Evidence is recorded in the
+  [keyboard result](https://github.com/wpliao/meal-planner/issues/7#issuecomment-5751060315)
+  and [deferral decision](https://github.com/wpliao/meal-planner/issues/7#issuecomment-5751073741).
+- `V-DEV-07` (2026-09-21): the authenticated document retained all seven static
+  security headers through the deployed Cloudflare edge. Workers Logs searches
+  found no owner/member emails, household name, or bootstrap-secret label; source
+  inspection and the passing runtime console-spy regression establish that the
+  application does not emit the Access assertion or identity data. The Cloudflare
+  header-field autocomplete was not misreported as a value search. Evidence is
+  recorded in the
+  [header result](https://github.com/wpliao/meal-planner/issues/7#issuecomment-5751099014)
+  and [log result](https://github.com/wpliao/meal-planner/issues/7#issuecomment-5754960154).
 - Independent security review found no unresolved high-severity issue after all
   review findings were corrected. CI and the Sonar Quality Gate passed for
-  [PR #9](https://github.com/wpliao/meal-planner/pull/9) and
-  [PR #10](https://github.com/wpliao/meal-planner/pull/10). The remaining
-  development Access scenarios and production rollout remain pending.
+  [PR #9](https://github.com/wpliao/meal-planner/pull/9),
+  [PR #10](https://github.com/wpliao/meal-planner/pull/10), and the responsive
+  follow-ups through [PR #13](https://github.com/wpliao/meal-planner/pull/13).
+  Production rollout remains pending separate explicit approval.
 
 ## Rollout and rollback
 
@@ -448,6 +481,7 @@ the owner explicitly deletes them.
 | 2026-09-20 | The member table pins its Actions column to the visible right edge                                                                                                                 | Development acceptance showed that working role and revocation controls were undiscoverable beyond a horizontal scrollbar on a computer browser                                  | [Issue #7 acceptance finding](https://github.com/wpliao/meal-planner/issues/7#issuecomment-5749507874); `V-LOCAL-06` |
 | 2026-09-20 | Member administration uses information-first desktop columns and stacked mobile member cards instead of a pinned action column                                                     | Owner review found that pinning made actions discoverable but consumed too much space and hid member information; the adaptive layout keeps both visible without scrolling       | Owner screenshot and feedback; `V-LOCAL-07`                                                                          |
 | 2026-09-21 | The member layout responds to the management panel's width instead of the overall browser viewport                                                                                 | The desktop browser remained wide while its sidebar panel was too narrow for four columns, causing role and status to collide; panel containment selects the legible card layout | Owner local-preview approval; `V-LOCAL-08`                                                                           |
+| 2026-09-21 | Manual screen-reader validation is deferred while semantic implementation and automated accessibility coverage remain                                                              | The owner does not require a VoiceOver exercise for this private family app; preserving the low-cost accessible foundation avoids weakening the implementation                   | Owner decision; `V-DEV-06`                                                                                           |
 
 ## Release record
 
@@ -464,14 +498,16 @@ the owner explicitly deletes them.
   the balanced desktop and stacked mobile refinement in
   [#12](https://github.com/wpliao/meal-planner/pull/12) merged as `0599cd3` with
   CI and the Sonar Quality Gate passing. Its panel-width follow-up was approved
-  through a local screenshot and is under review in
-  [#13](https://github.com/wpliao/meal-planner/pull/13).
-- Development deployment: `V-DEV-01` complete; migration `0001` and the Phase 1
-  Worker are deployed with the required values restored as encrypted secrets.
-- Development validation: `V-DEV-02` and `V-DEV-03` partially complete;
-  next-request revocation, accessibility, edge-header, and log-privacy checks
-  remain pending. The refined member layout awaits review and development
-  redeployment before its manual recheck.
+  through a local screenshot and merged through
+  [#13](https://github.com/wpliao/meal-planner/pull/13) as `7088fea`; CI and the
+  Sonar Quality Gate passed.
+- Development deployment: `V-DEV-01` and `V-DEV-04` complete; migration `0001`
+  and the final Phase 1 Worker are deployed with the required values stored as
+  encrypted secrets.
+- Development validation: Complete through `V-DEV-07`. The manual screen-reader
+  exercise is explicitly deferred and not reported as passed; keyboard,
+  responsive-layout, denial, activation, revocation, edge-header, and
+  application-log checks are recorded.
 - Production release: Pending explicit approval
 - Known follow-up work: Household-data deletion/transfer must be designed with the
   first feature that stores product data.
