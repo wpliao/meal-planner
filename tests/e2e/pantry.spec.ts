@@ -26,10 +26,22 @@ const pantryStatus = (page: Page) =>
 const uniqueName = (prefix: string) =>
   `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
 
+// The add form is disabled while the previous mutation settles. Submitting
+// before it is ready sends an empty name, which only sets a field error and
+// leaves the previous notice in place — a silent no-op that reads as a hang.
+const submitItem = async (page: Page, name: string, signal?: string) => {
+  const field = page.getByLabel('Item name');
+  const button = page.getByRole('button', { name: 'Add item' });
+
+  await expect(button).toBeEnabled();
+  await field.fill(name);
+  await expect(field).toHaveValue(name);
+  if (signal) await page.getByLabel(signal, { exact: true }).check();
+  await button.click();
+};
+
 const addItem = async (page: Page, name: string, signal: string) => {
-  await page.getByLabel('Item name').fill(name);
-  await page.getByLabel(signal, { exact: true }).check();
-  await page.getByRole('button', { name: 'Add item' }).click();
+  await submitItem(page, name, signal);
   await expect(pantryStatus(page)).toContainText(
     `${name} was added to the pantry.`,
   );
@@ -72,8 +84,7 @@ test('a duplicate name is refused without creating a second item', async ({
 
   await addItem(page, name, 'Available');
 
-  await page.getByLabel('Item name').fill(name.toUpperCase());
-  await page.getByRole('button', { name: 'Add item' }).click();
+  await submitItem(page, name.toUpperCase());
 
   await expect(pantryStatus(page)).toContainText('already in your pantry');
   await expect(itemCard(page, name)).toHaveCount(1);
