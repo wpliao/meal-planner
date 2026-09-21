@@ -37,6 +37,11 @@ const jsonResponse = (body: unknown, status = 200) =>
 
 const listOnce = (items: PantryItem[]) => jsonResponse({ items });
 
+/** Rename and Remove now live behind the per-item actions menu. */
+const openItemMenu = (name = 'Rice') => {
+  fireEvent.click(screen.getByRole('button', { name: `Actions for ${name}` }));
+};
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -257,11 +262,12 @@ describe('Pantry', () => {
     render(<Pantry />);
     await screen.findByText('Rice');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+    openItemMenu();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
     fireEvent.change(screen.getByLabelText('New name'), {
       target: { value: 'Brown rice' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save name' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(
       await screen.findByText('The item was renamed to Brown rice.'),
@@ -282,7 +288,8 @@ describe('Pantry', () => {
     render(<Pantry />);
     await screen.findByText('Rice');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    openItemMenu();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove' }));
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText('Remove Rice?')).toBeInTheDocument();
 
@@ -301,7 +308,8 @@ describe('Pantry', () => {
 
     render(<Pantry />);
     await screen.findByText('Rice');
-    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    openItemMenu();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove' }));
 
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
 
@@ -323,7 +331,8 @@ describe('Pantry', () => {
     render(<Pantry />);
     await screen.findByText('Rice');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    openItemMenu();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove' }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove item' }));
 
     expect(
@@ -342,7 +351,8 @@ describe('Pantry', () => {
 
     render(<Pantry />);
     await screen.findByText('Rice');
-    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    openItemMenu();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove' }));
 
     const dialog = screen.getByRole('dialog');
     const remove = within(dialog).getByRole('button', { name: 'Remove item' });
@@ -364,11 +374,59 @@ describe('Pantry', () => {
 
     render(<Pantry />);
     await screen.findByText('Rice');
-    const trigger = screen.getByRole('button', { name: 'Remove' });
-    fireEvent.click(trigger);
+    openItemMenu();
+    const trigger = screen.getByRole('button', { name: 'Actions for Rice' });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove' }));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
     await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
+  it('opens the actions menu, moves with arrows, and closes on Escape', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => listOnce([item()]));
+
+    render(<Pantry />);
+    await screen.findByText('Rice');
+
+    const trigger = screen.getByRole('button', { name: 'Actions for Rice' });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(trigger);
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+
+    const rename = screen.getByRole('menuitem', { name: 'Rename' });
+    const remove = screen.getByRole('menuitem', { name: 'Remove' });
+    await waitFor(() => expect(rename).toHaveFocus());
+
+    const menu = screen.getByRole('menu');
+    fireEvent.keyDown(menu, { key: 'ArrowDown' });
+    expect(remove).toHaveFocus();
+    // Wraps rather than dead-ending at the last entry.
+    fireEvent.keyDown(menu, { key: 'ArrowDown' });
+    expect(rename).toHaveFocus();
+    fireEvent.keyDown(menu, { key: 'ArrowUp' });
+    expect(remove).toHaveFocus();
+
+    fireEvent.keyDown(menu, { key: 'Escape' });
+    await waitFor(() =>
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument(),
+    );
+    expect(trigger).toHaveFocus();
+  });
+
+  it('closes the actions menu when pressing outside it', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => listOnce([item()]));
+
+    render(<Pantry />);
+    await screen.findByText('Rice');
+    openItemMenu();
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+
+    fireEvent.pointerDown(document.body);
+
+    await waitFor(() =>
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument(),
+    );
   });
 
   it('moves focus to the result message after a change', async () => {

@@ -84,16 +84,14 @@ test('pantry panel', async ({ page }) => {
   await expect(pantry(page)).toHaveScreenshot('pantry-panel.png');
 });
 
-test('item action row', async ({ page }) => {
+test('item actions menu', async ({ page }) => {
   await stub(page);
+  const card = page.locator('.pantry-item').filter({ hasText: 'rice' });
+  await card.getByRole('button', { name: 'Actions for rice' }).click();
   // Scoped tightly on purpose. The same fault inside the whole panel changes
   // too few pixels to clear the ratio tolerance; here the affected text is a
   // large share of the area.
-  const actions = page
-    .locator('.pantry-item')
-    .filter({ hasText: 'rice' })
-    .locator('.pantry-item__actions');
-  await expect(actions).toHaveScreenshot('item-actions.png', {
+  await expect(page.getByRole('menu')).toHaveScreenshot('item-menu.png', {
     maxDiffPixelRatio: 0.005,
   });
 });
@@ -173,8 +171,13 @@ test('status control group', async ({ page }) => {
 
 test('pantry item with rename open', async ({ page }) => {
   await stub(page);
-  const card = page.locator('.pantry-item').filter({ hasText: 'olive oil' });
-  await card.getByRole('button', { name: 'Rename' }).click();
+  // Address the card by position, not by its text: inline renaming replaces
+  // the name with an input, whose value hasText cannot see. Order is fixed by
+  // the mocked data — needed, then low, then available.
+  const card = page.locator('.pantry-item').nth(1);
+  await expect(card).toContainText('olive oil');
+  await card.getByRole('button', { name: 'Actions for olive oil' }).click();
+  await page.getByRole('menuitem', { name: 'Rename' }).click();
   // Catches the rename field collapsing: a layout fault the component layer
   // cannot prevent.
   await expect(card).toHaveScreenshot('pantry-item-rename.png');
@@ -185,8 +188,9 @@ test('remove confirmation dialog', async ({ page }) => {
   await page
     .locator('.pantry-item')
     .filter({ hasText: 'rice' })
-    .getByRole('button', { name: 'Remove' })
+    .getByRole('button', { name: 'Actions for rice' })
     .click();
+  await page.getByRole('menuitem', { name: 'Remove' }).click();
   await expect(page.getByRole('dialog')).toHaveScreenshot('remove-dialog.png');
 });
 
