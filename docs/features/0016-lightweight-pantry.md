@@ -1,11 +1,11 @@
 # Feature: Lightweight household pantry
 
-- Status: Implementing
+- Status: Development validation
 - Phase: 2
 - Issue: [#16](https://github.com/wpliao/meal-planner/issues/16)
 - Product owner: Repository owner
 - Last updated: 2026-09-21
-- Pull requests: [#17 — design proposal](https://github.com/wpliao/meal-planner/pull/17); [#18 — implementation](https://github.com/wpliao/meal-planner/pull/18)
+- Pull requests: [#17 — design proposal](https://github.com/wpliao/meal-planner/pull/17); [#18 — implementation](https://github.com/wpliao/meal-planner/pull/18); [#19 — Safari coverage and layout corrections](https://github.com/wpliao/meal-planner/pull/19)
 
 ## Problem and outcome
 
@@ -50,18 +50,18 @@ Identifiers match [issue #16](https://github.com/wpliao/meal-planner/issues/16)
 and stay stable after design acceptance. Changed criteria must be retained as
 superseded and explained in the decision log.
 
-- [ ] `AC-01`: Active household members can view only their household's pantry
+- [x] `AC-01`: Active household members can view only their household's pantry
       items, with each item's name, availability signal, and last-change time;
       non-members cannot read them.
-- [ ] `AC-02`: Active members can add an item using a short name and one of three
+- [x] `AC-02`: Active members can add an item using a short name and one of three
       explicit signals: Available, Low, or Needed. No quantity is required.
-- [ ] `AC-03`: Active members can change an item's signal; a shopping view shows
+- [x] `AC-03`: Active members can change an item's signal; a shopping view shows
       Low and Needed items and no longer shows an item once marked Available.
-- [ ] `AC-04`: Active members can rename or delete an item, with duplicate names
+- [x] `AC-04`: Active members can rename or delete an item, with duplicate names
       prevented within one household and destructive removal confirmed in the UI.
-- [ ] `AC-05`: The pantry works on phone and desktop and has accessible loading,
+- [x] `AC-05`: The pantry works on phone and desktop and has accessible loading,
       empty, validation, success, conflict, and failure states.
-- [ ] `AC-06`: Pantry reads and mutations enforce the Phase 1
+- [x] `AC-06`: Pantry reads and mutations enforce the Phase 1
       identity/membership boundary, household-scoped D1 access, bounded
       validation, and no food-item or identity data in application logs.
 - [ ] `AC-07`: Deterministic local tests cover the migration, API boundary,
@@ -226,15 +226,15 @@ PR without real family data. Do not claim a check passed until its run exists.
 
 ## Traceability
 
-| Criterion | Implementation                                                                                                          | Automated tests                                                                                                                                                                                                                                                                                                                                     | Release evidence            |
-| --------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
-| `AC-01`   | `src/worker/index.ts` — `handlePantryCollection`; `src/worker/data/pantry-repository.ts` — `listPantryItems`            | `test/worker/pantry.test.ts` — “starts empty and adds an item with a signal but no quantity”; “never lets one household reach another household pantry”; “denies an identity that is not an active member”                                                                                                                                          | `V-LOCAL-P1`; PR CI pending |
-| `AC-02`   | `src/worker/index.ts` — `requirePantryName`/`requirePantryStatus`; `createPantryItem`; `src/client/Pantry.tsx` add form | `src/shared/pantry.test.ts` — normalization matrix; `test/worker/pantry.test.ts` — “treats case, spacing, and Unicode form differences as the same item”; `src/client/Pantry.test.tsx` — “adds an item with the chosen signal and reconciles from the server”                                                                                       | `V-LOCAL-P1`; PR CI pending |
-| `AC-03`   | `src/worker/data/pantry-repository.ts` — `updatePantryItem`; `src/shared/pantry.ts` — `shoppingItems`                   | `src/shared/pantry.test.ts` — ordering and shopping filter; `test/worker/pantry.test.ts` — “moves an item in and out of the shopping view by signal”; `tests/e2e/pantry.spec.ts` — “an item moves through Needed, Shopping, and Available”                                                                                                          | `V-LOCAL-P1`; PR CI pending |
-| `AC-04`   | `src/worker/data/pantry-repository.ts` — `deletePantryItem`, `nameTaken`; `src/client/Pantry.tsx` rename/remove         | `test/worker/pantry.test.ts` — “renames an item and rejects renaming onto another item”; “deletes an item only with its current version”; `tests/e2e/pantry.spec.ts` — “an item can be renamed and removed with confirmation”                                                                                                                       | `V-LOCAL-P1`; PR CI pending |
-| `AC-05`   | `src/client/Pantry.tsx`; `src/client/dialog.ts` — shared focus trap; `src/client/styles.css` — pantry rules             | `src/client/Pantry.test.tsx` — loading, empty, validation, conflict, failure, focus, and dialog tests including “traps Tab inside the confirmation dialog” and “restores focus to the trigger when the dialog is cancelled”; `tests/e2e/pantry.spec.ts` — “pantry names and actions fit the panel without sideways scrolling” on desktop and mobile | `V-LOCAL-P1`; PR CI pending |
-| `AC-06`   | `src/worker/index.ts` — `requireMemberForRequest` and mutation header checks; scoped prepared statements                | `test/worker/pantry.test.ts` — “requires same-origin JSON for every pantry mutation”; “rejects invalid names, statuses, versions, and unexpected fields”; “caps the pantry per household and keeps the message free of item names”; “writes no item name to the console during pantry work”                                                         | `V-LOCAL-P1`; PR CI pending |
-| `AC-07`   | `migrations/0002_create_pantry_items.sql`; `test/worker/helpers.ts`                                                     | `test/worker/migration.test.ts` — “applies 0002 on top of the Phase 1 schema without altering it”; constraint and cascade tests; full client/Worker/Playwright suites                                                                                                                                                                               | `V-LOCAL-P1`; dev pending   |
+| Criterion | Implementation                                                                                                          | Automated tests                                                                                                                                                                                                                                                                                                                                     | Release evidence                |
+| --------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `AC-01`   | `src/worker/index.ts` — `handlePantryCollection`; `src/worker/data/pantry-repository.ts` — `listPantryItems`            | `test/worker/pantry.test.ts` — “starts empty and adds an item with a signal but no quantity”; “never lets one household reach another household pantry”; “denies an identity that is not an active member”                                                                                                                                          | `V-DEV-P1`; CI and Sonar passed |
+| `AC-02`   | `src/worker/index.ts` — `requirePantryName`/`requirePantryStatus`; `createPantryItem`; `src/client/Pantry.tsx` add form | `src/shared/pantry.test.ts` — normalization matrix; `test/worker/pantry.test.ts` — “treats case, spacing, and Unicode form differences as the same item”; `src/client/Pantry.test.tsx` — “adds an item with the chosen signal and reconciles from the server”                                                                                       | `V-DEV-P1`; CI and Sonar passed |
+| `AC-03`   | `src/worker/data/pantry-repository.ts` — `updatePantryItem`; `src/shared/pantry.ts` — `shoppingItems`                   | `src/shared/pantry.test.ts` — ordering and shopping filter; `test/worker/pantry.test.ts` — “moves an item in and out of the shopping view by signal”; `tests/e2e/pantry.spec.ts` — “an item moves through Needed, Shopping, and Available”                                                                                                          | `V-DEV-P1`; CI and Sonar passed |
+| `AC-04`   | `src/worker/data/pantry-repository.ts` — `deletePantryItem`, `nameTaken`; `src/client/Pantry.tsx` rename/remove         | `test/worker/pantry.test.ts` — “renames an item and rejects renaming onto another item”; “deletes an item only with its current version”; `tests/e2e/pantry.spec.ts` — “an item can be renamed and removed with confirmation”                                                                                                                       | `V-DEV-P1`; CI and Sonar passed |
+| `AC-05`   | `src/client/Pantry.tsx`; `src/client/dialog.ts` — shared focus trap; `src/client/styles.css` — pantry rules             | `src/client/Pantry.test.tsx` — loading, empty, validation, conflict, failure, focus, and dialog tests including “traps Tab inside the confirmation dialog” and “restores focus to the trigger when the dialog is cancelled”; `tests/e2e/pantry.spec.ts` — “pantry names and actions fit the panel without sideways scrolling” on desktop and mobile | `V-DEV-P1`; CI and Sonar passed |
+| `AC-06`   | `src/worker/index.ts` — `requireMemberForRequest` and mutation header checks; scoped prepared statements                | `test/worker/pantry.test.ts` — “requires same-origin JSON for every pantry mutation”; “rejects invalid names, statuses, versions, and unexpected fields”; “caps the pantry per household and keeps the message free of item names”; “writes no item name to the console during pantry work”                                                         | `V-DEV-P1`; CI and Sonar passed |
+| `AC-07`   | `migrations/0002_create_pantry_items.sql`; `test/worker/helpers.ts`                                                     | `test/worker/migration.test.ts` — “applies 0002 on top of the Phase 1 schema without altering it”; constraint and cascade tests; full client/Worker/Playwright suites                                                                                                                                                                               | `V-DEV-P1`; production pending  |
 
 Development and production release evidence is added as each gate runs.
 
@@ -305,7 +305,28 @@ requires a design change recorded in the decision log below.
   formatting, lint, typecheck, 55 client tests, 70 Worker-runtime tests,
   coverage thresholds, production build, and 25 Playwright tests across desktop,
   mobile, and the asset pipeline.
-- Development validation: Pending
+- Development validation: `V-DEV-P1` complete on 2026-09-21. Migration `0002`
+  was applied to the development D1 database
+  (`5f5e98ba-7b27-4fcf-8c2b-ab1605461082`) and `42bc7cd` deployed through the
+  protected workflow. The owner then worked a 26-case run sheet against real
+  Cloudflare Access identities; `QA-01` through `QA-23` passed, covering
+  pre-merge acceptance, the merge, the deployment, and the complete development
+  acceptance set. The production cases `QA-24` through `QA-26` remain open.
+
+  Findings raised during acceptance and corrected before this record:
+  `QA-19` found the rename field collapsing to roughly 40px on desktop, and
+  `QA-23` found the status controls rendering several times their size on iOS
+  Safari and overlapping their own labels. Both are fixed in
+  [#19](https://github.com/wpliao/meal-planner/pull/19), which also added the
+  `webkit-desktop` and `webkit-mobile` Playwright projects — the suite had been
+  Chromium only, so no test had ever run in Safari's engine. Geometry
+  assertions now guard both defects.
+
+  Not proven by automation: `QA-16`, `QA-17` and `QA-20` required two real
+  Access identities, so cross-member visibility, stale-edit conflict, and
+  immediate revocation were confirmed by hand on separate devices. `QA-22`
+  confirmed by inspection that no item name reached the Worker logs.
+
 - Production release: Pending separate explicit approval
 - Known follow-up work: Recipe linkage, nutrition, photos, and automatic
   suggestions remain in later phases.
