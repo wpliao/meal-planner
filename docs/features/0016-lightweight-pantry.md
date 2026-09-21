@@ -1,11 +1,11 @@
 # Feature: Lightweight household pantry
 
-- Status: Accepted
+- Status: Implementing
 - Phase: 2
 - Issue: [#16](https://github.com/wpliao/meal-planner/issues/16)
 - Product owner: Repository owner
 - Last updated: 2026-09-21
-- Pull requests: [#17 — design proposal](https://github.com/wpliao/meal-planner/pull/17)
+- Pull requests: [#17 — design proposal](https://github.com/wpliao/meal-planner/pull/17); [#18 — implementation](https://github.com/wpliao/meal-planner/pull/18)
 
 ## Problem and outcome
 
@@ -209,8 +209,8 @@ independent of pantry state.
   through the protected workflow and validate a small owner add/update/view
   journey. Do not use real food names in screenshots or test artifacts.
 
-No test is claimed passed by this design proposal. Planned test file names and
-case names will be fixed in the implementation PR and entered below.
+Test names above match the implementation. Development and production evidence
+remains outstanding and is not claimed here.
 
 ### Evidence retention
 
@@ -226,27 +226,27 @@ PR without real family data. Do not claim a check passed until its run exists.
 
 ## Traceability
 
-| Criterion | Planned implementation                              | Planned automated/manual evidence                 | Release evidence |
-| --------- | --------------------------------------------------- | ------------------------------------------------- | ---------------- |
-| `AC-01`   | Worker pantry list and repository household scope   | Worker member/isolation tests; development checks | Pending          |
-| `AC-02`   | Client add form; Worker create and normalization    | Unit, Worker create, desktop/mobile E2E           | Pending          |
-| `AC-03`   | Client Shopping filter; Worker versioned state edit | Unit, Worker edit, desktop/mobile E2E             | Pending          |
-| `AC-04`   | Client rename/delete; Worker uniqueness and delete  | Worker conflict/delete; client confirmation tests | Pending          |
-| `AC-05`   | Responsive pantry UI and semantic status controls   | Client accessibility; desktop/mobile E2E          | Pending          |
-| `AC-06`   | Phase 1 member context; scoped prepared D1 queries  | Worker authorization, validation, log-spy tests   | Pending          |
-| `AC-07`   | Migration, test harness, and deployment workflow    | Local/CI/Sonar; dev/prod release checks           | Pending          |
+| Criterion | Implementation                                                                                                          | Automated tests                                                                                                                                                                                                                                               | Release evidence            |
+| --------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| `AC-01`   | `src/worker/index.ts` — `handlePantryCollection`; `src/worker/data/pantry-repository.ts` — `listPantryItems`            | `test/worker/pantry.test.ts` — “starts empty and adds an item with a signal but no quantity”; “never lets one household reach another household pantry”; “denies an identity that is not an active member”                                                    | `V-LOCAL-P1`; PR CI pending |
+| `AC-02`   | `src/worker/index.ts` — `requirePantryName`/`requirePantryStatus`; `createPantryItem`; `src/client/Pantry.tsx` add form | `src/shared/pantry.test.ts` — normalization matrix; `test/worker/pantry.test.ts` — “treats case, spacing, and Unicode form differences as the same item”; `src/client/Pantry.test.tsx` — “adds an item with the chosen signal and reconciles from the server” | `V-LOCAL-P1`; PR CI pending |
+| `AC-03`   | `src/worker/data/pantry-repository.ts` — `updatePantryItem`; `src/shared/pantry.ts` — `shoppingItems`                   | `src/shared/pantry.test.ts` — ordering and shopping filter; `test/worker/pantry.test.ts` — “moves an item in and out of the shopping view by signal”; `tests/e2e/pantry.spec.ts` — “an item moves through Needed, Shopping, and Available”                    | `V-LOCAL-P1`; PR CI pending |
+| `AC-04`   | `src/worker/data/pantry-repository.ts` — `deletePantryItem`, `nameTaken`; `src/client/Pantry.tsx` rename/remove         | `test/worker/pantry.test.ts` — “renames an item and rejects renaming onto another item”; “deletes an item only with its current version”; `tests/e2e/pantry.spec.ts` — “an item can be renamed and removed with confirmation”                                 | `V-LOCAL-P1`; PR CI pending |
+| `AC-05`   | `src/client/Pantry.tsx`; `src/client/styles.css` — pantry rules                                                         | `src/client/Pantry.test.tsx` — loading, empty, validation, conflict, failure, focus, and dialog tests; `tests/e2e/pantry.spec.ts` — “pantry names and actions fit the panel without sideways scrolling” on desktop and mobile                                 | `V-LOCAL-P1`; PR CI pending |
+| `AC-06`   | `src/worker/index.ts` — `requireMemberForRequest` and mutation header checks; scoped prepared statements                | `test/worker/pantry.test.ts` — “requires same-origin JSON for every pantry mutation”; “rejects invalid names, statuses, versions, and unexpected fields”; “caps the pantry per household and keeps the message free of item names”                            | `V-LOCAL-P1`; PR CI pending |
+| `AC-07`   | `migrations/0002_create_pantry_items.sql`; `test/worker/helpers.ts`                                                     | `test/worker/migration.test.ts` — “applies 0002 on top of the Phase 1 schema without altering it”; constraint and cascade tests; full client/Worker/Playwright suites                                                                                         | `V-LOCAL-P1`; dev pending   |
 
-The implementation PR must replace these planned descriptions with repository
-paths, named symbols, exact test names, and links to passing runs.
+Development and production release evidence is added as each gate runs.
 
 ## Rollout and rollback
 
 1. ~~Review and accept this design in
    [issue #16](https://github.com/wpliao/meal-planner/issues/16).~~ Accepted on
    2026-09-21; implementation may begin once this status reaches `main`.
-2. Implement migration `0002`, application behavior, tests, and data-model
-   documentation together. Run the full local gate, PR CI, Sonar, and security
-   review before merge.
+2. ~~Implement migration `0002`, application behavior, tests, and data-model
+   documentation together.~~ Done in
+   [#18](https://github.com/wpliao/meal-planner/pull/18); PR CI, Sonar, and the
+   independent security review run against that pull request.
 3. Apply migration in development through the named workflow; validate with
    real family identities and record the results.
 4. Obtain separate owner approval for production. The production workflow
@@ -275,15 +275,21 @@ requires a design change recorded in the decision log below.
 
 ## Decision and change log
 
-| Date       | Change                                                                                                               | Reason                                                                                                             | Evidence                                                                                    |
-| ---------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| 2026-09-21 | Initial lightweight pantry design proposed for owner review                                                          | Keep availability useful without exact-use bookkeeping                                                             | [Issue #16](https://github.com/wpliao/meal-planner/issues/16)                               |
-| 2026-09-21 | Product owner accepted the design and authorized implementation; the three open decisions were confirmed as proposed | The signal model, shared member edit access, and the exclusion of quantities match the intended lightweight pantry | [Approval record](https://github.com/wpliao/meal-planner/issues/16#issuecomment-5757123841) |
+| Date       | Change                                                                                                                            | Reason                                                                                                                      | Evidence                                                                                    |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| 2026-09-21 | Initial lightweight pantry design proposed for owner review                                                                       | Keep availability useful without exact-use bookkeeping                                                                      | [Issue #16](https://github.com/wpliao/meal-planner/issues/16)                               |
+| 2026-09-21 | Implementation added migration `0002`, the pantry API, the shared pantry section, and the full local test set                     | Turn the accepted design into shipping behavior within the agreed scope                                                     | [#18](https://github.com/wpliao/meal-planner/pull/18); `V-LOCAL-P1`                         |
+| 2026-09-21 | Optimistic concurrency uses an integer `version` column with `409 stale_version`, and duplicate names return `409 duplicate_name` | A stale screen must never silently overwrite another member's change, and the two conflicts need different recovery actions | `V-LOCAL-P1`; concurrent-edit test                                                          |
+| 2026-09-21 | The per-household cap is enforced by a guarded `INSERT ... SELECT ... WHERE (count) < limit` rather than a separate count         | Counting first and inserting afterwards would let two concurrent adds exceed the cap                                        | `V-LOCAL-P1`                                                                                |
+| 2026-09-21 | Product owner accepted the design and authorized implementation; the three open decisions were confirmed as proposed              | The signal model, shared member edit access, and the exclusion of quantities match the intended lightweight pantry          | [Approval record](https://github.com/wpliao/meal-planner/issues/16#issuecomment-5757123841) |
 
 ## Release record
 
 - Design approval: Accepted on 2026-09-21 ([approval record](https://github.com/wpliao/meal-planner/issues/16#issuecomment-5757123841))
-- Local verification: Not run for implementation; design only
+- Local verification: `V-LOCAL-P1` (2026-09-21) — `./scripts/verify.sh` passed:
+  formatting, lint, typecheck, 55 client tests, 70 Worker-runtime tests,
+  coverage thresholds, production build, and 25 Playwright tests across desktop,
+  mobile, and the asset pipeline.
 - Development validation: Pending
 - Production release: Pending separate explicit approval
 - Known follow-up work: Recipe linkage, nutrition, photos, and automatic

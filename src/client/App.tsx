@@ -15,6 +15,7 @@ import type {
   MemberRole,
   SessionResponse,
 } from '../shared/api';
+import { Pantry } from './Pantry';
 
 type SessionState =
   | { kind: 'loading' }
@@ -387,6 +388,7 @@ export function App() {
           </output>
         )}
       </section>
+      {sessionState.kind === 'ready' && <Pantry />}
       {isOwner ? (
         <aside className="card" aria-labelledby="members-title">
           <p className="card__number">Family access</p>

@@ -7,6 +7,16 @@ import type {
   MemberRole,
   SessionResponse,
 } from '../shared/api';
+import {
+  cleanPantryDisplayName,
+  isPantryStatus,
+  isValidPantryName,
+  normalizePantryName,
+  PANTRY_NAME_MAX_LENGTH,
+  type PantryItemResponse,
+  type PantryItemsResponse,
+  type PantryStatus,
+} from '../shared/pantry';
 import { getVerifiedIdentity } from './auth/access-identity';
 import {
   isValidEmail,
@@ -26,6 +36,13 @@ import {
   resolveMemberContext,
   type MemberContext,
 } from './data/household-repository';
+import {
+  createPantryItem,
+  deletePantryItem,
+  listPantryItems,
+  updatePantryItem,
+  type PantryItemChange,
+} from './data/pantry-repository';
 import { ApiError, invalidRequest } from './errors';
 import {
   errorResponse,
@@ -47,6 +64,8 @@ type IdentityProvider = (
 const LOCAL_BOOTSTRAP_EMAIL = 'owner@example.test';
 const MEMBER_PATH =
   /^\/api\/household\/members\/([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/iu;
+const PANTRY_ITEM_PATH =
+  /^\/api\/pantry\/items\/([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/iu;
 
 const toReadySession = (member: MemberContext): SessionResponse => ({
   status: 'ready',
@@ -86,6 +105,36 @@ const requireHouseholdName = (value: unknown): string => {
     throw invalidRequest('Household name must be between 1 and 80 characters.');
   }
   return name;
+};
+
+const requirePantryName = (
+  value: unknown,
+): { displayName: string; normalizedName: string } => {
+  if (typeof value !== 'string') {
+    throw invalidRequest('Item name must be a string.');
+  }
+  const displayName = cleanPantryDisplayName(value);
+  const normalizedName = normalizePantryName(value);
+  if (!isValidPantryName(normalizedName)) {
+    throw invalidRequest(
+      `Enter an item name between 1 and ${PANTRY_NAME_MAX_LENGTH} characters.`,
+    );
+  }
+  return { displayName, normalizedName };
+};
+
+const requirePantryStatus = (value: unknown): PantryStatus => {
+  if (!isPantryStatus(value)) {
+    throw invalidRequest('Status must be available, low, or needed.');
+  }
+  return value;
+};
+
+const requireVersion = (value: unknown): number => {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1) {
+    throw invalidRequest('Version must be a positive whole number.');
+  }
+  return value;
 };
 
 const requireRole = (value: unknown): MemberRole => {
@@ -144,14 +193,21 @@ const handleBootstrap = async (
   return json(toReadySession(member), { status: 201 });
 };
 
-const requireOwnerForRequest = async (
+const requireMemberForRequest = async (
   request: Request,
   env: AppEnv,
   identityProvider: IdentityProvider,
 ): Promise<MemberContext> => {
   const identity = await identityProvider(request, env);
-  return requireOwner(await requireMemberContext(env.DB, identity));
+  return requireMemberContext(env.DB, identity);
 };
+
+const requireOwnerForRequest = async (
+  request: Request,
+  env: AppEnv,
+  identityProvider: IdentityProvider,
+): Promise<MemberContext> =>
+  requireOwner(await requireMemberForRequest(request, env, identityProvider));
 
 const handleMembersCollection = async (
   request: Request,
@@ -238,6 +294,113 @@ const handleMember = async (
   throw new ApiError(404, 'not_found', 'Not found.');
 };
 
+// Every active member shares the pantry; owner role is not required here.
+const handlePantryCollection = async (
+  request: Request,
+  env: AppEnv,
+  identityProvider: IdentityProvider,
+): Promise<Response> => {
+  if (request.method === 'GET') {
+    const member = await requireMemberForRequest(
+      request,
+      env,
+      identityProvider,
+    );
+    const body: PantryItemsResponse = {
+      items: await listPantryItems(env.DB, member.householdId),
+    };
+    return json(body);
+  }
+
+  if (request.method === 'POST') {
+    requireMutationHeaders(request);
+    const member = await requireMemberForRequest(
+      request,
+      env,
+      identityProvider,
+    );
+    const input = await readJsonObject(request);
+    requireExactFields(input, ['name', 'status']);
+    const { displayName, normalizedName } = requirePantryName(input.name);
+    const item = await createPantryItem(
+      env.DB,
+      member.householdId,
+      displayName,
+      normalizedName,
+      requirePantryStatus(input.status),
+    );
+    const body: PantryItemResponse = { item };
+    return json(body, { status: 201 });
+  }
+
+  throw new ApiError(404, 'not_found', 'Not found.');
+};
+
+const readPantryChange = (input: Record<string, unknown>): PantryItemChange => {
+  const allowed = ['version', 'name', 'status'];
+  const keys = Object.keys(input);
+  if (
+    !Object.hasOwn(input, 'version') ||
+    keys.length < 2 ||
+    keys.some((key) => !allowed.includes(key))
+  ) {
+    throw invalidRequest('Provide version and at least one of name or status.');
+  }
+
+  const change: PantryItemChange = {};
+  if (Object.hasOwn(input, 'name')) {
+    const { displayName, normalizedName } = requirePantryName(input.name);
+    change.displayName = displayName;
+    change.normalizedName = normalizedName;
+  }
+  if (Object.hasOwn(input, 'status')) {
+    change.status = requirePantryStatus(input.status);
+  }
+  return change;
+};
+
+const handlePantryItem = async (
+  request: Request,
+  env: AppEnv,
+  itemId: string,
+  identityProvider: IdentityProvider,
+): Promise<Response> => {
+  requireMutationHeaders(request);
+  const member = await requireMemberForRequest(request, env, identityProvider);
+  const input = await readJsonObject(request);
+
+  if (request.method === 'PATCH') {
+    const item = await updatePantryItem(
+      env.DB,
+      member.householdId,
+      itemId,
+      requireVersion(input.version),
+      readPantryChange(input),
+    );
+    const body: PantryItemResponse = { item };
+    return json(body);
+  }
+
+  if (request.method === 'DELETE') {
+    requireExactFields(input, ['version']);
+    await deletePantryItem(
+      env.DB,
+      member.householdId,
+      itemId,
+      requireVersion(input.version),
+    );
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'cache-control': 'no-store',
+        'x-content-type-options': 'nosniff',
+      },
+    });
+  }
+
+  throw new ApiError(404, 'not_found', 'Not found.');
+};
+
 const route = async (
   request: Request,
   env: AppEnv,
@@ -269,6 +432,15 @@ const route = async (
   const memberMatch = url.pathname.match(MEMBER_PATH);
   if (memberMatch) {
     return handleMember(request, env, memberMatch[1], identityProvider);
+  }
+
+  if (url.pathname === '/api/pantry/items') {
+    return handlePantryCollection(request, env, identityProvider);
+  }
+
+  const pantryMatch = url.pathname.match(PANTRY_ITEM_PATH);
+  if (pantryMatch) {
+    return handlePantryItem(request, env, pantryMatch[1], identityProvider);
   }
 
   throw new ApiError(404, 'not_found', 'Not found.');

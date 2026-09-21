@@ -89,11 +89,52 @@ describe('App', () => {
     expect(screen.queryByText('Liao family')).not.toBeInTheDocument();
   });
 
+  it('shows the shared pantry to a regular member', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) =>
+      Promise.resolve(
+        input === '/api/session' ? json(memberSession) : json({ items: [] }),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    render(<App />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Pantry' }),
+    ).toBeInTheDocument();
+    // The pantry is shared; the owner-only members panel stays hidden.
+    expect(
+      screen.queryByRole('heading', { name: 'Members' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('does not load the pantry before a session is ready', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) =>
+      Promise.resolve(
+        input === '/api/session'
+          ? json({ status: 'not-a-member' })
+          : json({ items: [] }),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    render(<App />);
+
+    expect(
+      await screen.findByRole('heading', {
+        name: 'You are not a family member',
+      }),
+    ).toBeInTheDocument();
+    expect(
+      fetchMock.mock.calls.filter(([url]) => url === '/api/pantry/items'),
+    ).toHaveLength(0);
+  });
+
   it('retries an unavailable session', async () => {
     const fetchMock = vi
       .fn()
       .mockRejectedValueOnce(new Error('offline'))
-      .mockResolvedValueOnce(json(memberSession));
+      .mockResolvedValueOnce(json(memberSession))
+      // The ready session also mounts the pantry, which loads its own items.
+      .mockResolvedValue(json({ items: [] }));
     vi.stubGlobal('fetch', fetchMock);
     render(<App />);
 
@@ -105,7 +146,9 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
 
     expect(await screen.findByText('Liao family')).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(
+      fetchMock.mock.calls.filter(([url]) => url === '/api/session'),
+    ).toHaveLength(2);
   });
 
   it('confirms first-owner setup and focuses the success result', async () => {
