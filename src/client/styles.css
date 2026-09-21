@@ -475,6 +475,25 @@ td:first-child {
   color: #fdfbf7;
 }
 
+/*
+ * The quiet action row makes button backgrounds transparent, which outranks
+ * .button--danger's own background and would leave its white text unreadable.
+ * Give the destructive action dark-on-light contrast instead, and invert it
+ * only on hover, where the solid background returns.
+ */
+.pantry-item__actions .button--danger {
+  background: transparent;
+  border-color: #882f25;
+  color: #882f25;
+  font-weight: 600;
+}
+
+.pantry-item__actions .button--danger:hover:not(:disabled),
+.pantry-item__actions .button--danger:focus-visible:not(:disabled) {
+  background: #a73c2e;
+  color: #fff;
+}
+
 .pantry-item__signals button:disabled {
   cursor: default;
 }
