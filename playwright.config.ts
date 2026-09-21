@@ -26,6 +26,24 @@ export default defineConfig({
       },
     },
     {
+      name: 'webkit-desktop',
+      testIgnore: /security-headers\.spec\.ts/u,
+      use: {
+        ...devices['Desktop Safari'],
+        baseURL: 'http://127.0.0.1:5175',
+      },
+    },
+    {
+      // iOS is half the family's devices, and Chromium at a phone viewport
+      // does not render like Safari — form controls especially.
+      name: 'webkit-mobile',
+      testIgnore: /security-headers\.spec\.ts/u,
+      use: {
+        ...devices['iPhone 15'],
+        baseURL: 'http://127.0.0.1:5176',
+      },
+    },
+    {
       // The production build served through the real Cloudflare asset
       // pipeline, which is the only place `public/_headers` takes effect.
       name: 'asset-pipeline',
@@ -43,6 +61,18 @@ export default defineConfig({
     {
       command: 'pnpm dev:e2e -- --port 5174',
       url: 'http://127.0.0.1:5174/api/health',
+      reuseExistingServer: false,
+      timeout: 120_000,
+    },
+    {
+      command: 'pnpm dev:e2e -- --port 5175',
+      url: 'http://127.0.0.1:5175/api/health',
+      reuseExistingServer: false,
+      timeout: 120_000,
+    },
+    {
+      command: 'pnpm dev:e2e -- --port 5176',
+      url: 'http://127.0.0.1:5176/api/health',
       reuseExistingServer: false,
       timeout: 120_000,
     },

@@ -145,6 +145,50 @@ test('pantry names and actions fit the panel without sideways scrolling', async 
   );
 });
 
+test('signal controls and the rename field are usably sized', async ({
+  page,
+}) => {
+  await openFamilySpace(page);
+  const name = uniqueName('quinoa');
+  await addItem(page, name, 'Low');
+
+  // Safari sizes unconstrained form controls differently from Chromium, so
+  // assert real geometry rather than trusting that the control is present.
+  const radios = page.locator('.pantry-signals input[type="radio"]');
+  await expect(radios).toHaveCount(3);
+  for (let index = 0; index < 3; index += 1) {
+    const box = await radios.nth(index).boundingBox();
+    expect(box, `radio ${index} box`).not.toBeNull();
+    expect(box!.width).toBeGreaterThan(10);
+    expect(box!.width).toBeLessThan(40);
+    expect(box!.height).toBeGreaterThan(10);
+    expect(box!.height).toBeLessThan(40);
+  }
+
+  // Each signal label must stay clear of the next one.
+  const labels = page.locator('.pantry-signals label');
+  const boxes = [];
+  for (let index = 0; index < (await labels.count()); index += 1) {
+    boxes.push(await labels.nth(index).boundingBox());
+  }
+  for (let a = 0; a < boxes.length; a += 1) {
+    for (let b = a + 1; b < boxes.length; b += 1) {
+      const overlap =
+        boxes[a]!.x < boxes[b]!.x + boxes[b]!.width &&
+        boxes[b]!.x < boxes[a]!.x + boxes[a]!.width &&
+        boxes[a]!.y < boxes[b]!.y + boxes[b]!.height &&
+        boxes[b]!.y < boxes[a]!.y + boxes[a]!.height;
+      expect(overlap, `labels ${a} and ${b} overlap`).toBe(false);
+    }
+  }
+
+  // The rename field must be wide enough to read what you are typing.
+  await itemCard(page, name).getByRole('button', { name: 'Rename' }).click();
+  const field = await page.getByLabel('New name').boundingBox();
+  expect(field).not.toBeNull();
+  expect(field!.width).toBeGreaterThan(120);
+});
+
 test('a non-member sees no pantry at all', async ({ page }) => {
   await page.route('**/api/session', async (route) => {
     await route.fulfill({
