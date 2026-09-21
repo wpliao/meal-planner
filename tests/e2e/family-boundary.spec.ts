@@ -22,14 +22,29 @@ test('local owner can bootstrap and invite a family member', async ({
   await dialog.getByRole('button', { name: 'Create family space' }).click();
 
   await expect(page.getByRole('heading', { name: 'Members' })).toBeVisible();
-  const invitedEmail = 'e2e-invitee@example.test';
-  await page.getByLabel('Verified email address').fill(invitedEmail);
-  await page.getByRole('button', { name: 'Add member' }).click();
+
+  // Unique per run so a retry or a parallel worker never collides on the
+  // address, which would surface as a confusing duplicate-membership error.
+  const invitedEmail = `e2e-${Math.random().toString(36).slice(2, 8)}@example.test`;
+  const emailField = page.getByLabel('Verified email address');
+  const addButton = page.getByRole('button', { name: 'Add member' });
+
+  // The form stays disabled while the bootstrap mutation settles. Submitting
+  // before it is ready sends an empty email, which only sets a field error and
+  // leaves the result notice reading "Your family space is ready." — the exact
+  // flake that failed a production deployment run.
+  await expect(addButton).toBeEnabled();
+  await emailField.fill(invitedEmail);
+  await expect(emailField).toHaveValue(invitedEmail);
+  await addButton.click();
+
+  // Assert the durable row first, then the transient notice.
+  const invitedRow = page.getByRole('row', { name: new RegExp(invitedEmail) });
+  await expect(invitedRow).toContainText(invitedEmail);
   await expect(page.locator('.hero').getByRole('status')).toContainText(
     `${invitedEmail} is invited`,
   );
-  const invitedRow = page.getByRole('row', { name: new RegExp(invitedEmail) });
-  await expect(invitedRow).toContainText(invitedEmail);
+
   await invitedRow.getByRole('button', { name: 'Remove' }).click();
   await expect(page.getByRole('dialog')).toContainText(
     `Remove ${invitedEmail}?`,
