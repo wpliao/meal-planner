@@ -1,7 +1,8 @@
 # ADR 0006: Component library for the family interface
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-21
+- Approval: [Issue #23](https://github.com/wpliao/meal-planner/issues/23#issuecomment-5763375016)
 - Feature: [UI foundation](../features/0023-ui-foundation.md)
 
 ## Context

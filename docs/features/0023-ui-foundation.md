@@ -1,6 +1,6 @@
 # Feature: UI foundation
 
-- Status: Designing
+- Status: Accepted
 - Phase: Foundation — between Phase 2 and Phase 3
 - Issue: [#23](https://github.com/wpliao/meal-planner/issues/23)
 - Product owner: Repository owner
@@ -150,15 +150,25 @@ recorded, because it affects every page load on a family phone.
 - Routing coverage: deep link loads the right section, back moves between
   sections, an unknown path behaves as designed.
 
-## Open design decisions for the owner
+## Resolved design decisions
 
-- Confirm that adopting the component layer's visual language is acceptable,
-  and whether the current warm palette should be carried across through theming
-  or deliberately replaced.
-- Confirm shareable URLs are wanted, given they are the reason for the Worker
-  fallback and the router dependency.
-- Confirm this is approved explicitly as foundation work shipping no new family
-  capability.
+The product owner resolved these on 2026-09-21 in the
+[approval record](https://github.com/wpliao/meal-planner/issues/23#issuecomment-5763375016). They are settled for this work;
+reopening any of them requires a change recorded in the decision log below.
+
+- **Visual language**: adopting Mantine's component look is acceptable. The
+  initial theme **approximates the current warm palette**, so the application
+  does not visually lurch during the migration. Deliberate theme design is a
+  later, separate change, taken before visual-regression baselines settle, since
+  a theme change afterwards churns every snapshot.
+- **Navigation**: **real URLs**, using React Router v7 in library mode, with the
+  Worker serving the application shell for paths outside `/api/*`. Chosen
+  primarily because the manifest sets `display: standalone`, so on a home-screen
+  install the system back gesture is the only back affordance there is; with tabs
+  it exits the application instead of returning to the previous section. Linkable
+  sections and surviving a refresh follow from the same decision.
+- **Scope**: approved explicitly as foundation work that ships **no new
+  family-visible capability**.
 
 ## Traceability
 
@@ -189,14 +199,16 @@ There is no migration to reverse. Rollback is redeploying the previous version.
 
 ## Decision and change log
 
-| Date       | Change                                                                                              | Reason                                                                                                                                                | Evidence                                                      |
-| ---------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| 2026-09-21 | Proposed the UI foundation as one piece of work covering component layer, tokens and page structure | The three parts touch the same files; doing them separately would migrate the interface two or three times                                            | [Issue #23](https://github.com/wpliao/meal-planner/issues/23) |
-| 2026-09-21 | Measured the bundle cost of both component options rather than relying on published figures         | Public numbers were contradictory, and the prior assumption that the copied-in option was smaller proved wrong for this component set in this bundler | ADR 0006                                                      |
+| Date       | Change                                                                                              | Reason                                                                                                                                                | Evidence                                                                                    |
+| ---------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| 2026-09-21 | Proposed the UI foundation as one piece of work covering component layer, tokens and page structure | The three parts touch the same files; doing them separately would migrate the interface two or three times                                            | [Issue #23](https://github.com/wpliao/meal-planner/issues/23)                               |
+| 2026-09-21 | Measured the bundle cost of both component options rather than relying on published figures         | Public numbers were contradictory, and the prior assumption that the copied-in option was smaller proved wrong for this component set in this bundler | ADR 0006                                                                                    |
+| 2026-09-21 | Product owner accepted the design and both decision records, and authorised implementation          | The component choice, the navigation model and the foundation-only scope match the intended work                                                      | [Approval record](https://github.com/wpliao/meal-planner/issues/23#issuecomment-5763375016) |
+| 2026-09-21 | The initial Mantine theme approximates the current palette rather than adopting Mantine defaults    | Avoids a visible lurch during migration, and keeps deliberate theme design out of the same change while still preceding visual-regression baselines   | Owner decision                                                                              |
 
 ## Release record
 
-- Design approval: Pending
+- Design approval: Accepted on 2026-09-21 ([approval record](https://github.com/wpliao/meal-planner/issues/23#issuecomment-5763375016))
 - Local verification: Not run; design only
 - Development validation: Pending
 - Production release: Pending separate explicit approval

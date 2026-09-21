@@ -1,7 +1,8 @@
 # ADR 0007: Navigation and information architecture
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-21
+- Approval: [Issue #23](https://github.com/wpliao/meal-planner/issues/23#issuecomment-5763375016)
 - Feature: [UI foundation](../features/0023-ui-foundation.md)
 
 ## Context
