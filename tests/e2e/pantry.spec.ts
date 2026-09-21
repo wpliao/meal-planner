@@ -52,7 +52,7 @@ test('an item moves through Needed, Shopping, and Available', async ({
 
   // Buying it and marking Available takes it off the list.
   const signals = itemCard(page, name).getByRole('group', {
-    name: `Signal for ${name}`,
+    name: `Status for ${name}`,
   });
   await signals.getByRole('button', { name: 'Available' }).click();
   await expect(pantryStatus(page)).toContainText(
