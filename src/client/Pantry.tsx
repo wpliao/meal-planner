@@ -7,6 +7,7 @@ import {
   type MouseEvent,
 } from 'react';
 import type { ApiErrorResponse } from '../shared/api';
+import { dialogControls, handleDialogKeyDown } from './dialog';
 import {
   comparePantryItems,
   isShoppingItem,
@@ -90,10 +91,8 @@ export function Pantry() {
 
   useEffect(() => {
     if (!confirming) return;
-    const controls = dialogRef.current?.querySelectorAll<HTMLElement>(
-      'button:not([disabled])',
-    );
-    (controls?.[0] ?? dialogRef.current)?.focus();
+    const [firstControl] = dialogControls(dialogRef.current);
+    (firstControl ?? dialogRef.current)?.focus();
     return () => triggerRef.current?.focus();
   }, [confirming, pending]);
 
@@ -182,6 +181,9 @@ export function Pantry() {
   const removeItem = async () => {
     if (!confirming) return;
     const target = confirming;
+    // The trigger button disappears with the row, so restoring focus to it
+    // would drop the user at <body>. The result notice takes focus instead.
+    triggerRef.current = null;
     setConfirming(null);
     await run(async () => {
       await api<void>(
@@ -378,12 +380,13 @@ export function Pantry() {
             aria-labelledby="pantry-confirm-title"
             aria-modal="true"
             className="dialog"
-            onKeyDown={(event) => {
-              if (event.key === 'Escape' && !pending) {
-                event.preventDefault();
-                setConfirming(null);
-              }
-            }}
+            onKeyDown={(event) =>
+              handleDialogKeyDown(event, {
+                dialog: dialogRef,
+                pending,
+                onDismiss: () => setConfirming(null),
+              })
+            }
             ref={dialogRef}
             role="dialog"
             tabIndex={-1}

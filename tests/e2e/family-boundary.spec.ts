@@ -1,5 +1,9 @@
 import { expect, test } from '@playwright/test';
 
+// The signed-in page has more than one live region (the session/member notice
+// in the hero, and the pantry panel's own). Scope status assertions so they
+// stay unambiguous as sections are added.
+
 test('local owner can bootstrap and invite a family member', async ({
   page,
 }) => {
@@ -21,7 +25,7 @@ test('local owner can bootstrap and invite a family member', async ({
   const invitedEmail = 'e2e-invitee@example.test';
   await page.getByLabel('Verified email address').fill(invitedEmail);
   await page.getByRole('button', { name: 'Add member' }).click();
-  await expect(page.getByRole('status')).toContainText(
+  await expect(page.locator('.hero').getByRole('status')).toContainText(
     `${invitedEmail} is invited`,
   );
   const invitedRow = page.getByRole('row', { name: new RegExp(invitedEmail) });
@@ -38,7 +42,9 @@ test('local owner can bootstrap and invite a family member', async ({
     .getByRole('dialog')
     .getByRole('button', { name: 'Remove member' })
     .click();
-  await expect(page.getByRole('status')).toContainText('Member was removed.');
+  await expect(page.locator('.hero').getByRole('status')).toContainText(
+    'Member was removed.',
+  );
   await expect(invitedRow).toHaveCount(0);
 });
 

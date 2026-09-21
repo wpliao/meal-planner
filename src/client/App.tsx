@@ -15,6 +15,7 @@ import type {
   MemberRole,
   SessionResponse,
 } from '../shared/api';
+import { handleDialogKeyDown, dialogControls } from './dialog';
 import { Pantry } from './Pantry';
 
 type SessionState =
@@ -122,10 +123,8 @@ export function App() {
   }, [notice]);
   useEffect(() => {
     if (!confirmation) return;
-    const controls = dialogRef.current?.querySelectorAll<HTMLElement>(
-      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-    );
-    (controls?.[0] ?? dialogRef.current)?.focus();
+    const [firstControl] = dialogControls(dialogRef.current);
+    (firstControl ?? dialogRef.current)?.focus();
     return () => triggerRef.current?.focus();
   }, [confirmation, pending]);
 
@@ -137,33 +136,12 @@ export function App() {
     setConfirmation(next);
   };
 
-  const trapDialogFocus = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      if (!pending) setConfirmation(null);
-      return;
-    }
-    if (event.key !== 'Tab') return;
-    const controls = Array.from(
-      dialogRef.current?.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      ) ?? [],
-    );
-    if (!controls.length) {
-      event.preventDefault();
-      dialogRef.current?.focus();
-      return;
-    }
-    const [first] = controls;
-    const last = controls.at(-1);
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last?.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  };
+  const trapDialogFocus = (event: KeyboardEvent<HTMLDivElement>) =>
+    handleDialogKeyDown(event, {
+      dialog: dialogRef,
+      pending,
+      onDismiss: () => setConfirmation(null),
+    });
 
   const bootstrap = async () => {
     if (confirmation?.kind !== 'bootstrap') return;

@@ -394,6 +394,48 @@ describe('pantry API', () => {
     expect(body.error.message).not.toContain('one too many');
   });
 
+  it('reports a missing item as not found even when the name collides', async () => {
+    await addItemOk('rice');
+
+    const response = await patchItem(crypto.randomUUID(), {
+      version: 1,
+      name: 'rice',
+    });
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'not_found' },
+    });
+  });
+
+  it('writes no item name to the console during pantry work', async () => {
+    const written: string[] = [];
+    const levels = ['log', 'info', 'warn', 'error', 'debug'] as const;
+    const originals = levels.map(
+      (level) => [level, console[level].bind(console)] as const,
+    );
+    for (const level of levels) {
+      console[level] = (...args: unknown[]) => {
+        written.push(args.map((arg) => String(arg)).join(' '));
+      };
+    }
+
+    try {
+      const item = await addItemOk('saffron');
+      await patchItem(item.id, { version: item.version, status: 'needed' });
+      await patchItem(item.id, { version: 999, status: 'low' });
+      await addItem('saffron');
+      await deleteItem(item.id, { version: 999 });
+      await listItems();
+    } finally {
+      for (const [level, original] of originals) {
+        console[level] = original;
+      }
+    }
+
+    expect(written.join('\n')).not.toContain('saffron');
+  });
+
   it('keeps item names out of responses that do not carry them', async () => {
     const item = await addItemOk('anchovies');
     const conflict = await patchItem(item.id, {

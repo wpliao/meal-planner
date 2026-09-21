@@ -19,6 +19,10 @@ const openFamilySpace = async (page: Page) => {
   await expect(page.getByRole('heading', { name: 'Pantry' })).toBeVisible();
 };
 
+// The members panel has its own live region, so scope to the pantry panel.
+const pantryStatus = (page: Page) =>
+  page.getByRole('complementary', { name: 'Pantry' }).getByRole('status');
+
 const uniqueName = (prefix: string) =>
   `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -26,7 +30,7 @@ const addItem = async (page: Page, name: string, signal: string) => {
   await page.getByLabel('Item name').fill(name);
   await page.getByLabel(signal, { exact: true }).check();
   await page.getByRole('button', { name: 'Add item' }).click();
-  await expect(page.getByRole('status')).toContainText(
+  await expect(pantryStatus(page)).toContainText(
     `${name} was added to the pantry.`,
   );
 };
@@ -51,7 +55,7 @@ test('an item moves through Needed, Shopping, and Available', async ({
     name: `Signal for ${name}`,
   });
   await signals.getByRole('button', { name: 'Available' }).click();
-  await expect(page.getByRole('status')).toContainText(
+  await expect(pantryStatus(page)).toContainText(
     `${name} is now marked Available.`,
   );
   await expect(itemCard(page, name)).toHaveCount(0);
@@ -71,9 +75,7 @@ test('a duplicate name is refused without creating a second item', async ({
   await page.getByLabel('Item name').fill(name.toUpperCase());
   await page.getByRole('button', { name: 'Add item' }).click();
 
-  await expect(page.getByRole('status')).toContainText(
-    'already in your pantry',
-  );
+  await expect(pantryStatus(page)).toContainText('already in your pantry');
   await expect(itemCard(page, name)).toHaveCount(1);
 });
 
@@ -89,7 +91,7 @@ test('an item can be renamed and removed with confirmation', async ({
   await itemCard(page, name).getByRole('button', { name: 'Rename' }).click();
   await page.getByLabel('New name').fill(renamed);
   await page.getByRole('button', { name: 'Save name' }).click();
-  await expect(page.getByRole('status')).toContainText(
+  await expect(pantryStatus(page)).toContainText(
     `The item was renamed to ${renamed}.`,
   );
 
@@ -105,7 +107,7 @@ test('an item can be renamed and removed with confirmation', async ({
     .getByRole('dialog')
     .getByRole('button', { name: 'Remove item' })
     .click();
-  await expect(page.getByRole('status')).toContainText(
+  await expect(pantryStatus(page)).toContainText(
     `${renamed} was removed from the pantry.`,
   );
   await expect(itemCard(page, renamed)).toHaveCount(0);

@@ -179,6 +179,10 @@ export const updatePantryItem = async (
 ): Promise<PantryItem> => {
   const now = new Date().toISOString();
 
+  // A missing item is a 404 even when the requested name collides, so the
+  // existence check comes before the duplicate pre-check.
+  if (!(await getScopedItem(db, householdId, itemId))) throw notFound();
+
   // Reject a rename onto another item before touching the row, so the common
   // case returns a precise conflict rather than a constraint failure.
   if (

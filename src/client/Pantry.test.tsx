@@ -337,6 +337,40 @@ describe('Pantry', () => {
     });
   });
 
+  it('traps Tab inside the confirmation dialog', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => listOnce([item()]));
+
+    render(<Pantry />);
+    await screen.findByText('Rice');
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+
+    const dialog = screen.getByRole('dialog');
+    const remove = within(dialog).getByRole('button', { name: 'Remove item' });
+    const cancel = within(dialog).getByRole('button', { name: 'Cancel' });
+
+    expect(remove).toHaveFocus();
+
+    // Tab from the last control wraps to the first, and Shift+Tab back again.
+    cancel.focus();
+    fireEvent.keyDown(dialog, { key: 'Tab' });
+    expect(remove).toHaveFocus();
+
+    fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true });
+    expect(cancel).toHaveFocus();
+  });
+
+  it('restores focus to the trigger when the dialog is cancelled', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => listOnce([item()]));
+
+    render(<Pantry />);
+    await screen.findByText('Rice');
+    const trigger = screen.getByRole('button', { name: 'Remove' });
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
   it('moves focus to the result message after a change', async () => {
     vi.spyOn(globalThis, 'fetch')
       .mockImplementationOnce(() => listOnce([item({ status: 'low' })]))
