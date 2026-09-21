@@ -20,6 +20,37 @@ member IDs are opaque and globally unique. Prepared statements, foreign keys,
 and role/status checks enforce the same boundary in the database and service
 layers.
 
+## Proposed Phase 2 pantry model (not yet implemented)
+
+[Feature #16](features/0016-lightweight-pantry.md) proposes one household-owned
+table for manual availability and shopping signals. This section is a design
+proposal, not a claim that the migration has been applied.
+
+```text
+households (1) ──< pantry_items (*)
+     │                    household_id → households.id
+     └──< household_members (*)
+```
+
+Each pantry item would have an opaque ID; household ID; human-readable and
+normalized names; one of `available`, `low`, or `needed`; a version for
+conflict-safe edits; manual-creation provenance; and creation/last-change
+timestamps. The household owns the item: revoking the member who entered it
+does not delete shared data. Names are unique only within a household. Every
+query derives household scope from the verified Phase 1 member context, never
+from client input. The shopping view is derived from `low` and `needed` rows,
+not stored as a second list.
+
+An item remains until an active member deletes it or the household is removed
+through an explicitly authorized operational process. Item deletion removes
+its current row; no application tombstone or edit history is retained. If the
+household is eventually deleted, its pantry rows should cascade after the
+installation pointer is handled. Deletion from the live table does not imply
+immediate erasure from D1's [Time Travel history](https://developers.cloudflare.com/d1/reference/time-travel/);
+the available recovery window depends on the Workers plan and must be verified
+before production release. No export, photo, external source, or automatic
+consumption path is included in this proposal.
+
 ## Durable principles
 
 - D1 is authoritative for structured application data.
