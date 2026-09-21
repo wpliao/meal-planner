@@ -1,11 +1,11 @@
 # Feature: Trusted family boundary
 
-- Status: Implementing
+- Status: Released
 - Phase: 1
 - Issue: [#7](https://github.com/wpliao/meal-planner/issues/7)
 - Product owner: Repository owner
 - Last updated: 2026-09-21
-- Pull requests: [#8 — design](https://github.com/wpliao/meal-planner/pull/8); [#9 — implementation](https://github.com/wpliao/meal-planner/pull/9); [#10 — bootstrap failure classification and traceability](https://github.com/wpliao/meal-planner/pull/10); [#11 — development validation and initial action discoverability correction](https://github.com/wpliao/meal-planner/pull/11); [#12 — balanced responsive member layout](https://github.com/wpliao/meal-planner/pull/12); [#13 — panel-width member layout](https://github.com/wpliao/meal-planner/pull/13); [#14 — development acceptance record](https://github.com/wpliao/meal-planner/pull/14)
+- Pull requests: [#8 — design](https://github.com/wpliao/meal-planner/pull/8); [#9 — implementation](https://github.com/wpliao/meal-planner/pull/9); [#10 — bootstrap failure classification and traceability](https://github.com/wpliao/meal-planner/pull/10); [#11 — development validation and initial action discoverability correction](https://github.com/wpliao/meal-planner/pull/11); [#12 — balanced responsive member layout](https://github.com/wpliao/meal-planner/pull/12); [#13 — panel-width member layout](https://github.com/wpliao/meal-planner/pull/13); [#14 — development acceptance record](https://github.com/wpliao/meal-planner/pull/14); [#15 — production release record](https://github.com/wpliao/meal-planner/pull/15)
 
 ## Problem and outcome
 
@@ -79,7 +79,7 @@ criteria remain in this document and are explained in the decision log.
 - [x] `AC-09`: Local and automated tests cover token validation, household
       isolation, role authorization, bootstrap safety, revocation, migrations, and
       the primary owner/member browser journeys without remote services.
-- [ ] `AC-10`: Development and production use distinct audience settings,
+- [x] `AC-10`: Development and production use distinct audience settings,
       bootstrap secrets, D1 data, and explicitly tested migration/deployment steps.
 
 ## Experience design
@@ -327,7 +327,8 @@ the panel-width correction in
 [#13](https://github.com/wpliao/meal-planner/pull/13) as `7088fea`. CI and the
 Sonar Quality Gate passed for each. Development validation is complete with the
 manual screen-reader exercise explicitly deferred by the product owner. `AC-10`
-remains open because Phase 1 has not been rolled out to production.
+is complete after the approved production migration, deployment, and owner
+bootstrap recorded below.
 
 | Criterion | Implementation                                                                                                                                              | Automated tests                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Release evidence                                                               |
 | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
@@ -340,7 +341,7 @@ remains open because Phase 1 has not been rolled out to production.
 | `AC-07`   | `src/client/App.tsx`; `src/client/styles.css`                                                                                                               | `src/client/App.test.tsx` — setup, validation, lifecycle, destructive confirmation, reconciliation, failure, and focus tests; `tests/e2e/family-boundary.spec.ts` — owner bootstrap/invite/remove, member-only, denied, and “adapts member information and actions to the panel without horizontal scrolling” journeys                                                                                                                                                    | `V-LOCAL-01`; `V-LOCAL-06`; `V-LOCAL-07`; `V-LOCAL-08`; `V-DEV-04`; `V-DEV-06` |
 | `AC-08`   | `src/worker/http.ts`; `public/_headers` — static-document headers; `src/worker/data/household-repository.ts` — validation, headers, prepared scoped queries | `test/worker/members.test.ts` — no identity logging and household scope; `test/worker/session-bootstrap.test.ts` — origin/content-type/body-size validation, including streamed bodies without a trustworthy content length; `tests/e2e/security-headers.spec.ts` — “serves the application document with the static security headers”; “serves built assets with the same framing protection”; “does not serve the headers configuration file itself”                    | `V-LOCAL-01`; security review; `V-DEV-07`                                      |
 | `AC-09`   | `test/worker/helpers.ts`; `scripts/dev-e2e.sh`; `vitest.worker.config.ts`                                                                                   | Complete client, Worker-runtime, migration, and isolated desktop/mobile Playwright suites                                                                                                                                                                                                                                                                                                                                                                                 | `V-LOCAL-01`; CI and Sonar passed in #9                                        |
-| `AC-10`   | `wrangler.jsonc`; `.github/workflows/deploy.yml`; `scripts/dev.sh`; `docs/ENVIRONMENTS.md`                                                                  | `test/worker/migration.test.ts`; generated binding check; named-environment builds; fresh local migration/startup check                                                                                                                                                                                                                                                                                                                                                   | `V-LOCAL-02`; `V-DEV-01`; `V-DEV-04`; production pending                       |
+| `AC-10`   | `wrangler.jsonc`; `.github/workflows/deploy.yml`; `scripts/dev.sh`; `docs/ENVIRONMENTS.md`                                                                  | `test/worker/migration.test.ts`; generated binding check; named-environment builds; fresh local migration/startup check                                                                                                                                                                                                                                                                                                                                                   | `V-LOCAL-02`; `V-DEV-01`; `V-DEV-04`; `V-PROD-01`; `V-PROD-02`                 |
 
 ### Verification evidence
 
@@ -433,12 +434,36 @@ remains open because Phase 1 has not been rolled out to production.
   recorded in the
   [header result](https://github.com/wpliao/meal-planner/issues/7#issuecomment-5751099014)
   and [log result](https://github.com/wpliao/meal-planner/issues/7#issuecomment-5754960154).
+- `V-PROD-01` (2026-09-21): following explicit
+  [owner approval](https://github.com/wpliao/meal-planner/issues/7#issuecomment-5755201106),
+  the [production workflow](https://github.com/wpliao/meal-planner/actions/runs/35568107211)
+  from `main` commit `1dd0e1eb3badaf67aea405151d03e68cf78434f3` passed
+  its confirmation gate, `./scripts/verify.sh` (16 client, 48 Worker-runtime,
+  15 Playwright tests), and the named production build. It applied
+  `0001_create_household_identity.sql` to the distinct production D1 database
+  `d944b652-580f-437e-b7ce-21818525c46c` and deployed production Worker
+  version `2f3855f4-b091-4da7-a2f4-c16ef1e57f91` with its distinct R2 binding.
+  Unauthenticated requests to `/` and `/api/health` returned `302` to the
+  production Cloudflare Access application. Two earlier attempts failed closed
+  with Cloudflare authorization code `7403` before Worker deployment; the
+  corrected environment credentials and successful retry are documented in
+  [issue #7](https://github.com/wpliao/meal-planner/issues/7#issuecomment-5756274876).
+- `V-PROD-02` (2026-09-21): the product owner signed in to the production
+  Cloudflare Access application using the configured bootstrap identity, created
+  the production family space, and confirmed the signed-in Family owner state
+  with member-management controls. This validates the production audience,
+  bootstrap secret, D1 schema, and application path together. The owner has not
+  reported a separate production member/revocation exercise; those behaviors
+  were validated in development and automated tests. Evidence is recorded in
+  [issue #7](https://github.com/wpliao/meal-planner/issues/7#issuecomment-5756499664).
 - Independent security review found no unresolved high-severity issue after all
   review findings were corrected. CI and the Sonar Quality Gate passed for
   [PR #9](https://github.com/wpliao/meal-planner/pull/9),
   [PR #10](https://github.com/wpliao/meal-planner/pull/10), and the responsive
   follow-ups through [PR #13](https://github.com/wpliao/meal-planner/pull/13).
-  Production rollout remains pending separate explicit approval.
+  [PR #14](https://github.com/wpliao/meal-planner/pull/14) and its merged
+  [main CI run](https://github.com/wpliao/meal-planner/actions/runs/35557999496)
+  also passed verification and Sonar analysis before production rollout.
 
 ## Rollout and rollback
 
@@ -482,6 +507,8 @@ the owner explicitly deletes them.
 | 2026-09-20 | Member administration uses information-first desktop columns and stacked mobile member cards instead of a pinned action column                                                     | Owner review found that pinning made actions discoverable but consumed too much space and hid member information; the adaptive layout keeps both visible without scrolling       | Owner screenshot and feedback; `V-LOCAL-07`                                                                          |
 | 2026-09-21 | The member layout responds to the management panel's width instead of the overall browser viewport                                                                                 | The desktop browser remained wide while its sidebar panel was too narrow for four columns, causing role and status to collide; panel containment selects the legible card layout | Owner local-preview approval; `V-LOCAL-08`                                                                           |
 | 2026-09-21 | Manual screen-reader validation is deferred while semantic implementation and automated accessibility coverage remain                                                              | The owner does not require a VoiceOver exercise for this private family app; preserving the low-cost accessible foundation avoids weakening the implementation                   | Owner decision; `V-DEV-06`                                                                                           |
+| 2026-09-21 | The owner approved Phase 1 production rollout; after correcting production deployment credentials, migration `0001` and the Worker deployed successfully                           | Release the validated identity boundary to the isolated production environment without broadening feature scope                                                                  | `V-PROD-01`; [approval](https://github.com/wpliao/meal-planner/issues/7#issuecomment-5755201106)                     |
+| 2026-09-21 | The owner completed production bootstrap and confirmed the Family owner and member-management view                                                                                 | Verify that the production Access audience, bootstrap identity, D1 schema, and UI work together before closing Phase 1                                                           | `V-PROD-02`; [owner confirmation](https://github.com/wpliao/meal-planner/issues/7#issuecomment-5756499664)           |
 
 ## Release record
 
@@ -508,6 +535,10 @@ the owner explicitly deletes them.
   exercise is explicitly deferred and not reported as passed; keyboard,
   responsive-layout, denial, activation, revocation, edge-header, and
   application-log checks are recorded.
-- Production release: Pending explicit approval
+- Production release: `V-PROD-01` and `V-PROD-02` complete on 2026-09-21.
+  The production Worker version is `2f3855f4-b091-4da7-a2f4-c16ef1e57f91`
+  from commit `1dd0e1eb3badaf67aea405151d03e68cf78434f3`. The independent
+  reviewer gate described in the original environment plan is not available for
+  this private GitHub Pro repository; see [ADR 0005](../DECISIONS/0005-production-deployment-approval-on-github-pro.md).
 - Known follow-up work: Household-data deletion/transfer must be designed with the
   first feature that stores product data.

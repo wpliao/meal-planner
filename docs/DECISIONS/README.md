@@ -9,3 +9,4 @@ decisions.
 - [0002 — Explicit environment isolation](./0002-environment-isolation.md)
 - [0003 — Repository-centered feature traceability](./0003-feature-traceability.md)
 - [0004 — Access identity and household authorization](./0004-access-identity-and-household-authorization.md)
+- [0005 — Production deployment approval on private GitHub Pro](./0005-production-deployment-approval-on-github-pro.md)
