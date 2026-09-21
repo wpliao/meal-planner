@@ -368,3 +368,144 @@ td:first-child {
     }
   }
 }
+
+/* Pantry */
+
+.pantry-views {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.button--quiet {
+  background: transparent;
+  border: 1px solid var(--line, #d9cfc0);
+  color: inherit;
+}
+
+.pantry-views .button[aria-pressed='true'] {
+  background: #2f2a24;
+  border-color: #2f2a24;
+  color: #fdfbf7;
+}
+
+.pantry-signals {
+  border: 1px solid var(--line, #d9cfc0);
+  border-radius: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.75rem;
+}
+
+.pantry-signals legend {
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0 0.35rem;
+}
+
+.pantry-signals label {
+  align-items: center;
+  display: flex;
+  gap: 0.35rem;
+}
+
+.pantry-list {
+  display: grid;
+  gap: 0.75rem;
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+}
+
+.pantry-item {
+  border: 1px solid var(--line, #d9cfc0);
+  border-radius: 0.65rem;
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.85rem;
+}
+
+.pantry-item__head {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.pantry-item__name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.pantry-item__status {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.pantry-item__meta {
+  font-size: 0.8rem;
+  margin: 0;
+  opacity: 0.75;
+}
+
+.pantry-item__signals,
+.pantry-item__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.pantry-item__signals button,
+.pantry-item__actions button {
+  background: transparent;
+  border: 1px solid var(--line, #d9cfc0);
+  border-radius: 0.4rem;
+  cursor: pointer;
+  font: inherit;
+  padding: 0.35rem 0.7rem;
+}
+
+.pantry-item__signals button[aria-pressed='true'] {
+  background: #2f2a24;
+  border-color: #2f2a24;
+  color: #fdfbf7;
+}
+
+/*
+ * The quiet action row makes button backgrounds transparent, which outranks
+ * .button--danger's own background and would leave its white text unreadable.
+ * Give the destructive action dark-on-light contrast instead, and invert it
+ * only on hover, where the solid background returns.
+ */
+.pantry-item__actions .button--danger {
+  background: transparent;
+  border-color: #882f25;
+  color: #882f25;
+  font-weight: 600;
+}
+
+.pantry-item__actions .button--danger:hover:not(:disabled),
+.pantry-item__actions .button--danger:focus-visible:not(:disabled) {
+  background: #a73c2e;
+  color: #fff;
+}
+
+.pantry-item__signals button:disabled {
+  cursor: default;
+}
+
+.pantry-item__rename {
+  display: grid;
+  gap: 0.4rem;
+}
+
+@media (min-width: 45rem) {
+  .pantry-item__rename {
+    align-items: end;
+    grid-template-columns: auto 1fr auto auto;
+  }
+}

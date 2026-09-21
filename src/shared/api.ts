@@ -64,6 +64,9 @@ export type ApiErrorCode =
   | 'not_a_member'
   | 'owner_required'
   | 'state_conflict'
+  | 'duplicate_name'
+  | 'stale_version'
+  | 'limit_reached'
   | 'service_unavailable';
 
 export interface ApiErrorResponse {

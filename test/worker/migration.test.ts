@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { applyMigrations, testEnv } from './helpers';
+import { applyMigrations, seedPantryItem, testEnv } from './helpers';
 
 describe('household identity migration', () => {
   beforeEach(applyMigrations);
@@ -187,5 +187,96 @@ describe('household identity migration', () => {
         null,
       ),
     ).rejects.toThrow();
+  });
+});
+
+describe('pantry migration', () => {
+  beforeEach(applyMigrations);
+
+  it('applies 0002 on top of the Phase 1 schema without altering it', async () => {
+    const tables = await testEnv.DB.prepare(
+      `SELECT name FROM sqlite_master
+        WHERE type = 'table'
+          AND name IN ('households', 'household_members', 'app_installation', 'pantry_items')
+        ORDER BY name`,
+    ).all<{ name: string }>();
+
+    expect(tables.results.map(({ name }) => name)).toEqual([
+      'app_installation',
+      'household_members',
+      'households',
+      'pantry_items',
+    ]);
+  });
+
+  it('rejects an invalid status, a non-positive version, and a foreign source', async () => {
+    const now = new Date().toISOString();
+    const householdId = crypto.randomUUID();
+    await testEnv.DB.prepare(
+      `INSERT INTO households (id, name, created_at, updated_at)
+       VALUES (?, 'Pantry Family', ?, ?)`,
+    )
+      .bind(householdId, now, now)
+      .run();
+
+    const insert = (
+      status: string,
+      version: number,
+      source: string,
+    ): Promise<unknown> =>
+      testEnv.DB.prepare(
+        `INSERT INTO pantry_items (
+           id, household_id, display_name, normalized_name, status,
+           version, created_source, created_at, updated_at
+         ) VALUES (?, ?, 'x', ?, ?, ?, ?, ?, ?)`,
+      )
+        .bind(
+          crypto.randomUUID(),
+          householdId,
+          crypto.randomUUID(),
+          status,
+          version,
+          source,
+          now,
+          now,
+        )
+        .run();
+
+    await expect(insert('plenty', 1, 'manual')).rejects.toThrow();
+    await expect(insert('available', 0, 'manual')).rejects.toThrow();
+    await expect(insert('available', 1, 'photo')).rejects.toThrow();
+    await expect(insert('available', 1, 'manual')).resolves.toBeDefined();
+  });
+
+  it('scopes name uniqueness to one household and cascades on household delete', async () => {
+    const now = new Date().toISOString();
+    const [first, second] = [crypto.randomUUID(), crypto.randomUUID()];
+    await testEnv.DB.batch([
+      testEnv.DB.prepare(
+        `INSERT INTO households (id, name, created_at, updated_at)
+         VALUES (?, 'One', ?, ?)`,
+      ).bind(first, now, now),
+      testEnv.DB.prepare(
+        `INSERT INTO households (id, name, created_at, updated_at)
+         VALUES (?, 'Two', ?, ?)`,
+      ).bind(second, now, now),
+    ]);
+
+    await seedPantryItem(first, 'rice');
+    // The same name is fine in another household.
+    await expect(seedPantryItem(second, 'rice')).resolves.toBeDefined();
+    // ...but not twice in the same one.
+    await expect(seedPantryItem(first, 'rice')).rejects.toThrow();
+
+    await testEnv.DB.prepare('DELETE FROM households WHERE id = ?')
+      .bind(first)
+      .run();
+    const remaining = await testEnv.DB.prepare(
+      'SELECT COUNT(*) AS total FROM pantry_items WHERE household_id = ?',
+    )
+      .bind(first)
+      .first<{ total: number }>();
+
+    expect(remaining?.total).toBe(0);
   });
 });
