@@ -1,11 +1,11 @@
 # Feature: Lightweight household pantry
 
-- Status: Development validation
+- Status: Released
 - Phase: 2
 - Issue: [#16](https://github.com/wpliao/meal-planner/issues/16)
 - Product owner: Repository owner
 - Last updated: 2026-09-21
-- Pull requests: [#17 — design proposal](https://github.com/wpliao/meal-planner/pull/17); [#18 — implementation](https://github.com/wpliao/meal-planner/pull/18); [#19 — Safari coverage and layout corrections](https://github.com/wpliao/meal-planner/pull/19)
+- Pull requests: [#17 — design proposal](https://github.com/wpliao/meal-planner/pull/17); [#18 — implementation](https://github.com/wpliao/meal-planner/pull/18); [#19 — Safari coverage and layout corrections](https://github.com/wpliao/meal-planner/pull/19); [#20 — development validation record](https://github.com/wpliao/meal-planner/pull/20); [#21 — end-to-end submit-race fix](https://github.com/wpliao/meal-planner/pull/21)
 
 ## Problem and outcome
 
@@ -64,7 +64,7 @@ superseded and explained in the decision log.
 - [x] `AC-06`: Pantry reads and mutations enforce the Phase 1
       identity/membership boundary, household-scoped D1 access, bounded
       validation, and no food-item or identity data in application logs.
-- [ ] `AC-07`: Deterministic local tests cover the migration, API boundary,
+- [x] `AC-07`: Deterministic local tests cover the migration, API boundary,
       household isolation, concurrent edits, and primary browser journeys
       without remote services; development and production release evidence is
       recorded before completion.
@@ -234,7 +234,7 @@ PR without real family data. Do not claim a check passed until its run exists.
 | `AC-04`   | `src/worker/data/pantry-repository.ts` — `deletePantryItem`, `nameTaken`; `src/client/Pantry.tsx` rename/remove         | `test/worker/pantry.test.ts` — “renames an item and rejects renaming onto another item”; “deletes an item only with its current version”; `tests/e2e/pantry.spec.ts` — “an item can be renamed and removed with confirmation”                                                                                                                       | `V-DEV-P1`; CI and Sonar passed |
 | `AC-05`   | `src/client/Pantry.tsx`; `src/client/dialog.ts` — shared focus trap; `src/client/styles.css` — pantry rules             | `src/client/Pantry.test.tsx` — loading, empty, validation, conflict, failure, focus, and dialog tests including “traps Tab inside the confirmation dialog” and “restores focus to the trigger when the dialog is cancelled”; `tests/e2e/pantry.spec.ts` — “pantry names and actions fit the panel without sideways scrolling” on desktop and mobile | `V-DEV-P1`; CI and Sonar passed |
 | `AC-06`   | `src/worker/index.ts` — `requireMemberForRequest` and mutation header checks; scoped prepared statements                | `test/worker/pantry.test.ts` — “requires same-origin JSON for every pantry mutation”; “rejects invalid names, statuses, versions, and unexpected fields”; “caps the pantry per household and keeps the message free of item names”; “writes no item name to the console during pantry work”                                                         | `V-DEV-P1`; CI and Sonar passed |
-| `AC-07`   | `migrations/0002_create_pantry_items.sql`; `test/worker/helpers.ts`                                                     | `test/worker/migration.test.ts` — “applies 0002 on top of the Phase 1 schema without altering it”; constraint and cascade tests; full client/Worker/Playwright suites                                                                                                                                                                               | `V-DEV-P1`; production pending  |
+| `AC-07`   | `migrations/0002_create_pantry_items.sql`; `test/worker/helpers.ts`                                                     | `test/worker/migration.test.ts` — “applies 0002 on top of the Phase 1 schema without altering it”; constraint and cascade tests; full client/Worker/Playwright suites                                                                                                                                                                               | `V-DEV-P1`; `V-PROD-P1`         |
 
 Development and production release evidence is added as each gate runs.
 
@@ -275,18 +275,19 @@ requires a design change recorded in the decision log below.
 
 ## Decision and change log
 
-| Date       | Change                                                                                                                                                | Reason                                                                                                                                            | Evidence                                                                                    |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| 2026-09-21 | Initial lightweight pantry design proposed for owner review                                                                                           | Keep availability useful without exact-use bookkeeping                                                                                            | [Issue #16](https://github.com/wpliao/meal-planner/issues/16)                               |
-| 2026-09-21 | Owner screenshot review found the card's Remove action rendered white-on-light and unreadable; the destructive action now uses dark-on-light contrast | The quiet action row's transparent background outranked `.button--danger`, and name-based tests cannot see colour                                 | `V-LOCAL-P3`; desktop and mobile screenshots                                                |
-| 2026-09-21 | The three-choice control is labelled **Status** in the interface; “signal” remains the term this document uses                                        | “Signal” is design vocabulary and read as jargon to the family; the choices themselves are unchanged, so `AC-02` is unaffected                    | Owner review during development acceptance                                                  |
-| 2026-09-21 | Playwright gained `webkit-desktop` and `webkit-mobile` projects, and the signal radios and rename field were given explicit sizing                    | The family uses Android and iOS, but the matrix was Chromium only, so an iOS-only rendering fault reached the owner with every browser test green | [#19](https://github.com/wpliao/meal-planner/pull/19)                                       |
-| 2026-09-21 | Independent security review found no high-severity issue; its findings were corrected before review                                                   | Deletion confirmation lacked the Tab focus trap the design requires, and a missing item could surface as `409` instead of `404`                   | `V-LOCAL-P2`; [#18](https://github.com/wpliao/meal-planner/pull/18)                         |
-| 2026-09-21 | Dialog focus handling moved to `src/client/dialog.ts` and is shared by the member and pantry confirmations                                            | One implementation prevents the two dialogs from drifting apart again                                                                             | `V-LOCAL-P2`                                                                                |
-| 2026-09-21 | Implementation added migration `0002`, the pantry API, the shared pantry section, and the full local test set                                         | Turn the accepted design into shipping behavior within the agreed scope                                                                           | [#18](https://github.com/wpliao/meal-planner/pull/18); `V-LOCAL-P1`                         |
-| 2026-09-21 | Optimistic concurrency uses an integer `version` column with `409 stale_version`, and duplicate names return `409 duplicate_name`                     | A stale screen must never silently overwrite another member's change, and the two conflicts need different recovery actions                       | `V-LOCAL-P1`; concurrent-edit test                                                          |
-| 2026-09-21 | The per-household cap is enforced by a guarded `INSERT ... SELECT ... WHERE (count) < limit` rather than a separate count                             | Counting first and inserting afterwards would let two concurrent adds exceed the cap                                                              | `V-LOCAL-P1`                                                                                |
-| 2026-09-21 | Product owner accepted the design and authorized implementation; the three open decisions were confirmed as proposed                                  | The signal model, shared member edit access, and the exclusion of quantities match the intended lightweight pantry                                | [Approval record](https://github.com/wpliao/meal-planner/issues/16#issuecomment-5757123841) |
+| Date       | Change                                                                                                                                                | Reason                                                                                                                                                                      | Evidence                                                                                    |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| 2026-09-21 | Initial lightweight pantry design proposed for owner review                                                                                           | Keep availability useful without exact-use bookkeeping                                                                                                                      | [Issue #16](https://github.com/wpliao/meal-planner/issues/16)                               |
+| 2026-09-21 | Owner screenshot review found the card's Remove action rendered white-on-light and unreadable; the destructive action now uses dark-on-light contrast | The quiet action row's transparent background outranked `.button--danger`, and name-based tests cannot see colour                                                           | `V-LOCAL-P3`; desktop and mobile screenshots                                                |
+| 2026-09-21 | Production release approved and deployed; the approval comment was filed after dispatch rather than before                                            | ADR 0005 makes the recorded issue approval one of only three controls on production, and the only one capturing intent; the deviation is recorded rather than smoothed over | [Approval record](https://github.com/wpliao/meal-planner/issues/16#issuecomment-5762645095) |
+| 2026-09-21 | The three-choice control is labelled **Status** in the interface; “signal” remains the term this document uses                                        | “Signal” is design vocabulary and read as jargon to the family; the choices themselves are unchanged, so `AC-02` is unaffected                                              | Owner review during development acceptance                                                  |
+| 2026-09-21 | Playwright gained `webkit-desktop` and `webkit-mobile` projects, and the signal radios and rename field were given explicit sizing                    | The family uses Android and iOS, but the matrix was Chromium only, so an iOS-only rendering fault reached the owner with every browser test green                           | [#19](https://github.com/wpliao/meal-planner/pull/19)                                       |
+| 2026-09-21 | Independent security review found no high-severity issue; its findings were corrected before review                                                   | Deletion confirmation lacked the Tab focus trap the design requires, and a missing item could surface as `409` instead of `404`                                             | `V-LOCAL-P2`; [#18](https://github.com/wpliao/meal-planner/pull/18)                         |
+| 2026-09-21 | Dialog focus handling moved to `src/client/dialog.ts` and is shared by the member and pantry confirmations                                            | One implementation prevents the two dialogs from drifting apart again                                                                                                       | `V-LOCAL-P2`                                                                                |
+| 2026-09-21 | Implementation added migration `0002`, the pantry API, the shared pantry section, and the full local test set                                         | Turn the accepted design into shipping behavior within the agreed scope                                                                                                     | [#18](https://github.com/wpliao/meal-planner/pull/18); `V-LOCAL-P1`                         |
+| 2026-09-21 | Optimistic concurrency uses an integer `version` column with `409 stale_version`, and duplicate names return `409 duplicate_name`                     | A stale screen must never silently overwrite another member's change, and the two conflicts need different recovery actions                                                 | `V-LOCAL-P1`; concurrent-edit test                                                          |
+| 2026-09-21 | The per-household cap is enforced by a guarded `INSERT ... SELECT ... WHERE (count) < limit` rather than a separate count                             | Counting first and inserting afterwards would let two concurrent adds exceed the cap                                                                                        | `V-LOCAL-P1`                                                                                |
+| 2026-09-21 | Product owner accepted the design and authorized implementation; the three open decisions were confirmed as proposed                                  | The signal model, shared member edit access, and the exclusion of quantities match the intended lightweight pantry                                                          | [Approval record](https://github.com/wpliao/meal-planner/issues/16#issuecomment-5757123841) |
 
 ## Release record
 
@@ -327,6 +328,32 @@ requires a design change recorded in the decision log below.
   immediate revocation were confirmed by hand on separate devices. `QA-22`
   confirmed by inspection that no item name reached the Worker logs.
 
-- Production release: Pending separate explicit approval
+- Production release: `V-PROD-P1` complete on 2026-09-21, under the owner's
+  [production release approval](https://github.com/wpliao/meal-planner/issues/16#issuecomment-5762645095).
+  Commit `13bbc61`
+  deployed through the protected workflow, run
+  [35612934715](https://github.com/wpliao/meal-planner/actions/runs/35612934715).
+  Migration `0002_create_pantry_items.sql` applied to the production D1
+  database `d944b652-580f-437e-b7ce-21818525c46c`; Phase 1's `0001` was already
+  present and untouched. Worker version
+  `d776f8f3-12c4-4726-b43f-d60156abae64` published to
+  `family-meal-planner-production`. The owner then completed `QA-24` through
+  `QA-26`, closing the 26-case run sheet with every case passing.
+
+  The first production attempt, run
+  [35606329417](https://github.com/wpliao/meal-planner/actions/runs/35606329417),
+  failed at `./scripts/verify.sh`. It deployed nothing — build, migration and
+  publish were all skipped — so production was never touched by it. The cause
+  was an end-to-end submit race fixed in
+  [#21](https://github.com/wpliao/meal-planner/pull/21): two tests submitted a
+  form while the previous mutation was still settling, and the empty-field
+  early return left the previous notice in place. Retries could not recover,
+  because bootstrap is one-shot per server once a household exists.
+
+  Known limitation carried forward: a failure inside the bootstrap journey
+  still cannot be recovered by retries. Fixing it needs either a per-test
+  database or a restructure that the current `fullyParallel` setting makes
+  unsafe.
+
 - Known follow-up work: Recipe linkage, nutrition, photos, and automatic
   suggestions remain in later phases.
