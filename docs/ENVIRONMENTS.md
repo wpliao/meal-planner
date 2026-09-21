@@ -35,13 +35,16 @@ An authorized owner must:
 3. Configure Cloudflare Access applications/policies independently for both
    deployed hostnames before personal data is exposed.
 4. Create least-privilege GitHub environments named `development` and
-   `production`; require reviewers on `production`.
+   `production`, and restrict production deployments to `main`. Required
+   environment reviewers are unavailable for this private GitHub Pro repository;
+   see [ADR 0005](DECISIONS/0005-production-deployment-approval-on-github-pro.md).
 5. Add scoped `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets to each
    GitHub environment. Do not reuse a broad personal global API key.
 6. Add custom domains/routes only after reviewing Access and DNS configuration.
 
-Creating resources, adding credentials, and deploying are manual owner actions;
-the scaffold does none of them automatically.
+Creating resources and adding credentials are manual owner actions; the scaffold
+does none of them automatically. Production deployment requires the owner's
+explicit recorded approval before an authorized operator dispatches the workflow.
 
 ## Commands
 
@@ -49,8 +52,8 @@ The protected deployment workflow selects the named environment, runs the full
 verification gate, builds the matching configuration, applies pending committed
 D1 migrations to that environment, and deploys. Owners do not need to run a
 separate remote migration command. Review the target environment and configure
-its credentials first; production still requires explicit confirmation and the
-protected `production` environment approval.
+its credentials first; production requires the literal workflow confirmation,
+the `main`-only environment branch policy, and the owner's recorded approval.
 
 For local inspection, `CLOUDFLARE_ENV=development pnpm build` selects the named
 configuration. Never use a development command against the production database.

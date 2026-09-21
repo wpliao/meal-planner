@@ -3,6 +3,10 @@
 - Status: Accepted
 - Date: 2026-09-19
 
+The production required-reviewer clause below is superseded by
+[ADR 0005](0005-production-deployment-approval-on-github-pro.md); the resource
+isolation decision remains in force.
+
 ## Context
 
 Production must not depend on a development computer and family data must not be
