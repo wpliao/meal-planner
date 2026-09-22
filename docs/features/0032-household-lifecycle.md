@@ -1,12 +1,12 @@
 # Feature: Household ownership transfer and deletion
 
-- Status: Designing
+- Status: Accepted
 - Phase: Phase 1 follow-up; prerequisite for Phase 3 data
 - Issue: [#32](https://github.com/wpliao/meal-planner/issues/32)
 - Product owner: Repository owner
 - Last updated: 2026-09-22
-- Pull requests: [#34](https://github.com/wpliao/meal-planner/pull/34) (design
-  proposal)
+- Pull requests: [#34](https://github.com/wpliao/meal-planner/pull/34) (accepted
+  design)
 
 ## Problem and outcome
 
@@ -17,11 +17,13 @@ requests whole-household deletion, an operator needs a procedure that removes
 live family and identity data without exposing the bootstrap path or targeting
 the wrong environment.
 
-This is a **proposal**. The owner selected an
+The owner selected an
 [operator procedure with a development
 rehearsal](https://github.com/wpliao/meal-planner/issues/32#issuecomment-5773995645)
-for deletion. The exact controls below still need review before the design can
-be `Accepted`. No deletion or production action is authorized here.
+for deletion and [accepted this
+design](https://github.com/wpliao/meal-planner/issues/32#issuecomment-5774536685).
+The implementation gates below must be verified before a deletion workflow is
+eligible for use. Acceptance does not authorize a production deletion.
 
 ## User scenarios
 
@@ -47,13 +49,13 @@ be `Accepted`. No deletion or production action is authorized here.
   household, membership, pantry, and future recipe-row deletion semantics.
 - Not included: self-service household deletion, multiple households per
   identity, data export, a new public deletion API, automatic recovery, or any
-  production deletion under this proposal. Future R2 objects require an update
+  production deletion under this design. Future R2 objects require an update
   to this procedure before a photo feature can ship.
 
 ## Acceptance criteria
 
-These identifiers mirror [issue #32](https://github.com/wpliao/meal-planner/issues/32)
-and become stable after acceptance.
+These stable identifiers mirror
+[issue #32](https://github.com/wpliao/meal-planner/issues/32).
 
 - [ ] `AC-01`: A documented, tested ownership-transfer sequence moves owner
       responsibility to an active member and preserves the last-active-owner
@@ -240,7 +242,7 @@ restore requires another explicit approval. Do not create or alter an applied
 migration to recover live data. A successful requested deletion is not rolled
 back automatically.
 
-## Open decisions before acceptance
+## Implementation gates before a deletion workflow is eligible
 
 1. Confirm the exact Access/Worker closure mechanism and how the workflow
    proves it without exposing an authorization secret.
@@ -255,6 +257,7 @@ back automatically.
 | ---------- | ------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | 2026-09-22 | Initial proposal; status `Designing`                                | Close the Phase 1 household lifecycle gap before adding recipe data | [Issue #32](https://github.com/wpliao/meal-planner/issues/32)                              |
 | 2026-09-22 | Propose owner-approved operator deletion with development rehearsal | Product-owner preference over a self-service control                | [Owner decision](https://github.com/wpliao/meal-planner/issues/32#issuecomment-5773995645) |
+| 2026-09-22 | Accept design and stabilize `AC-01`–`AC-03`                         | Product owner approved PR #34 design; operational gates remain      | [Approval](https://github.com/wpliao/meal-planner/issues/32#issuecomment-5774536685)       |
 
 ## Release record
 

@@ -1,9 +1,10 @@
 # ADR 0008: Household transfer and decommissioning
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-22
 - Feature: [Household lifecycle](../features/0032-household-lifecycle.md)
 - Issue: [#32](https://github.com/wpliao/meal-planner/issues/32)
+- Accepted by product owner: [Issue comment](https://github.com/wpliao/meal-planner/issues/32#issuecomment-5774536685)
 
 ## Context
 
@@ -46,7 +47,7 @@ production branch and owner-approval process follow
 [ADR 0005](0005-production-deployment-approval-on-github-pro.md); GitHub Pro does
 not enforce a second reviewer on this private repository.
 
-## Proposed decision
+## Decision
 
 Use the existing owner/member API for ordinary transfer: promote an active
 successor, have the successor verify owner access, and only then demote or
@@ -80,7 +81,7 @@ must be handled explicitly in the runbook.
   documentation](https://developers.cloudflare.com/d1/worker-api/d1-database/#batch)
   describes transactional rollback on failure. The REST batch used by the
   operator script must be shown to have the same property in development
-  before the procedure is accepted.
+  before the procedure is eligible for production use.
 - [D1 Time Travel](https://developers.cloudflare.com/d1/reference/time-travel/)
   can retain deleted live rows within the account plan's recovery window.
   Deletion must be described as removal from the live database, not immediate
@@ -88,5 +89,6 @@ must be handled explicitly in the runbook.
   document its window before any production deletion.
 - A Time Travel restore overwrites the database in place. Recovery needs a
   separate owner decision and must not silently re-enable Access or bootstrap.
-- This ADR remains `Proposed` until the owner reviews the full feature design,
-  including the exact decommission sequence and evidence requirements.
+- Acceptance of this ADR authorizes implementation and testing of the design;
+  it does not authorize a production deletion. The exact closure, batch, and
+  retention checks must pass before the operator workflow is eligible for use.
