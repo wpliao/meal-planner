@@ -4,7 +4,7 @@ import { expect, test, type Page } from '@playwright/test';
 // share it. Bootstrap only when this run still needs it, and use unique item
 // names so specs never collide.
 const openFamilySpace = async (page: Page) => {
-  await page.goto('/');
+  await page.goto('/pantry');
 
   const setup = page.getByRole('heading', { name: 'Set up your family space' });
   if (await setup.isVisible().catch(() => false)) {
@@ -218,7 +218,7 @@ test('a non-member sees no pantry at all', async ({ page }) => {
     });
   });
 
-  await page.goto('/');
+  await page.goto('/pantry');
 
   await expect(
     page.getByRole('heading', { name: 'You are not a family member' }),
