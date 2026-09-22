@@ -6,7 +6,8 @@
 - Product owner: Repository owner
 - Last updated: 2026-09-22
 - Pull requests: [#34](https://github.com/wpliao/meal-planner/pull/34) (accepted
-  design)
+  design); [#35](https://github.com/wpliao/meal-planner/pull/35) (`AC-01`
+  transfer)
 
 ## Problem and outcome
 
@@ -258,7 +259,7 @@ back automatically.
 | 2026-09-22 | Initial proposal; status `Designing`                                | Close the Phase 1 household lifecycle gap before adding recipe data | [Issue #32](https://github.com/wpliao/meal-planner/issues/32)                              |
 | 2026-09-22 | Propose owner-approved operator deletion with development rehearsal | Product-owner preference over a self-service control                | [Owner decision](https://github.com/wpliao/meal-planner/issues/32#issuecomment-5773995645) |
 | 2026-09-22 | Accept design and stabilize `AC-01`–`AC-03`                         | Product owner approved PR #34 design; operational gates remain      | [Approval](https://github.com/wpliao/meal-planner/issues/32#issuecomment-5774536685)       |
-| 2026-09-22 | Begin `AC-01` ownership-transfer implementation                     | The existing role API supports the accepted sequence                | [PR #34](https://github.com/wpliao/meal-planner/pull/34)                                   |
+| 2026-09-22 | Begin `AC-01` ownership-transfer implementation                     | The existing role API supports the accepted sequence                | [PR #35](https://github.com/wpliao/meal-planner/pull/35)                                   |
 
 ## Release record
 
