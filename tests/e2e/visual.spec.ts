@@ -53,7 +53,7 @@ const ITEMS = {
   ],
 };
 
-const stub = async (page: Page) => {
+const stub = async (page: Page, path = '/pantry', heading = 'Pantry') => {
   await page.route('**/api/session', (route) =>
     route.fulfill({
       contentType: 'application/json',
@@ -72,8 +72,10 @@ const stub = async (page: Page) => {
       body: JSON.stringify(ITEMS),
     }),
   );
-  await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Pantry' })).toBeVisible();
+  await page.goto(path);
+  await expect(
+    page.getByRole('heading', { name: heading }).first(),
+  ).toBeVisible();
 };
 
 const pantry = (page: Page) =>
@@ -195,7 +197,7 @@ test('remove confirmation dialog', async ({ page }) => {
 });
 
 test('members panel', async ({ page }) => {
-  await stub(page);
+  await stub(page, '/family', 'Family');
   await expect(
     page.getByRole('complementary', { name: 'Members' }),
   ).toHaveScreenshot('members-panel.png');

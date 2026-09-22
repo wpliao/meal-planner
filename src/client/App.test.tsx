@@ -8,6 +8,15 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 
+/**
+ * Sections are routes now, so a test has to say which one it is exercising.
+ * Member administration lives at /family; the pantry at /pantry.
+ */
+const renderAt = (path: string) => {
+  window.history.pushState({}, '', path);
+  return render(<App />);
+};
+
 const ownerSession = {
   status: 'ready' as const,
   member: {
@@ -60,7 +69,7 @@ describe('App', () => {
 
   it('shows the member-only family view without management controls', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(memberSession)));
-    render(<App />);
+    renderAt('/family');
 
     expect(await screen.findByText('Liao family')).toBeInTheDocument();
     expect(
@@ -76,7 +85,7 @@ describe('App', () => {
       'fetch',
       vi.fn().mockResolvedValue(json({ status: 'not-a-member' })),
     );
-    render(<App />);
+    renderAt('/family');
 
     expect(
       await screen.findByRole('heading', {
@@ -96,7 +105,7 @@ describe('App', () => {
       ),
     );
     vi.stubGlobal('fetch', fetchMock);
-    render(<App />);
+    renderAt('/pantry');
 
     expect(
       await screen.findByRole('heading', { name: 'Pantry' }),
@@ -116,7 +125,7 @@ describe('App', () => {
       ),
     );
     vi.stubGlobal('fetch', fetchMock);
-    render(<App />);
+    renderAt('/pantry');
 
     expect(
       await screen.findByRole('heading', {
@@ -136,7 +145,7 @@ describe('App', () => {
       // The ready session also mounts the pantry, which loads its own items.
       .mockResolvedValue(json({ items: [] }));
     vi.stubGlobal('fetch', fetchMock);
-    render(<App />);
+    renderAt('/family');
 
     expect(
       await screen.findByRole('heading', {
@@ -170,7 +179,7 @@ describe('App', () => {
       return Promise.resolve(json(ownerSession));
     });
     vi.stubGlobal('fetch', fetchMock);
-    render(<App />);
+    renderAt('/family');
 
     expect(
       await screen.findByRole('heading', { name: 'Set up your family space' }),
@@ -201,13 +210,13 @@ describe('App', () => {
       return Promise.resolve(json({ members }));
     });
     vi.stubGlobal('fetch', fetchMock);
-    render(<App />);
+    renderAt('/family');
 
     expect(
       await screen.findByRole('heading', { name: 'Members' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: 'Make member' }),
+      await screen.findByRole('button', { name: 'Make member' }),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Revoke' })).toBeInTheDocument();
     expect(
@@ -235,7 +244,7 @@ describe('App', () => {
       return Promise.resolve(json({ members: [] }));
     });
     vi.stubGlobal('fetch', fetchMock);
-    render(<App />);
+    renderAt('/family');
 
     await screen.findByRole('heading', { name: 'Members' });
     fireEvent.change(screen.getByLabelText('Verified email address'), {
@@ -265,7 +274,7 @@ describe('App', () => {
       return Promise.resolve(json({ members: [members[0], activeMember] }));
     });
     vi.stubGlobal('fetch', fetchMock);
-    render(<App />);
+    renderAt('/family');
 
     const row = await screen.findByRole('row', {
       name: /active@example\.test/i,
@@ -294,7 +303,7 @@ describe('App', () => {
         ),
       ),
     );
-    render(<App />);
+    renderAt('/family');
 
     const remove = (
       await screen.findAllByRole('button', { name: 'Remove' })
@@ -326,7 +335,7 @@ describe('App', () => {
       return Promise.resolve(json({ members }));
     });
     vi.stubGlobal('fetch', fetchMock);
-    render(<App />);
+    renderAt('/family');
 
     fireEvent.click(
       (await screen.findAllByRole('button', { name: 'Remove' }))[0],
@@ -361,7 +370,7 @@ describe('App', () => {
       return Promise.resolve(json({ members }));
     });
     vi.stubGlobal('fetch', fetchMock);
-    render(<App />);
+    renderAt('/family');
 
     fireEvent.click(await screen.findByRole('button', { name: 'Make member' }));
     const dialog = screen.getByRole('dialog');
@@ -402,7 +411,7 @@ describe('App', () => {
       return Promise.resolve(json({ members }));
     });
     vi.stubGlobal('fetch', fetchMock);
-    render(<App />);
+    renderAt('/family');
 
     fireEvent.click(
       (await screen.findAllByRole('button', { name: 'Revoke' }))[0],
@@ -446,7 +455,7 @@ describe('App', () => {
       return Promise.resolve(json({ status: 'setup-required' }));
     });
     vi.stubGlobal('fetch', fetchMock);
-    render(<App />);
+    renderAt('/family');
 
     await screen.findByRole('heading', { name: 'Set up your family space' });
     fireEvent.click(
@@ -475,7 +484,7 @@ describe('App', () => {
         return Promise.resolve(json({ status: 'setup-required' }));
       }),
     );
-    render(<App />);
+    renderAt('/family');
 
     await screen.findByRole('heading', { name: 'Set up your family space' });
     fireEvent.click(
@@ -508,7 +517,7 @@ describe('App', () => {
         ),
       ),
     );
-    render(<App />);
+    renderAt('/family');
 
     await screen.findByRole('heading', { name: 'Members' });
     fireEvent.click(screen.getByRole('button', { name: 'Add member' }));
