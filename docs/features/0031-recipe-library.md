@@ -139,7 +139,8 @@ household recipe limit before migration review.
 
 Household deletion and ownership transfer remain an explicit Phase 1 follow-up
 ([feature #7](./0007-trusted-family-boundary.md)), now tracked in
-[issue #32](https://github.com/wpliao/meal-planner/issues/32). The current
+[issue #32](https://github.com/wpliao/meal-planner/issues/32) and its
+[design](./0032-household-lifecycle.md). The current
 schema restricts household deletion while `app_installation` points to it, and
 pantry rows cascade only after that pointer is handled. The proposed ordinary
 transfer uses the existing owner APIs: promote an active successor, have the
@@ -261,9 +262,10 @@ or an explicitly approved restore after examining D1 backup scope.
 
 ## Decision and change log
 
-| Date       | Change                                      | Reason                                                      | Evidence                                                      |
-| ---------- | ------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------- |
-| 2026-09-22 | Initial design proposal; status `Designing` | Start Phase 3 with reviewable scope and explicit open gates | [Issue #31](https://github.com/wpliao/meal-planner/issues/31) |
+| Date       | Change                                                                                             | Reason                                                                           | Evidence                                                                                  |
+| ---------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| 2026-09-22 | Initial design proposal; status `Designing`                                                        | Start Phase 3 with reviewable scope and explicit open gates                      | [Issue #31](https://github.com/wpliao/meal-planner/issues/31)                             |
+| 2026-09-22 | Product owner endorsed the proposed direction; retain `Designing` while prerequisites are resolved | Household lifecycle and import-destination policy still need concrete acceptance | [Review record](https://github.com/wpliao/meal-planner/issues/31#issuecomment-5774034983) |
 
 ## Release record
 
