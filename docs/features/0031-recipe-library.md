@@ -1,6 +1,6 @@
 # Feature: Recipe library
 
-- Status: Designing
+- Status: Accepted
 - Phase: 3 — recipes
 - Issue: [#31](https://github.com/wpliao/meal-planner/issues/31)
 - Product owner: Repository owner
@@ -14,11 +14,11 @@ may be entered by a member or copied from a website. An imported copy must be
 reviewed before saving and must retain its original link and provenance, because
 website extraction is imperfect and the family may want to revisit the source.
 
-This is a **proposal**, not an accepted design. The [product roadmap](../PRODUCT.md)
-defines the Phase 3 outcome but does not authorize implementation on its own.
-The product owner answered every open design decision on 2026-09-22; see
-[Resolved design decisions](#resolved-design-decisions). The design becomes
-`Accepted` only after the owner explicitly accepts this revision.
+The product owner resolved every open design decision and [accepted this
+design](https://github.com/wpliao/meal-planner/issues/31#issuecomment-5779088363) on 2026-09-22; see
+[Resolved design decisions](#resolved-design-decisions). Acceptance authorizes
+implementation. It does not authorize applying migration `0003` remotely,
+deploying, or changing production, which keep their existing approval gates.
 
 ## User scenarios
 
@@ -45,9 +45,9 @@ The product owner answered every open design decision on 2026-09-22; see
 
 ## Acceptance criteria
 
-These identifiers mirror [issue #31](https://github.com/wpliao/meal-planner/issues/31)
-and are **proposed**. They become stable only when the issue and design are
-accepted. No criterion is marked complete at this stage.
+These stable identifiers mirror
+[issue #31](https://github.com/wpliao/meal-planner/issues/31). `AC-02` gained
+"plus optional notes" before acceptance. No criterion is complete yet.
 
 - [ ] `AC-01`: Active members can list, view, create, edit, and delete only their
       household's recipes; unauthenticated visitors and non-members cannot read
@@ -107,7 +107,7 @@ identity and active membership boundary from
 on **every** recipe request; household scope comes from `MemberContext`, never
 from a URL or request body.
 
-Proposed API: `GET /api/recipes`, `GET /api/recipes/:id`, `POST /api/recipes`,
+API: `GET /api/recipes`, `GET /api/recipes/:id`, `POST /api/recipes`,
 `PATCH /api/recipes/:id`, `DELETE /api/recipes/:id`, and
 `POST /api/recipes/import-preview`. Mutations retain the existing same-origin
 and JSON content-type checks. Update and delete require the current version and
@@ -187,8 +187,8 @@ Household deletion and ownership transfer remain an explicit Phase 1 follow-up
 [issue #32](https://github.com/wpliao/meal-planner/issues/32) and its
 [design](./0032-household-lifecycle.md). The current
 schema restricts household deletion while `app_installation` points to it, and
-pantry rows cascade only after that pointer is handled. The proposed ordinary
-transfer uses the existing owner APIs: promote an active successor, have the
+pantry rows cascade only after that pointer is handled. Ordinary transfer,
+released as #32 `AC-01`, uses the existing owner APIs: promote an active successor, have the
 successor verify owner access, then let the previous owner step down. The
 last-active-owner guard remains in force. An unavailable previous owner needs a
 separate recovery decision.
@@ -327,14 +327,15 @@ passing test names during implementation; no recipe tests exist yet.
 4. Obtain separate, explicit production approval before applying the migration
    and deploying. Record the exact run, Worker version, and owner validation.
 
-The proposed migration is additive. A code rollback redeploys the prior Worker
+The migration is additive. A code rollback redeploys the prior Worker
 while keeping the unused table; it does not reverse an applied migration or
 silently delete family recipes. Recovery from a bad data write is a forward fix
 or an explicitly approved restore after examining D1 backup scope.
 
 ## Resolved design decisions
 
-The product owner answered these on 2026-09-22 in the design session. Each
+The product owner answered these on 2026-09-22 in the design session and
+accepted them with the design. Each
 chose the recommended option unless noted.
 
 1. **Import destinations:** an exact-host allowlist of the six candidate sites
@@ -357,8 +358,8 @@ chose the recommended option unless noted.
 7. **Limits:** the bounds in [Data and migrations](#data-and-migrations) and
    the import limits in [Security and privacy](#security-and-privacy);
    over-limit imports are truncated with a review notice. The 4,000-character
-   notes bound was proposed after the owner chose notes and is listed for
-   confirmation in the design pull request.
+   notes bound was proposed after the owner chose notes and accepted with the
+   design.
 
 ## Decision and change log
 
@@ -367,6 +368,7 @@ chose the recommended option unless noted.
 | 2026-09-22 | Initial design proposal; status `Designing`                                                                                                                                         | Start Phase 3 with reviewable scope and explicit open gates                       | [Issue #31](https://github.com/wpliao/meal-planner/issues/31)                             |
 | 2026-09-22 | Product owner endorsed the proposed direction; retain `Designing` while prerequisites are resolved                                                                                  | Household lifecycle and import-destination policy still need concrete acceptance  | [Review record](https://github.com/wpliao/meal-planner/issues/31#issuecomment-5774034983) |
 | 2026-09-22 | Resolve open decisions: six-host allowlist, manual redirects (≤3, revalidated), JSON-LD `Recipe` only, unstructured ingredient lines, household cascade, optional notes, and bounds | Product-owner answers in the design session; #32 deletion design already accepted | [PR #37](https://github.com/wpliao/meal-planner/pull/37)                                  |
+| 2026-09-22 | Accept design; status `Accepted`; `AC-01`–`AC-06` stable                                                                                                                            | Product owner: “I accept the #31 design”                                          | [Approval](https://github.com/wpliao/meal-planner/issues/31#issuecomment-5779088363)      |
 
 ## Release record
 
