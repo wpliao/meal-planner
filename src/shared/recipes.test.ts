@@ -52,7 +52,7 @@ describe('recipe plain-text normalization', () => {
 
   it('keeps NFC composed text and full-width forms instead of folding them', () => {
     expect(cleanRecipeLine('Ｆｕｌｌ')).toBe('Ｆｕｌｌ');
-    expect(cleanRecipeLine('Cafe\u0301').length).toBe(4);
+    expect(cleanRecipeLine('Cafe\u0301')).toHaveLength(4);
   });
 
   it('keeps line breaks and single blank lines in notes', () => {

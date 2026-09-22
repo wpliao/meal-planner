@@ -406,6 +406,34 @@ const validateSourceUrl = (value: unknown, label: string): FieldResult<URL> => {
     : fail(`${label} ${URL_MESSAGES[parsed.problem]}`);
 };
 
+/** The final URL, or null when absent or equal to the submitted URL. */
+const validateResolvedUrl = (
+  value: unknown,
+  submitted: URL,
+): FieldResult<URL | null> => {
+  if (value === undefined || value === null) return { ok: true, value: null };
+  const result = validateSourceUrl(value, 'The resolved URL');
+  if (!result.ok) return result;
+  return {
+    ok: true,
+    value: result.value.href === submitted.href ? null : result.value,
+  };
+};
+
+const validatePageTitle = (value: unknown): FieldResult<string | null> => {
+  if (value === undefined || value === null) return { ok: true, value: null };
+  if (typeof value !== 'string') {
+    return fail('The source page title must be text.');
+  }
+  const cleaned = cleanRecipeLine(value);
+  if (recipeTextLength(cleaned) > RECIPE_SOURCE_PAGE_TITLE_MAX_LENGTH) {
+    return fail(
+      `The source page title must be ${RECIPE_SOURCE_PAGE_TITLE_MAX_LENGTH} characters or fewer.`,
+    );
+  }
+  return { ok: true, value: cleaned.length > 0 ? cleaned : null };
+};
+
 /**
  * Validates client-supplied source metadata. The host is always derived from
  * the page the text came from (the resolved URL when present), never taken
@@ -435,42 +463,37 @@ export const validateRecipeSource = (
 
   const submitted = validateSourceUrl(value.submittedUrl, 'The source URL');
   if (!submitted.ok) return submitted;
-
-  let resolved: URL | null = null;
-  if (value.resolvedUrl !== undefined && value.resolvedUrl !== null) {
-    const result = validateSourceUrl(value.resolvedUrl, 'The resolved URL');
-    if (!result.ok) return result;
-    resolved = result.value.href === submitted.value.href ? null : result.value;
-  }
-
-  let pageTitle: string | null = null;
-  if (value.pageTitle !== undefined && value.pageTitle !== null) {
-    if (typeof value.pageTitle !== 'string') {
-      return fail('The source page title must be text.');
-    }
-    const cleaned = cleanRecipeLine(value.pageTitle);
-    if (recipeTextLength(cleaned) > RECIPE_SOURCE_PAGE_TITLE_MAX_LENGTH) {
-      return fail(
-        `The source page title must be ${RECIPE_SOURCE_PAGE_TITLE_MAX_LENGTH} characters or fewer.`,
-      );
-    }
-    pageTitle = cleaned.length > 0 ? cleaned : null;
-  }
+  const resolved = validateResolvedUrl(value.resolvedUrl, submitted.value);
+  if (!resolved.ok) return resolved;
+  const title = validatePageTitle(value.pageTitle);
+  if (!title.ok) return title;
 
   return {
     ok: true,
     value: {
       kind: 'website',
       submittedUrl: submitted.value.href,
-      resolvedUrl: resolved?.href ?? null,
-      host: (resolved ?? submitted.value).hostname,
-      pageTitle,
+      resolvedUrl: resolved.value?.href ?? null,
+      host: (resolved.value ?? submitted.value).hostname,
+      pageTitle: title.value,
     },
   };
 };
 
-const CREATE_FIELDS = ['title', 'notes', 'ingredients', 'steps', 'source'];
-const UPDATE_FIELDS = ['version', 'title', 'notes', 'ingredients', 'steps'];
+const CREATE_FIELDS = new Set([
+  'title',
+  'notes',
+  'ingredients',
+  'steps',
+  'source',
+]);
+const UPDATE_FIELDS = new Set([
+  'version',
+  'title',
+  'notes',
+  'ingredients',
+  'steps',
+]);
 
 const collect = <T>(
   errors: RecipeFieldError[],
@@ -496,9 +519,7 @@ export const validateCreateRecipe = (
       errors: [{ field: 'request', message: 'Send a recipe object.' }],
     };
   }
-  const unknown = Object.keys(input).filter(
-    (key) => !CREATE_FIELDS.includes(key),
-  );
+  const unknown = Object.keys(input).filter((key) => !CREATE_FIELDS.has(key));
   if (unknown.length > 0) {
     return {
       ok: false,
@@ -546,7 +567,7 @@ export const validateUpdateRecipe = (
     };
   }
   const keys = Object.keys(input);
-  const unknown = keys.filter((key) => !UPDATE_FIELDS.includes(key));
+  const unknown = keys.filter((key) => !UPDATE_FIELDS.has(key));
   if (unknown.length > 0) {
     return {
       ok: false,

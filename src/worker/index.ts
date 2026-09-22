@@ -579,7 +579,7 @@ const route = async (
     return handleRecipesCollection(request, env, identityProvider);
   }
 
-  const recipeMatch = url.pathname.match(RECIPE_PATH);
+  const recipeMatch = RECIPE_PATH.exec(url.pathname);
   if (recipeMatch) {
     return handleRecipe(request, env, recipeMatch[1], identityProvider);
   }
