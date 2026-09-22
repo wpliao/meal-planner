@@ -1,11 +1,22 @@
 import {
+  Badge,
+  Button,
+  Card,
+  Group,
+  Modal,
+  Stack,
+  Table,
+  Text,
+  TextInput,
+  Title,
+  VisuallyHidden,
+} from '@mantine/core';
+import {
   useCallback,
   useEffect,
-  useRef,
   useState,
   type FormEvent,
-  type KeyboardEvent,
-  type MouseEvent,
+  type ReactNode,
 } from 'react';
 import type {
   HouseholdMember,
@@ -15,7 +26,7 @@ import type {
 } from '../shared/api';
 import { api } from './api';
 import { useFamily } from './family-context';
-import { dialogControls, handleDialogKeyDown } from './dialog';
+import './members-table.css';
 
 type Confirmation =
   | { kind: 'delete'; member: HouseholdMember }
@@ -26,6 +37,34 @@ type Confirmation =
     }
   | null;
 
+/**
+ * Each confirmation variant differs only in its wording, so the three strings
+ * are resolved together rather than branching three times in the markup.
+ */
+const wordingFor = (
+  confirmation: NonNullable<Confirmation>,
+): { title: string; body: string; confirm: string } => {
+  if (confirmation.kind === 'delete') {
+    return {
+      title: 'Remove this member?',
+      body: `Remove ${confirmation.member.email}? This permanently removes their stored family membership.`,
+      confirm: 'Remove member',
+    };
+  }
+  if ('status' in confirmation.update) {
+    return {
+      title: 'Revoke this member?',
+      body: `Revoke ${confirmation.member.email}? They will immediately lose access to this family space.`,
+      confirm: 'Revoke member',
+    };
+  }
+  return {
+    title: 'Remove owner permissions?',
+    body: `Make ${confirmation.member.email} a family member? They will immediately lose owner permissions.`,
+    confirm: 'Make member',
+  };
+};
+
 /** The family space: who is signed in, and owner-only member administration. */
 export function FamilySpace() {
   const { session, reloadSession, notify } = useFamily();
@@ -35,8 +74,6 @@ export function FamilySpace() {
   const [formError, setFormError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [confirmation, setConfirmation] = useState<Confirmation>(null);
-  const triggerRef = useRef<HTMLElement | null>(null);
-  const dialogRef = useRef<HTMLDivElement>(null);
 
   const isOwner = session.member.role === 'owner';
 
@@ -59,28 +96,6 @@ export function FamilySpace() {
       );
     });
   }, [isOwner, loadMembers, notify]);
-
-  useEffect(() => {
-    if (!confirmation) return;
-    const [firstControl] = dialogControls(dialogRef.current);
-    (firstControl ?? dialogRef.current)?.focus();
-    return () => triggerRef.current?.focus();
-  }, [confirmation, pending]);
-
-  const openConfirmation = (
-    event: MouseEvent<HTMLElement>,
-    next: Confirmation,
-  ) => {
-    triggerRef.current = event.currentTarget;
-    setConfirmation(next);
-  };
-
-  const trapDialogFocus = (event: KeyboardEvent<HTMLDivElement>) =>
-    handleDialogKeyDown(event, {
-      dialog: dialogRef,
-      pending,
-      onDismiss: () => setConfirmation(null),
-    });
 
   const addMember = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -188,227 +203,244 @@ export function FamilySpace() {
     );
   };
 
+  const toggleRole = (member: HouseholdMember) => {
+    const update = {
+      role: member.role === 'owner' ? ('member' as const) : ('owner' as const),
+    };
+    // Granting ownership is recoverable; taking it away is not, so only the
+    // demotion asks first.
+    if (update.role === 'member') {
+      setConfirmation({ kind: 'member-update', member, update });
+      return;
+    }
+    void updateMember(member, update);
+  };
+
+  const wording = confirmation ? wordingFor(confirmation) : null;
+
+  let memberList: ReactNode;
+  if (!membersLoaded) {
+    memberList = (
+      <Text component="output" mt="md">
+        Checking family members…
+      </Text>
+    );
+  } else if (members.length === 0) {
+    memberList = (
+      <Text c="dimmed" mt="md">
+        No family members have been added yet.
+      </Text>
+    );
+  } else {
+    memberList = (
+      <Table.ScrollContainer
+        data-testid="member-table"
+        minWidth={30}
+        mt="md"
+        type="native"
+      >
+        <Table verticalSpacing="sm">
+          {/* Named for assistive technology; the visible heading above already
+              says what this table is. */}
+          <VisuallyHidden component="caption">
+            Family members and access controls
+          </VisuallyHidden>
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th scope="col">Member</Table.Th>
+              <Table.Th scope="col">Role</Table.Th>
+              <Table.Th scope="col">Status</Table.Th>
+              <Table.Th scope="col">Actions</Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {members.map((member) => (
+              <Table.Tr key={member.id}>
+                <Table.Td
+                  data-label="Member"
+                  style={{ overflowWrap: 'anywhere' }}
+                >
+                  {member.email}
+                </Table.Td>
+                <Table.Td data-label="Role">{member.role}</Table.Td>
+                <Table.Td data-label="Status">
+                  <Badge
+                    color={member.status === 'active' ? 'sage' : 'paper'}
+                    variant="light"
+                  >
+                    {member.status}
+                  </Badge>
+                </Table.Td>
+                <Table.Td data-label="Actions" data-testid="member-actions">
+                  <Group gap="xs" wrap="wrap">
+                    {member.status === 'active' && (
+                      <>
+                        <Button
+                          disabled={pending}
+                          onClick={() => toggleRole(member)}
+                          size="xs"
+                          variant="default"
+                        >
+                          {member.role === 'owner'
+                            ? 'Make member'
+                            : 'Make owner'}
+                        </Button>
+                        <Button
+                          disabled={pending}
+                          onClick={() =>
+                            setConfirmation({
+                              kind: 'member-update',
+                              member,
+                              update: { status: 'revoked' },
+                            })
+                          }
+                          size="xs"
+                          variant="default"
+                        >
+                          Revoke
+                        </Button>
+                      </>
+                    )}
+                    {member.status === 'revoked' && (
+                      <Button
+                        disabled={pending}
+                        onClick={() =>
+                          void updateMember(member, { status: 'active' })
+                        }
+                        size="xs"
+                        variant="default"
+                      >
+                        Reactivate
+                      </Button>
+                    )}
+                    {member.status !== 'active' && (
+                      <Button
+                        color="clay"
+                        disabled={pending}
+                        onClick={() =>
+                          setConfirmation({ kind: 'delete', member })
+                        }
+                        size="xs"
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </Group>
+                </Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      </Table.ScrollContainer>
+    );
+  }
+
   return (
     <>
-      <section className="panel" aria-labelledby="family-title">
-        <h1 id="family-title">Family</h1>
-        <p className="lede">
+      <Card
+        aria-labelledby="family-title"
+        component="section"
+        data-testid="family-panel"
+        padding="lg"
+        radius="lg"
+        withBorder
+      >
+        <Title id="family-title" order={1}>
+          Family
+        </Title>
+        <Text mt="xs">
           Signed in to <strong>{session.household.name}</strong> as{' '}
           {session.member.email}.
-        </p>
-        <p className="status">
-          <span className="status__dot" aria-hidden="true" />
+        </Text>
+        <Badge color="sage" mt="sm" variant="light">
           {isOwner ? 'Family owner' : 'Family member'}
-        </p>
-      </section>
+        </Badge>
+      </Card>
 
       {isOwner ? (
-        <aside className="card" aria-labelledby="members-title">
-          <p className="card__number">Family access</p>
-          <h2 id="members-title">Members</h2>
-          <form
-            className="stack"
-            noValidate
-            onSubmit={(event) => void addMember(event)}
-          >
-            <label htmlFor="member-email">Verified email address</label>
-            <input
-              aria-describedby={formError ? 'member-email-error' : undefined}
-              id="member-email"
-              onChange={(event) => setEmail(event.target.value)}
-              required
-              type="email"
-              value={email}
-            />
-            {formError && (
-              <p className="field-error" id="member-email-error" role="alert">
-                {formError}
-              </p>
-            )}
-            <button className="button" disabled={pending} type="submit">
-              Add member
-            </button>
+        <Card
+          aria-labelledby="members-title"
+          component="aside"
+          padding="lg"
+          radius="lg"
+          withBorder
+        >
+          <Text c="clay.8" fw={700} fz="xs" tt="uppercase">
+            Family access
+          </Text>
+          <Title id="members-title" order={2}>
+            Members
+          </Title>
+          <form noValidate onSubmit={(event) => void addMember(event)}>
+            <Stack gap="sm" mt="md">
+              <TextInput
+                error={formError && <span role="alert">{formError}</span>}
+                id="member-email"
+                label="Verified email address"
+                onChange={(event) => setEmail(event.currentTarget.value)}
+                required
+                type="email"
+                value={email}
+                withAsterisk={false}
+              />
+              <Button disabled={pending} type="submit" w="fit-content">
+                Add member
+              </Button>
+            </Stack>
           </form>
-          {!membersLoaded ? (
-            <output className="lede">Checking family members…</output>
-          ) : members.length === 0 ? (
-            <p className="empty-state">
-              No family members have been added yet.
-            </p>
-          ) : (
-            <div className="member-table-wrap">
-              <table>
-                <colgroup>
-                  <col className="member-column" />
-                  <col className="role-column" />
-                  <col className="status-column" />
-                  <col className="actions-column" />
-                </colgroup>
-                <caption className="sr-only">
-                  Family members and access controls
-                </caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Member</th>
-                    <th scope="col">Role</th>
-                    <th scope="col">Status</th>
-                    <th className="member-actions-heading" scope="col">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {members.map((member) => (
-                    <tr key={member.id}>
-                      <td data-label="Member">{member.email}</td>
-                      <td data-label="Role">{member.role}</td>
-                      <td data-label="Status">{member.status}</td>
-                      <td className="member-actions-cell" data-label="Actions">
-                        <div className="member-actions">
-                          {member.status === 'active' && (
-                            <>
-                              <button
-                                disabled={pending}
-                                onClick={(event) => {
-                                  const update = {
-                                    role:
-                                      member.role === 'owner'
-                                        ? ('member' as const)
-                                        : ('owner' as const),
-                                  };
-                                  if (update.role === 'member') {
-                                    openConfirmation(event, {
-                                      kind: 'member-update',
-                                      member,
-                                      update,
-                                    });
-                                    return;
-                                  }
-                                  void updateMember(member, update);
-                                }}
-                                type="button"
-                              >
-                                {member.role === 'owner'
-                                  ? 'Make member'
-                                  : 'Make owner'}
-                              </button>
-                              <button
-                                disabled={pending}
-                                onClick={(event) =>
-                                  openConfirmation(event, {
-                                    kind: 'member-update',
-                                    member,
-                                    update: { status: 'revoked' },
-                                  })
-                                }
-                                type="button"
-                              >
-                                Revoke
-                              </button>
-                            </>
-                          )}
-                          {member.status === 'revoked' && (
-                            <button
-                              disabled={pending}
-                              onClick={() =>
-                                void updateMember(member, { status: 'active' })
-                              }
-                              type="button"
-                            >
-                              Reactivate
-                            </button>
-                          )}
-                          {member.status !== 'active' && (
-                            <button
-                              className="button--danger"
-                              disabled={pending}
-                              onClick={(event) =>
-                                openConfirmation(event, {
-                                  kind: 'delete',
-                                  member,
-                                })
-                              }
-                              type="button"
-                            >
-                              Remove
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </aside>
+          {memberList}
+        </Card>
       ) : (
-        <aside className="card" aria-label="Family access">
-          <p className="card__number">Family access</p>
-          <h2>Private by default</h2>
-          <p>
+        <Card
+          aria-label="Family access"
+          component="aside"
+          padding="lg"
+          radius="lg"
+          withBorder
+        >
+          <Text c="clay.8" fw={700} fz="xs" tt="uppercase">
+            Family access
+          </Text>
+          <Title order={2}>Private by default</Title>
+          <Text mt="xs">
             Your family owner manages who can access this shared space. More
             meal planning tools will arrive in a future phase.
-          </p>
-        </aside>
+          </Text>
+        </Card>
       )}
 
-      {confirmation && (
-        <div className="dialog-backdrop">
-          <div
-            aria-labelledby="confirmation-title"
-            aria-modal="true"
-            aria-busy={pending}
-            className="dialog"
-            onKeyDown={trapDialogFocus}
-            ref={dialogRef}
-            role="dialog"
-            tabIndex={-1}
-          >
-            <h2 id="confirmation-title">
-              {confirmation.kind === 'delete'
-                ? 'Remove this member?'
-                : 'status' in confirmation.update
-                  ? 'Revoke this member?'
-                  : 'Remove owner permissions?'}
-            </h2>
-            <p>
-              {confirmation.kind === 'delete'
-                ? `Remove ${confirmation.member.email}? This permanently removes their stored family membership.`
-                : 'status' in confirmation.update
-                  ? `Revoke ${confirmation.member.email}? They will immediately lose access to this family space.`
-                  : `Make ${confirmation.member.email} a family member? They will immediately lose owner permissions.`}
-            </p>
-            <div className="dialog__actions">
-              <button
+      <Modal
+        centered
+        onClose={() => setConfirmation(null)}
+        opened={confirmation !== null}
+        title={wording?.title ?? ''}
+      >
+        {confirmation && wording && (
+          <Stack gap="md">
+            <Text>{wording.body}</Text>
+            <Group justify="flex-end">
+              <Button
                 disabled={pending}
                 onClick={() => setConfirmation(null)}
-                type="button"
+                variant="default"
               >
                 Cancel
-              </button>
-              <button
-                className="button--danger"
+              </Button>
+              <Button
+                color="clay"
                 disabled={pending}
                 onClick={() =>
                   void (confirmation.kind === 'delete'
                     ? deleteMember()
                     : updateMember(confirmation.member, confirmation.update))
                 }
-                type="button"
               >
-                {pending
-                  ? 'Working…'
-                  : confirmation.kind === 'delete'
-                    ? 'Remove member'
-                    : 'status' in confirmation.update
-                      ? 'Revoke member'
-                      : 'Make member'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+                {pending ? 'Working…' : wording.confirm}
+              </Button>
+            </Group>
+          </Stack>
+        )}
+      </Modal>
     </>
   );
 }

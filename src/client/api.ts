@@ -30,3 +30,44 @@ export const jsonMutation = (
   headers: { 'content-type': 'application/json' },
   ...(body === undefined ? {} : { body: JSON.stringify(body) }),
 });
+
+/**
+ * Every section runs mutations the same way: block further input, clear the
+ * previous result, apply the change, reconcile from the server — after a
+ * failure too, so the screen never keeps a value the server rejected — and
+ * report exactly once.
+ *
+ * `reconcile` also carries whatever else has to happen on both paths, such as
+ * closing a confirmation dialog.
+ */
+export async function runMutation(
+  {
+    setPending,
+    notify,
+    reconcile,
+    fallback,
+  }: {
+    setPending: (pending: boolean) => void;
+    notify: (notice: Notice) => void;
+    reconcile: () => Promise<unknown>;
+    fallback: string;
+  },
+  action: () => Promise<unknown>,
+  success: string,
+): Promise<void> {
+  setPending(true);
+  notify(null);
+  try {
+    await action();
+    await reconcile();
+    notify({ tone: 'success', message: success });
+  } catch (error: unknown) {
+    await reconcile();
+    notify({
+      tone: 'error',
+      message: error instanceof Error ? error.message : fallback,
+    });
+  } finally {
+    setPending(false);
+  }
+}

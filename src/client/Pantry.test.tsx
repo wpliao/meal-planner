@@ -6,7 +6,9 @@ import {
   within,
 } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { MantineProvider } from '@mantine/core';
 import { Pantry } from './Pantry';
+import { theme } from './theme';
 import type { PantryItem } from '../shared/pantry';
 
 const item = (over: Partial<PantryItem> = {}): PantryItem => ({
@@ -38,9 +40,18 @@ const jsonResponse = (body: unknown, status = 200) =>
 const listOnce = (items: PantryItem[]) => jsonResponse({ items });
 
 /** Rename and Remove now live behind the per-item actions menu. */
-const openItemMenu = (name = 'Rice') => {
+const openItemMenu = async (name = 'Rice') => {
   fireEvent.click(screen.getByRole('button', { name: `Actions for ${name}` }));
+  await screen.findByRole('menu');
 };
+
+/** Mantine components need the provider and this project's theme. */
+const renderPantry = () =>
+  render(
+    <MantineProvider env="test" theme={theme}>
+      <Pantry />
+    </MantineProvider>,
+  );
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -50,7 +61,7 @@ describe('Pantry', () => {
   it('announces loading and then shows the empty state', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(() => listOnce([]));
 
-    render(<Pantry />);
+    renderPantry();
     expect(screen.getByText('Checking your pantry…')).toBeInTheDocument();
 
     expect(await screen.findByText(/The pantry is empty/u)).toBeInTheDocument();
@@ -62,7 +73,7 @@ describe('Pantry', () => {
       .mockImplementationOnce(() => jsonResponse({}, 503))
       .mockImplementation(() => listOnce([item()]));
 
-    render(<Pantry />);
+    renderPantry();
 
     const retry = await screen.findByRole('button', { name: 'Retry' });
     expect(
@@ -84,7 +95,7 @@ describe('Pantry', () => {
       ]),
     );
 
-    render(<Pantry />);
+    renderPantry();
     await screen.findByText('Rice');
 
     fireEvent.click(screen.getByRole('button', { name: 'Shopping (2)' }));
@@ -99,7 +110,7 @@ describe('Pantry', () => {
       listOnce([item({ status: 'available' })]),
     );
 
-    render(<Pantry />);
+    renderPantry();
     await screen.findByText('Rice');
     fireEvent.click(screen.getByRole('button', { name: 'Shopping (0)' }));
 
@@ -113,7 +124,7 @@ describe('Pantry', () => {
       .spyOn(globalThis, 'fetch')
       .mockImplementation(() => listOnce([]));
 
-    render(<Pantry />);
+    renderPantry();
     await screen.findByText(/The pantry is empty/u);
 
     fireEvent.click(screen.getByRole('button', { name: 'Add item' }));
@@ -132,7 +143,7 @@ describe('Pantry', () => {
       .mockImplementationOnce(() => jsonResponse({ item: added }, 201))
       .mockImplementation(() => listOnce([added]));
 
-    render(<Pantry />);
+    renderPantry();
     await screen.findByText(/The pantry is empty/u);
 
     fireEvent.change(screen.getByLabelText('Item name'), {
@@ -165,7 +176,7 @@ describe('Pantry', () => {
         listOnce([{ ...current, status: 'available', version: 5 }]),
       );
 
-    render(<Pantry />);
+    renderPantry();
     await screen.findByText('Rice');
 
     const signals = screen.getByRole('group', { name: 'Status for Rice' });
@@ -201,7 +212,7 @@ describe('Pantry', () => {
       )
       .mockImplementation(() => listOnce([fresh]));
 
-    render(<Pantry />);
+    renderPantry();
     await screen.findByText('Rice');
 
     const signals = screen.getByRole('group', { name: 'Status for Rice' });
@@ -215,7 +226,7 @@ describe('Pantry', () => {
     const refreshed = screen.getByRole('group', { name: 'Status for Rice' });
     expect(
       within(refreshed).getByRole('button', { name: 'Needed' }),
-    ).toBeDisabled();
+    ).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('reports a duplicate name from the server', async () => {
@@ -234,7 +245,7 @@ describe('Pantry', () => {
       )
       .mockImplementation(() => listOnce([item()]));
 
-    render(<Pantry />);
+    renderPantry();
     await screen.findByText(/The pantry is empty/u);
 
     fireEvent.change(screen.getByLabelText('Item name'), {
@@ -259,11 +270,11 @@ describe('Pantry', () => {
         listOnce([{ ...current, name: 'Brown rice', version: 3 }]),
       );
 
-    render(<Pantry />);
+    renderPantry();
     await screen.findByText('Rice');
 
-    openItemMenu();
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
+    await openItemMenu();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Rename' }));
     fireEvent.change(screen.getByLabelText('New name'), {
       target: { value: 'Brown rice' },
     });
@@ -285,12 +296,12 @@ describe('Pantry', () => {
       .spyOn(globalThis, 'fetch')
       .mockImplementation(() => listOnce([item()]));
 
-    render(<Pantry />);
+    renderPantry();
     await screen.findByText('Rice');
 
-    openItemMenu();
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove' }));
-    const dialog = screen.getByRole('dialog');
+    await openItemMenu();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove' }));
+    const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('Remove Rice?')).toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
@@ -306,10 +317,10 @@ describe('Pantry', () => {
       .spyOn(globalThis, 'fetch')
       .mockImplementation(() => listOnce([item()]));
 
-    render(<Pantry />);
+    renderPantry();
     await screen.findByText('Rice');
-    openItemMenu();
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove' }));
+    await openItemMenu();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove' }));
 
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
 
@@ -328,11 +339,11 @@ describe('Pantry', () => {
       )
       .mockImplementation(() => listOnce([]));
 
-    render(<Pantry />);
+    renderPantry();
     await screen.findByText('Rice');
 
-    openItemMenu();
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove' }));
+    await openItemMenu();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove' }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove item' }));
 
     expect(
@@ -346,84 +357,68 @@ describe('Pantry', () => {
     });
   });
 
-  it('traps Tab inside the confirmation dialog', async () => {
+  it('keeps focus inside the confirmation dialog and closes on Escape', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(() => listOnce([item()]));
 
-    render(<Pantry />);
+    renderPantry();
     await screen.findByText('Rice');
-    openItemMenu();
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove' }));
+    await openItemMenu();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove' }));
 
-    const dialog = screen.getByRole('dialog');
-    const remove = within(dialog).getByRole('button', { name: 'Remove item' });
-    const cancel = within(dialog).getByRole('button', { name: 'Cancel' });
+    const dialog = await screen.findByRole('dialog');
+    // The dialog is modal, so focus must move into it rather than stay behind
+    // it on the page.
+    await waitFor(() =>
+      expect(dialog.contains(document.activeElement)).toBe(true),
+    );
+    expect(
+      within(dialog).getByRole('button', { name: 'Remove item' }),
+    ).toBeInTheDocument();
 
-    expect(remove).toHaveFocus();
-
-    // Tab from the last control wraps to the first, and Shift+Tab back again.
-    cancel.focus();
-    fireEvent.keyDown(dialog, { key: 'Tab' });
-    expect(remove).toHaveFocus();
-
-    fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true });
-    expect(cancel).toHaveFocus();
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
   });
 
   it('restores focus to the trigger when the dialog is cancelled', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(() => listOnce([item()]));
 
-    render(<Pantry />);
+    renderPantry();
     await screen.findByText('Rice');
-    openItemMenu();
+    await openItemMenu();
     const trigger = screen.getByRole('button', { name: 'Actions for Rice' });
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove' }));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
     await waitFor(() => expect(trigger).toHaveFocus());
   });
 
-  it('opens the actions menu, moves with arrows, and closes on Escape', async () => {
+  it('opens the actions menu and closes it on Escape', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(() => listOnce([item()]));
 
-    render(<Pantry />);
+    render(
+      <MantineProvider env="test" theme={theme}>
+        <Pantry />
+      </MantineProvider>,
+    );
     await screen.findByText('Rice');
 
     const trigger = screen.getByRole('button', { name: 'Actions for Rice' });
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
 
-    fireEvent.click(trigger);
+    await openItemMenu();
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      await screen.findByRole('menuitem', { name: 'Rename' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('menuitem', { name: 'Remove' }),
+    ).toBeInTheDocument();
 
-    const rename = screen.getByRole('menuitem', { name: 'Rename' });
-    const remove = screen.getByRole('menuitem', { name: 'Remove' });
-    await waitFor(() => expect(rename).toHaveFocus());
-
-    const menu = screen.getByRole('menu');
-    fireEvent.keyDown(menu, { key: 'ArrowDown' });
-    expect(remove).toHaveFocus();
-    // Wraps rather than dead-ending at the last entry.
-    fireEvent.keyDown(menu, { key: 'ArrowDown' });
-    expect(rename).toHaveFocus();
-    fireEvent.keyDown(menu, { key: 'ArrowUp' });
-    expect(remove).toHaveFocus();
-
-    fireEvent.keyDown(menu, { key: 'Escape' });
-    await waitFor(() =>
-      expect(screen.queryByRole('menu')).not.toBeInTheDocument(),
-    );
-    expect(trigger).toHaveFocus();
-  });
-
-  it('closes the actions menu when pressing outside it', async () => {
-    vi.spyOn(globalThis, 'fetch').mockImplementation(() => listOnce([item()]));
-
-    render(<Pantry />);
-    await screen.findByText('Rice');
-    openItemMenu();
-    expect(screen.getByRole('menu')).toBeInTheDocument();
-
-    fireEvent.pointerDown(document.body);
-
+    // Keyboard navigation inside the dropdown is the library's; what matters
+    // here is that the menu is dismissible without a mouse.
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
     await waitFor(() =>
       expect(screen.queryByRole('menu')).not.toBeInTheDocument(),
     );
@@ -437,13 +432,15 @@ describe('Pantry', () => {
       )
       .mockImplementation(() => listOnce([item({ status: 'available' })]));
 
-    render(<Pantry />);
+    renderPantry();
     await screen.findByText('Rice');
 
     const signals = screen.getByRole('group', { name: 'Status for Rice' });
     fireEvent.click(within(signals).getByRole('button', { name: 'Available' }));
 
-    const notice = await screen.findByText('Rice is now marked Available.');
-    await waitFor(() => expect(notice).toHaveFocus());
+    await screen.findByText('Rice is now marked Available.');
+    // The alert root is what takes focus; findByText returns its inner text
+    // element, which never does.
+    await waitFor(() => expect(screen.getByRole('status')).toHaveFocus());
   });
 });

@@ -21,7 +21,7 @@ const openFamilySpace = async (page: Page) => {
 
 // The members panel has its own live region, so scope to the pantry panel.
 const pantryStatus = (page: Page) =>
-  page.getByRole('complementary', { name: 'Pantry' }).getByRole('status');
+  page.getByRole('region', { name: 'Pantry' }).getByRole('status');
 
 const uniqueName = (prefix: string) =>
   `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
@@ -48,7 +48,7 @@ const addItem = async (page: Page, name: string, signal: string) => {
 };
 
 const itemCard = (page: Page, name: string) =>
-  page.locator('.pantry-item').filter({ hasText: name });
+  page.getByTestId('pantry-item').filter({ hasText: name });
 
 /** Rename and Remove live behind the per-item actions menu. */
 const itemAction = async (page: Page, name: string, action: string) => {
@@ -149,9 +149,9 @@ test('pantry names and actions fit the panel without sideways scrolling', async 
     card.getByRole('button', { name: `Actions for ${name}` }),
   ).toBeVisible();
 
-  const panelBox = await page.locator('.card').first().boundingBox();
+  const panelBox = await page.getByTestId('pantry-panel').boundingBox();
   const cardBox = await card.boundingBox();
-  const actionsBox = await card.locator('.pantry-item__signals').boundingBox();
+  const actionsBox = await card.getByTestId('item-status').boundingBox();
   expect(panelBox).not.toBeNull();
   expect(cardBox).not.toBeNull();
   expect(actionsBox).not.toBeNull();
@@ -175,7 +175,9 @@ test('signal controls and the rename field are usably sized', async ({
 
   // Safari sizes unconstrained form controls differently from Chromium, so
   // assert real geometry rather than trusting that the control is present.
-  const radios = page.locator('.pantry-signals input[type="radio"]');
+  const radios = page
+    .getByTestId('status-field')
+    .locator('input[type="radio"]');
   await expect(radios).toHaveCount(3);
   for (let index = 0; index < 3; index += 1) {
     const box = await radios.nth(index).boundingBox();
@@ -187,7 +189,7 @@ test('signal controls and the rename field are usably sized', async ({
   }
 
   // Each signal label must stay clear of the next one.
-  const labels = page.locator('.pantry-signals label');
+  const labels = page.getByTestId('status-field').locator('label');
   const boxes = [];
   for (let index = 0; index < (await labels.count()); index += 1) {
     boxes.push(await labels.nth(index).boundingBox());

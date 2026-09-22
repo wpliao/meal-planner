@@ -1,14 +1,24 @@
 import {
+  Alert,
+  Button,
+  Card,
+  Group,
+  Menu,
+  Modal,
+  Radio,
+  Stack,
+  Text,
+  TextInput,
+  Title,
+} from '@mantine/core';
+import {
   useCallback,
   useEffect,
   useRef,
   useState,
   type FormEvent,
-  type KeyboardEvent,
-  type MouseEvent,
 } from 'react';
-import type { ApiErrorResponse } from '../shared/api';
-import { dialogControls, handleDialogKeyDown } from './dialog';
+import { api, jsonMutation, runMutation, type Notice } from './api';
 import {
   comparePantryItems,
   isShoppingItem,
@@ -21,7 +31,9 @@ import {
 
 type LoadState = 'loading' | 'ready' | 'unavailable';
 type View = 'all' | 'shopping';
-type Notice = { tone: 'success' | 'error'; message: string } | null;
+
+/** Shown only when the server returns no message of its own. */
+const PANTRY_FALLBACK = 'The pantry could not be updated. Please try again.';
 
 const STATUS_LABEL: Record<PantryStatus, string> = {
   available: 'Available',
@@ -30,26 +42,6 @@ const STATUS_LABEL: Record<PantryStatus, string> = {
 };
 
 const STATUS_ORDER: readonly PantryStatus[] = ['available', 'low', 'needed'];
-
-const messageFor = (response: Response, body: unknown): string => {
-  const error = body as Partial<ApiErrorResponse> | undefined;
-  if (error?.error?.message) return error.error.message;
-  return 'The pantry could not be updated. Please try again.';
-};
-
-async function api<T>(input: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, init);
-  if (response.status === 204) return undefined as T;
-  const body: unknown = await response.json().catch(() => undefined);
-  if (!response.ok) throw new Error(messageFor(response, body));
-  return body as T;
-}
-
-const mutation = (method: 'POST' | 'PATCH' | 'DELETE', body: unknown) => ({
-  method,
-  headers: { 'content-type': 'application/json' },
-  body: JSON.stringify(body),
-});
 
 export function Pantry() {
   const [loadState, setLoadState] = useState<LoadState>('loading');
@@ -62,13 +54,9 @@ export function Pantry() {
   const [pending, setPending] = useState(false);
   const [confirming, setConfirming] = useState<PantryItem | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
-  const [menuId, setMenuId] = useState<string | null>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const menuTriggerRef = useRef<HTMLElement | null>(null);
   const [renameValue, setRenameValue] = useState('');
-  const resultRef = useRef<HTMLOutputElement>(null);
-  const triggerRef = useRef<HTMLElement | null>(null);
-  const dialogRef = useRef<HTMLDivElement>(null);
+  const resultRef = useRef<HTMLDivElement>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const load = useCallback(async (): Promise<boolean> => {
     try {
@@ -93,38 +81,19 @@ export function Pantry() {
     if (notice) resultRef.current?.focus();
   }, [notice]);
 
-  useEffect(() => {
-    if (!confirming) return;
-    const [firstControl] = dialogControls(dialogRef.current);
-    (firstControl ?? dialogRef.current)?.focus();
-    return () => triggerRef.current?.focus();
-  }, [confirming, pending]);
-
-  // Every mutation reconciles from the server; a conflict reloads rather than
-  // letting one member's stale screen overwrite another's change.
-  const run = async (
-    action: () => Promise<void>,
-    success: string,
-  ): Promise<void> => {
-    setPending(true);
-    setNotice(null);
-    try {
-      await action();
-      await load();
-      setNotice({ tone: 'success', message: success });
-    } catch (error: unknown) {
-      await load();
-      setNotice({
-        tone: 'error',
-        message:
-          error instanceof Error
-            ? error.message
-            : 'The pantry could not be updated. Please try again.',
-      });
-    } finally {
-      setPending(false);
-    }
-  };
+  // A conflict reloads rather than letting one member's stale screen
+  // overwrite another's change.
+  const run = (action: () => Promise<unknown>, success: string) =>
+    runMutation(
+      {
+        setPending,
+        notify: setNotice,
+        reconcile: load,
+        fallback: PANTRY_FALLBACK,
+      },
+      action,
+      success,
+    );
 
   const addItem = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -137,7 +106,7 @@ export function Pantry() {
     await run(async () => {
       await api<PantryItemResponse>(
         '/api/pantry/items',
-        mutation('POST', { name: trimmed, status }),
+        jsonMutation('POST', { name: trimmed, status }),
       );
       setName('');
       setStatus('available');
@@ -148,47 +117,9 @@ export function Pantry() {
     run(async () => {
       await api<PantryItemResponse>(
         `/api/pantry/items/${item.id}`,
-        mutation('PATCH', { version: item.version, status: next }),
+        jsonMutation('PATCH', { version: item.version, status: next }),
       );
     }, `${item.name} is now marked ${STATUS_LABEL[next]}.`);
-
-  // Focus the first entry on open, close on an outside press, and return
-  // focus to the trigger when dismissed by keyboard.
-  useEffect(() => {
-    if (!menuId) return;
-    const [first] = dialogControls(menuRef.current);
-    first?.focus();
-
-    const onPointerDown = (event: Event) => {
-      const target = event.target as Node | null;
-      if (
-        target &&
-        !menuRef.current?.contains(target) &&
-        !menuTriggerRef.current?.contains(target)
-      ) {
-        setMenuId(null);
-      }
-    };
-    document.addEventListener('pointerdown', onPointerDown);
-    return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, [menuId]);
-
-  const handleMenuKeys = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      setMenuId(null);
-      menuTriggerRef.current?.focus();
-      return;
-    }
-    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
-
-    event.preventDefault();
-    const items = dialogControls(menuRef.current);
-    if (!items.length) return;
-    const current = items.indexOf(document.activeElement as HTMLElement);
-    const step = event.key === 'ArrowDown' ? 1 : -1;
-    items[(current + step + items.length) % items.length]?.focus();
-  };
 
   const startRename = (item: PantryItem) => {
     setRenamingId(item.id);
@@ -215,22 +146,30 @@ export function Pantry() {
     await run(async () => {
       await api<PantryItemResponse>(
         `/api/pantry/items/${item.id}`,
-        mutation('PATCH', { version: item.version, name: trimmed }),
+        jsonMutation('PATCH', { version: item.version, name: trimmed }),
       );
     }, `The item was renamed to ${trimmed}.`);
+  };
+
+  // Cancelling and dismissing must both land back on the actions button: the
+  // menu item that opened the dialog has unmounted, so Mantine's own return
+  // focus would go to <body>.
+  const closeConfirmation = () => {
+    setConfirming(null);
+    menuTriggerRef.current?.focus();
   };
 
   const removeItem = async () => {
     if (!confirming) return;
     const target = confirming;
-    // The trigger button disappears with the row, so restoring focus to it
-    // would drop the user at <body>. The result notice takes focus instead.
-    triggerRef.current = null;
+    // Mantine's Modal restores focus to whatever opened it. That trigger
+    // disappears with the removed row, so the result message takes focus
+    // instead — see the effect above.
     setConfirming(null);
     await run(async () => {
       await api<void>(
         `/api/pantry/items/${target.id}`,
-        mutation('DELETE', { version: target.version }),
+        jsonMutation('DELETE', { version: target.version }),
       );
     }, `${target.name} was removed from the pantry.`);
   };
@@ -239,257 +178,261 @@ export function Pantry() {
   const shoppingCount = items.filter(isShoppingItem).length;
 
   return (
-    <aside className="card" aria-labelledby="pantry-title">
-      <p className="card__number">Kitchen</p>
-      <h2 id="pantry-title">Pantry</h2>
+    <Card
+      aria-labelledby="pantry-title"
+      component="section"
+      data-testid="pantry-panel"
+      padding="lg"
+      radius="lg"
+      withBorder
+    >
+      <Text c="clay.8" fw={700} fz="xs" tt="uppercase">
+        Kitchen
+      </Text>
+      <Title id="pantry-title" mb="md" order={1}>
+        Pantry
+      </Title>
 
-      <div className="pantry-views" role="group" aria-label="Pantry view">
-        <button
+      {/*
+        Button.Group's own props do not include `role`, so the grouping
+        semantics go on the root element itself. Without them the two views
+        read as unrelated buttons.
+      */}
+      <Button.Group
+        mb="md"
+        renderRoot={(props) => (
+          <div {...props} aria-label="Pantry view" role="group" />
+        )}
+      >
+        <Button
           aria-pressed={view === 'all'}
-          className="button button--quiet"
           onClick={() => setView('all')}
-          type="button"
+          variant={view === 'all' ? 'filled' : 'default'}
         >
           All items ({items.length})
-        </button>
-        <button
+        </Button>
+        <Button
           aria-pressed={view === 'shopping'}
-          className="button button--quiet"
           onClick={() => setView('shopping')}
-          type="button"
+          variant={view === 'shopping' ? 'filled' : 'default'}
         >
           Shopping ({shoppingCount})
-        </button>
-      </div>
+        </Button>
+      </Button.Group>
 
-      <form
-        className="stack"
-        noValidate
-        onSubmit={(event) => void addItem(event)}
-      >
-        <label htmlFor="pantry-name">Item name</label>
-        <input
-          aria-describedby={formError ? 'pantry-name-error' : undefined}
-          id="pantry-name"
-          maxLength={PANTRY_NAME_MAX_LENGTH}
-          onChange={(event) => setName(event.target.value)}
-          value={name}
-        />
-        {formError && (
-          <p className="field-error" id="pantry-name-error" role="alert">
-            {formError}
-          </p>
-        )}
-        <fieldset className="pantry-signals">
-          <legend>Status</legend>
-          {STATUS_ORDER.map((option) => (
-            <label key={option} htmlFor={`pantry-status-${option}`}>
-              <input
-                checked={status === option}
-                id={`pantry-status-${option}`}
-                name="pantry-status"
-                onChange={() => setStatus(option)}
-                type="radio"
-                value={option}
-              />
-              {STATUS_LABEL[option]}
-            </label>
-          ))}
-        </fieldset>
-        <button className="button" disabled={pending} type="submit">
-          Add item
-        </button>
+      <form noValidate onSubmit={(event) => void addItem(event)}>
+        <Stack gap="sm">
+          <TextInput
+            error={formError}
+            label="Item name"
+            maxLength={PANTRY_NAME_MAX_LENGTH}
+            onChange={(event) => setName(event.currentTarget.value)}
+            value={name}
+          />
+          <Radio.Group
+            data-testid="status-field"
+            label="Status"
+            onChange={(value) => setStatus(value)}
+            value={status}
+          >
+            <Group gap="lg" mt="xs">
+              {STATUS_ORDER.map((option) => (
+                <Radio
+                  key={option}
+                  label={STATUS_LABEL[option]}
+                  value={option}
+                />
+              ))}
+            </Group>
+          </Radio.Group>
+          <Button disabled={pending} type="submit" w="fit-content">
+            Add item
+          </Button>
+        </Stack>
       </form>
 
       {loadState === 'loading' && (
-        <output className="lede">Checking your pantry…</output>
+        <Text component="output" mt="md">
+          Checking your pantry…
+        </Text>
       )}
 
       {loadState === 'unavailable' && (
-        <div className="stack">
-          <output className="lede">
+        <Stack align="flex-start" gap="sm" mt="md">
+          <Text component="output">
             We could not load the pantry. Please try again.
-          </output>
-          <button className="button" onClick={() => void load()} type="button">
+          </Text>
+          <Button onClick={() => void load()} variant="default">
             Retry
-          </button>
-        </div>
+          </Button>
+        </Stack>
       )}
 
       {loadState === 'ready' && visible.length === 0 && (
-        <p className="empty-state">
+        <Text c="dimmed" mt="md">
           {view === 'shopping'
             ? 'Nothing is marked Low or Needed right now. This does not mean the family owns everything.'
             : 'The pantry is empty. Add an item and mark it Available, Low, or Needed — no quantities needed.'}
-        </p>
+        </Text>
       )}
 
       {loadState === 'ready' && visible.length > 0 && (
-        <ul className="pantry-list">
+        <Stack
+          component="ul"
+          gap="sm"
+          mt="md"
+          p={0}
+          style={{ listStyle: 'none' }}
+        >
           {visible.map((item) => (
-            <li className="pantry-item" key={item.id}>
-              <div className="pantry-item__head">
-                {renamingId === item.id ? (
-                  <form
-                    className="pantry-item__rename"
-                    noValidate
-                    onSubmit={(event) => void submitRename(event, item)}
-                  >
-                    <label
-                      className="sr-only"
-                      htmlFor={`pantry-rename-${item.id}`}
-                    >
-                      New name
-                    </label>
-                    <input
-                      autoFocus
-                      id={`pantry-rename-${item.id}`}
+            <Card
+              component="li"
+              data-testid="pantry-item"
+              key={item.id}
+              padding="md"
+              radius="md"
+              withBorder
+            >
+              {renamingId === item.id ? (
+                <form
+                  noValidate
+                  onSubmit={(event) => void submitRename(event, item)}
+                >
+                  <Stack gap="xs">
+                    <TextInput
+                      aria-label="New name"
+                      data-autofocus
                       maxLength={PANTRY_NAME_MAX_LENGTH}
-                      onChange={(event) => setRenameValue(event.target.value)}
+                      onChange={(event) =>
+                        setRenameValue(event.currentTarget.value)
+                      }
                       value={renameValue}
                     />
-                    <button disabled={pending} type="submit">
-                      Save
-                    </button>
-                    <button
-                      disabled={pending}
-                      onClick={() => setRenamingId(null)}
-                      type="button"
-                    >
-                      Cancel
-                    </button>
-                  </form>
-                ) : (
-                  <>
-                    <span className="pantry-item__name">{item.name}</span>
-                    <div className="pantry-item__menu">
-                      <button
-                        aria-expanded={menuId === item.id}
-                        aria-haspopup="menu"
-                        aria-label={`Actions for ${item.name}`}
-                        className="pantry-item__menu-trigger"
+                    <Group gap="xs">
+                      <Button disabled={pending} size="sm" type="submit">
+                        Save
+                      </Button>
+                      <Button
                         disabled={pending}
-                        onClick={(event: MouseEvent<HTMLElement>) => {
+                        onClick={() => setRenamingId(null)}
+                        size="sm"
+                        variant="default"
+                      >
+                        Cancel
+                      </Button>
+                    </Group>
+                  </Stack>
+                </form>
+              ) : (
+                <Group justify="space-between" wrap="nowrap">
+                  <Text fw={600} fz="lg" style={{ overflowWrap: 'anywhere' }}>
+                    {item.name}
+                  </Text>
+                  <Menu position="bottom-end" shadow="md" withinPortal={false}>
+                    <Menu.Target>
+                      <Button
+                        aria-label={`Actions for ${item.name}`}
+                        disabled={pending}
+                        onClick={(event) => {
                           menuTriggerRef.current = event.currentTarget;
-                          setMenuId(menuId === item.id ? null : item.id);
                         }}
-                        type="button"
+                        px="xs"
+                        variant="subtle"
                       >
                         <span aria-hidden="true">…</span>
-                      </button>
-                      {menuId === item.id && (
-                        <div
-                          className="pantry-item__menu-list"
-                          onKeyDown={handleMenuKeys}
-                          ref={menuRef}
-                          role="menu"
-                        >
-                          <button
-                            onClick={() => {
-                              setMenuId(null);
-                              startRename(item);
-                            }}
-                            role="menuitem"
-                            type="button"
-                          >
-                            Rename
-                          </button>
-                          <button
-                            className="pantry-item__menu-danger"
-                            onClick={() => {
-                              setMenuId(null);
-                              triggerRef.current = menuTriggerRef.current;
-                              setConfirming(item);
-                            }}
-                            role="menuitem"
-                            type="button"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-              <p className="pantry-item__meta">
+                      </Button>
+                    </Menu.Target>
+                    <Menu.Dropdown>
+                      <Menu.Item onClick={() => startRename(item)}>
+                        Rename
+                      </Menu.Item>
+                      <Menu.Item c="clay.8" onClick={() => setConfirming(item)}>
+                        Remove
+                      </Menu.Item>
+                    </Menu.Dropdown>
+                  </Menu>
+                </Group>
+              )}
+
+              <Text c="dimmed" fz="sm" mt={4}>
                 Last changed {new Date(item.updatedAt).toLocaleDateString()}
-              </p>
-              <div
-                className="pantry-item__signals"
-                role="group"
-                aria-label={`Status for ${item.name}`}
+              </Text>
+
+              {/* Named so a screen reader says which item these belong to. */}
+              <Button.Group
+                mt="sm"
+                renderRoot={(props) => (
+                  <div
+                    {...props}
+                    aria-label={`Status for ${item.name}`}
+                    data-testid="item-status"
+                    role="group"
+                  />
+                )}
               >
                 {STATUS_ORDER.map((option) => (
-                  <button
+                  <Button
                     aria-pressed={item.status === option}
-                    disabled={pending || item.status === option}
+                    disabled={pending}
                     key={option}
-                    onClick={() => void changeStatus(item, option)}
-                    type="button"
+                    onClick={() => {
+                      // Pressing the current status is a no-op rather than a
+                      // disabled control: Mantine greys a disabled button, so
+                      // the current status read as the unavailable one.
+                      if (item.status === option) return;
+                      void changeStatus(item, option);
+                    }}
+                    size="sm"
+                    variant={item.status === option ? 'filled' : 'default'}
                   >
                     {STATUS_LABEL[option]}
-                  </button>
+                  </Button>
                 ))}
-              </div>
-            </li>
+              </Button.Group>
+            </Card>
           ))}
-        </ul>
+        </Stack>
       )}
 
       {notice && (
-        <output
-          className={`notice notice--${notice.tone}`}
+        <Alert
+          color={notice.tone === 'success' ? 'sage' : 'clay'}
+          mt="md"
           ref={resultRef}
+          role="status"
           tabIndex={-1}
         >
           {notice.message}
-        </output>
+        </Alert>
       )}
 
-      {confirming && (
-        <div className="dialog-backdrop">
-          <div
-            aria-labelledby="pantry-confirm-title"
-            aria-modal="true"
-            className="dialog"
-            onKeyDown={(event) =>
-              handleDialogKeyDown(event, {
-                dialog: dialogRef,
-                pending,
-                onDismiss: () => setConfirming(null),
-              })
-            }
-            ref={dialogRef}
-            role="dialog"
-            tabIndex={-1}
+      <Modal
+        centered
+        onClose={closeConfirmation}
+        opened={confirming !== null}
+        title={confirming ? `Remove ${confirming.name}?` : ''}
+      >
+        <Text>
+          This removes the item from the shared family pantry. It cannot be
+          undone.
+        </Text>
+        <Group justify="flex-end" mt="md">
+          <Button
+            color="clay"
+            disabled={pending}
+            onClick={() => void removeItem()}
           >
-            <h2 id="pantry-confirm-title">Remove {confirming.name}?</h2>
-            <p>
-              This removes the item from the shared family pantry. It cannot be
-              undone.
-            </p>
-            <div className="dialog__actions">
-              <button
-                className="button button--danger"
-                disabled={pending}
-                onClick={() => void removeItem()}
-                type="button"
-              >
-                Remove item
-              </button>
-              <button
-                className="button"
-                disabled={pending}
-                onClick={() => setConfirming(null)}
-                type="button"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </aside>
+            Remove item
+          </Button>
+          <Button
+            disabled={pending}
+            onClick={closeConfirmation}
+            variant="default"
+          >
+            Cancel
+          </Button>
+        </Group>
+      </Modal>
+    </Card>
   );
 }

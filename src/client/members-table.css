@@ -1,0 +1,80 @@
+/**
+ * The members table, narrow.
+ *
+ * Mantine ships a table and a scroll container, but no responsive table: on a
+ * phone the four columns are wider than the screen, and `Table.ScrollContainer`
+ * answers that with sideways scrolling. The family reads this on phones, so
+ * each row becomes a labelled card instead — the same treatment Phase 1 used,
+ * now keyed on the test hooks rather than hand-written class names.
+ *
+ * A container query, not a media query: the panel is what constrains the
+ * table, and Phase 2 QA found a rename field that collapsed precisely because
+ * a viewport query was standing in for a container one.
+ */
+
+[data-testid='member-table'] {
+  container: member-table / inline-size;
+}
+
+@container member-table (max-width: 44rem) {
+  [data-testid='member-table'] table,
+  [data-testid='member-table'] tbody,
+  [data-testid='member-table'] tr,
+  [data-testid='member-table'] td {
+    display: block;
+    width: 100%;
+  }
+
+  /* The header still names the columns for assistive technology; each cell
+     carries its own visible label below. */
+  [data-testid='member-table'] thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  [data-testid='member-table'] tbody {
+    display: grid;
+    gap: 0.85rem;
+  }
+
+  [data-testid='member-table'] tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0.75rem 1rem;
+    padding: 1rem;
+    border: 1px solid var(--mantine-color-paper-3);
+    border-radius: var(--mantine-radius-md);
+    background: var(--mantine-color-white);
+  }
+
+  [data-testid='member-table'] td {
+    display: grid;
+    gap: 0.2rem;
+    padding: 0;
+    border: 0;
+  }
+
+  [data-testid='member-table'] td::before {
+    content: attr(data-label);
+    color: var(--mantine-color-dimmed);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  [data-testid='member-table'] td:first-child,
+  [data-testid='member-actions'] {
+    grid-column: 1 / -1;
+  }
+
+  [data-testid='member-actions'] {
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--mantine-color-paper-3);
+  }
+}

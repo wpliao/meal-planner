@@ -6,6 +6,8 @@
 - [ENVIRONMENTS.md](./ENVIRONMENTS.md): local, development, and production setup.
 - [CI_CD.md](./CI_CD.md): quality gates and deployment controls.
 - [SECURITY.md](./SECURITY.md): threat model and operating rules.
+- [DESIGN_SYSTEM.md](./DESIGN_SYSTEM.md): design tokens and the rules for
+  building a screen from them.
 - [FEATURE_LIFECYCLE.md](./FEATURE_LIFECYCLE.md): feature discovery, design,
   implementation, verification, release, and change workflow.
 - [AGENT_ORCHESTRATION.md](./AGENT_ORCHESTRATION.md): approved staged model and

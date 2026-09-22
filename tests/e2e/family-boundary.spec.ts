@@ -58,7 +58,7 @@ test('local owner can bootstrap and invite a family member', async ({
   // Assert the durable row first, then the transient notice.
   const invitedRow = page.getByRole('row', { name: new RegExp(invitedEmail) });
   await expect(invitedRow).toContainText(invitedEmail);
-  await expect(page.locator('output.notice')).toContainText(
+  await expect(page.getByTestId('result')).toContainText(
     `${invitedEmail} is invited`,
   );
 
@@ -74,9 +74,7 @@ test('local owner can bootstrap and invite a family member', async ({
     .getByRole('dialog')
     .getByRole('button', { name: 'Remove member' })
     .click();
-  await expect(page.locator('output.notice')).toContainText(
-    'Member was removed.',
-  );
+  await expect(page.getByTestId('result')).toContainText('Member was removed.');
   await expect(invitedRow).toHaveCount(0);
 });
 
@@ -86,7 +84,7 @@ test('active member sees only their family view', async ({ page }) => {
   await page.goto('/family');
 
   await expect(
-    page.locator('.panel').getByText('The test family'),
+    page.getByTestId('family-panel').getByText('The test family'),
   ).toBeVisible();
   await expect(page.getByText('Family member', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Members' })).toHaveCount(0);
@@ -128,7 +126,7 @@ test('adapts member information and actions to the panel without horizontal scro
 
   await page.goto('/family');
 
-  const tableViewport = page.locator('.member-table-wrap');
+  const tableViewport = page.getByTestId('member-table');
   const memberRow = page.getByRole('row', {
     name: /member-with-a-long-address@example\.test/i,
   });
@@ -144,7 +142,7 @@ test('adapts member information and actions to the panel without horizontal scro
   const roleCellBox = await memberRow.locator('td').nth(1).boundingBox();
   const statusCellBox = await memberRow.locator('td').nth(2).boundingBox();
   const actionsCellBox = await memberRow
-    .locator('.member-actions-cell')
+    .getByTestId('member-actions')
     .boundingBox();
   expect(tableViewportBox).not.toBeNull();
   expect(tableBox).not.toBeNull();

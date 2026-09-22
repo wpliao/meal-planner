@@ -11,8 +11,12 @@ const expectedHeaders: Record<string, string> = {
   'cross-origin-opener-policy': 'same-origin',
   'cross-origin-resource-policy': 'same-origin',
   'permissions-policy': 'camera=(), microphone=(), geolocation=()',
+  // `style-src 'unsafe-inline'` is deliberate and narrow: Mantine sets inline
+  // style attributes on almost every element, and no nonce or hash can cover
+  // an attribute whose value is computed at runtime. Scripts remain restricted
+  // to 'self', and the application renders no user-supplied HTML. See ADR 0006.
   'content-security-policy':
-    "default-src 'self'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'",
+    "default-src 'self'; style-src 'self' 'unsafe-inline'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'",
 };
 
 test('serves the application document with the static security headers', async ({

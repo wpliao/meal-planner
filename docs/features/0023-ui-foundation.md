@@ -57,22 +57,22 @@ is planned in the open rather than absorbed invisibly into Phase 3.
 Identifiers match [issue #23](https://github.com/wpliao/meal-planner/issues/23)
 and stay stable after acceptance.
 
-- [ ] `AC-01`: An accepted decision record selects the component approach,
+- [x] `AC-01`: An accepted decision record selects the component approach,
       records the alternatives and the evidence, and states the measured bundle
       cost.
-- [ ] `AC-02`: An accepted decision record selects navigation and information
+- [x] `AC-02`: An accepted decision record selects navigation and information
       architecture, including URL shareability and how the Worker serves
       application paths outside `/api/*`.
-- [ ] `AC-03`: Design tokens and usage rules are written down and the interface
+- [x] `AC-03`: Design tokens and usage rules are written down and the interface
       is built from them.
-- [ ] `AC-04`: Family-visible behaviour is unchanged; every Phase 1 and Phase 2
+- [x] `AC-04`: Family-visible behaviour is unchanged; every Phase 1 and Phase 2
       acceptance criterion still holds and its tests still pass.
-- [ ] `AC-05`: Visual regression coverage exists at desktop and phone widths on
+- [x] `AC-05`: Visual regression coverage exists at desktop and phone widths on
       Chromium and WebKit, and demonstrably catches the three Phase 2 defect
       classes.
-- [ ] `AC-06`: Accessibility is preserved or improved — native semantics,
+- [x] `AC-06`: Accessibility is preserved or improved — native semantics,
       keyboard operation, visible focus, focus-trapped dialogs, WCAG AA contrast.
-- [ ] `AC-07`: The measured production bundle change is recorded and justified.
+- [x] `AC-07`: The measured production bundle change is recorded and justified.
 - [ ] `AC-08`: Development and production release evidence is recorded before
       completion.
 
@@ -174,13 +174,13 @@ reopening any of them requires a change recorded in the decision log below.
 
 | Criterion | Planned implementation                                                   | Planned evidence                        | Release evidence |
 | --------- | ------------------------------------------------------------------------ | --------------------------------------- | ---------------- |
-| `AC-01`   | [ADR 0006](../DECISIONS/0006-component-library.md)                       | Measured bundle comparison              | Pending          |
-| `AC-02`   | [ADR 0007](../DECISIONS/0007-navigation-and-information-architecture.md) | Routing and Worker fallback tests       | Pending          |
-| `AC-03`   | Token definitions and usage rules                                        | Interface built from tokens             | Pending          |
-| `AC-04`   | Migrated Phase 1 and Phase 2 interfaces                                  | Existing suites still passing           | Pending          |
-| `AC-05`   | Visual regression project                                                | Fails on the three reintroduced defects | Pending          |
-| `AC-06`   | Component layer and dialog helper                                        | Accessibility and keyboard tests        | Pending          |
-| `AC-07`   | Build output                                                             | Before and after measurement            | Pending          |
+| `AC-01`   | [ADR 0006](../DECISIONS/0006-component-library.md)                       | Measured bundle comparison              | `V-LOCAL-U4`     |
+| `AC-02`   | [ADR 0007](../DECISIONS/0007-navigation-and-information-architecture.md) | Routing and Worker fallback tests       | `V-LOCAL-U3`     |
+| `AC-03`   | [DESIGN_SYSTEM.md](../DESIGN_SYSTEM.md) and `src/client/theme.ts`        | Interface built from tokens             | `V-LOCAL-U4`     |
+| `AC-04`   | Migrated Phase 1 and Phase 2 interfaces                                  | Existing suites still passing           | `V-LOCAL-U4`     |
+| `AC-05`   | Visual regression project                                                | Fails on the three reintroduced defects | `V-LOCAL-U1`     |
+| `AC-06`   | Component layer on Mantine `Modal` and `Alert`                           | Accessibility and keyboard tests        | `V-LOCAL-U4`     |
+| `AC-07`   | Build output                                                             | Before and after measurement            | `V-LOCAL-U4`     |
 | `AC-08`   | Deployment workflow                                                      | Development and production records      | Pending          |
 
 ## Rollout and rollback
@@ -211,6 +211,15 @@ There is no migration to reverse. Rollback is redeploying the previous version.
 | 2026-09-22 | Visual regression pairs pixel snapshots with a computed-contrast assertion, and adds a tightly scoped action-row snapshot    | Proving the suite against the real defects showed pixel diffing alone **missed** the unreadable destructive action: the affected text was too small a share of the panel to clear the ratio tolerance that absorbs font antialiasing                                                                    | `V-LOCAL-U1`                                                                                |
 | 2026-09-22 | End-to-end specs moved to their own `tsconfig.e2e.json` with the DOM library                                                 | Playwright specs legitimately contain browser-context code inside `page.evaluate`; the node project deliberately has no DOM types and should keep it that way                                                                                                                                           | `V-LOCAL-U1`                                                                                |
 
+### Findings during the component migration
+
+| Date       | Finding                                                                                                                    | Resolution                                                                                                                                                                                                                 | Evidence     |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| 2026-09-22 | The Content Security Policy blocked every inline style attribute, leaving all buttons as bare text in the built app        | Owner approved adding `style-src 'self' 'unsafe-inline'`; no nonce or hash can cover a runtime-computed style attribute. Recorded in ADR 0006 and `docs/SECURITY.md`, and asserted by `tests/e2e/security-headers.spec.ts` | `V-LOCAL-U4` |
+| 2026-09-22 | Alphabetical per-component stylesheet imports put `UnstyledButton.css` after `Button.css`, silently unstyling every button | Imports reordered to Mantine's own order, and `src/client/mantine.test.ts` added to enforce it. The guard was verified by reintroducing the fault                                                                          | `V-LOCAL-U4` |
+| 2026-09-22 | Mantine's default `dimmed` text measures 3.11:1 on this ground, below WCAG AA                                              | Overridden in `theme.ts` at 5.4:1 or better. Caught by the computed-contrast assertion, not by eye or by pixel diffing                                                                                                     | `V-LOCAL-U4` |
+| 2026-09-22 | Visual baselines were regenerated against the broken rendering and passed                                                  | Baselines regenerated only after the rendering was inspected directly. `docs/DESIGN_SYSTEM.md` records the rule: look at the screen before approving a snapshot                                                            | `V-LOCAL-U4` |
+
 ## Release record
 
 - Design approval: Accepted on 2026-09-21 ([approval record](https://github.com/wpliao/meal-planner/issues/23#issuecomment-5763375016))
@@ -219,6 +228,11 @@ There is no migration to reverse. Rollback is redeploying the previous version.
   suite failed on each; with the tree clean it passes. The first attempt showed
   pixel diffing alone missing the contrast defect, which is why a computed
   contrast assertion and a scoped action-row snapshot were added.
+- Local verification: `V-LOCAL-U4` (2026-09-22) — component layer and tokens.
+  Full gate green in the Dev Container: 60 client tests, the Worker suite, and
+  84 browser tests across Chromium and WebKit at desktop and phone widths.
+  Bundle measured at 144.0 KB JS and 12.1 KB CSS gzipped, against 84.4 KB and
+  2.6 KB before, and recorded in ADR 0006.
 - Development validation: Pending
 - Production release: Pending separate explicit approval
 - Known follow-up work: Household deletion and ownership transfer remain

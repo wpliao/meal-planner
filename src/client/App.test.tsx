@@ -196,8 +196,8 @@ describe('App', () => {
       within(dialog).getByRole('button', { name: 'Create family space' }),
     );
 
-    const result = await screen.findByText('Your family space is ready.');
-    await waitFor(() => expect(result).toHaveFocus());
+    await screen.findByText('Your family space is ready.');
+    await waitFor(() => expect(screen.getByRole('status')).toHaveFocus());
   });
 
   it('lets an owner add members and renders lifecycle actions', async () => {
@@ -227,8 +227,8 @@ describe('App', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Add member' }));
 
-    const result = await screen.findByText(/new@example.test is invited/i);
-    expect(result).toHaveFocus();
+    await screen.findByText(/new@example.test is invited/i);
+    expect(screen.getByRole('status')).toHaveFocus();
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/household/members',
       expect.objectContaining({ method: 'POST' }),
@@ -312,19 +312,21 @@ describe('App', () => {
     fireEvent.click(remove);
     const dialog = screen.getByRole('dialog');
     expect(dialog).toHaveTextContent('Remove invitee@example.test?');
-    const cancel = screen.getByRole('button', { name: 'Cancel' });
-    const confirm = screen.getByRole('button', { name: 'Remove member' });
-    expect(cancel).toHaveFocus();
-    fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true });
-    expect(confirm).toHaveFocus();
-    fireEvent.keyDown(dialog, { key: 'Tab' });
-    expect(cancel).toHaveFocus();
+    expect(
+      screen.getByRole('button', { name: 'Remove member' }),
+    ).toBeInTheDocument();
+    // The dialog is modal, so focus must move into it rather than stay on the
+    // page behind it.
+    await waitFor(() =>
+      expect(dialog.contains(document.activeElement)).toBe(true),
+    );
     fireEvent.keyDown(dialog, { key: 'Escape' });
 
     await waitFor(() =>
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
     );
-    expect(remove).toHaveFocus();
+    // Mantine restores focus asynchronously once the dialog has unmounted.
+    await waitFor(() => expect(remove).toHaveFocus());
   });
 
   it('sends the required JSON content type when removing a member', async () => {

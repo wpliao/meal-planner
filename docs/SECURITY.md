@@ -29,6 +29,13 @@ resource sharing.
   request content-type and same-origin checks for browser mutations.
 - AI integrations run server-side through AI Gateway, minimize disclosed data,
   and cannot authoritatively calculate nutrition.
+- The static Content Security Policy in `public/_headers` allows
+  `style-src 'self' 'unsafe-inline'`. The component library sets inline style
+  attributes that no nonce or hash can cover; the reasoning and what it gives
+  up are recorded in [ADR 0006](./DECISIONS/0006-component-library.md). Scripts
+  remain restricted to `'self'`. `tests/e2e/security-headers.spec.ts` asserts
+  the exact policy, so any further relaxation is a deliberate, reviewed edit —
+  and introducing user-supplied HTML to a page would require revisiting it.
 
 ## Dependency and delivery security
 
