@@ -273,6 +273,70 @@ describe('household member APIs', () => {
     );
   });
 
+  it('transfers ownership only after an active successor confirms owner access', async () => {
+    const initialSession = await fetchWorker(
+      new Request('https://example.test/api/session'),
+    );
+    const initial: { member: { id: string } } = await initialSession.json();
+    const successor = await addMember();
+
+    expect((await patchMember(successor.id, { role: 'owner' })).status).toBe(
+      409,
+    );
+    expect(
+      (
+        await requestAs(
+          memberIdentity,
+          new Request('https://example.test/api/session'),
+        )
+      ).status,
+    ).toBe(200);
+    expect((await patchMember(successor.id, { role: 'owner' })).status).toBe(
+      200,
+    );
+
+    const successorOwnerView = await requestAs(
+      memberIdentity,
+      new Request('https://example.test/api/household/members'),
+    );
+    expect(successorOwnerView.status).toBe(200);
+    const successorView: { members: HouseholdMember[] } =
+      await successorOwnerView.json();
+    expect(
+      successorView.members.find((member) => member.id === successor.id),
+    ).toMatchObject({ role: 'owner' });
+
+    expect(
+      (await patchMember(initial.member.id, { role: 'member' })).status,
+    ).toBe(200);
+    expect(
+      (
+        await fetchWorker(
+          new Request('https://example.test/api/household/members'),
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await requestAs(
+          memberIdentity,
+          new Request('https://example.test/api/household/members'),
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await requestAs(
+          memberIdentity,
+          new Request(
+            `https://example.test/api/household/members/${successor.id}`,
+            mutationInit('PATCH', { role: 'member' }),
+          ),
+        )
+      ).status,
+    ).toBe(409);
+  });
+
   it('preserves an active owner under concurrent owner demotions', async () => {
     const session = await fetchWorker(
       new Request('https://example.test/api/session'),

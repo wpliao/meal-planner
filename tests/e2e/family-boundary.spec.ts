@@ -78,6 +78,85 @@ test('local owner can bootstrap and invite a family member', async ({
   await expect(invitedRow).toHaveCount(0);
 });
 
+test('successor confirms owner access before the first owner steps down', async ({
+  page,
+}) => {
+  let signedInAs: 'owner' | 'successor' = 'owner';
+  const members = [
+    {
+      id: 'owner-1',
+      email: 'owner@example.test',
+      role: 'owner',
+      status: 'active',
+    },
+    {
+      id: 'successor-1',
+      email: 'successor@example.test',
+      role: 'member',
+      status: 'active',
+    },
+  ];
+  await page.route('**/api/session', (route) => {
+    const member = members[signedInAs === 'owner' ? 0 : 1];
+    return route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status: 'ready',
+        member: { id: member.id, email: member.email, role: member.role },
+        household: { id: 'household-1', name: 'The test family' },
+      }),
+    });
+  });
+  await page.route('**/api/household/members', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ members }),
+    }),
+  );
+  await page.route('**/api/household/members/*', (route) => {
+    const id = route.request().url().split('/').pop();
+    const member = members.find((candidate) => candidate.id === id);
+    const update = route.request().postDataJSON() as unknown as {
+      role: 'owner' | 'member';
+    };
+    if (!member || route.request().method() !== 'PATCH') {
+      return route.fulfill({ status: 404 });
+    }
+    member.role = update.role;
+    return route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ member }),
+    });
+  });
+
+  await page.goto('/family');
+  await expect(page.getByText('To transfer ownership,')).toBeVisible();
+  const successorRow = page.getByRole('row', {
+    name: /successor@example\.test/i,
+  });
+  await successorRow.getByRole('button', { name: 'Make owner' }).click();
+  await expect(successorRow).toContainText('owner');
+
+  signedInAs = 'successor';
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Members' })).toBeVisible();
+  await expect(page.getByText('Family owner', { exact: true })).toBeVisible();
+
+  signedInAs = 'owner';
+  await page.reload();
+  const ownerRow = page.getByRole('row', { name: /owner@example\.test/i });
+  await ownerRow.getByRole('button', { name: 'Make member' }).click();
+  await expect(page.getByRole('dialog')).toContainText(
+    'First confirm another active owner has signed in',
+  );
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Make member' })
+    .click();
+  await expect(page.getByText('Family member', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Members' })).toHaveCount(0);
+});
+
 test('active member sees only their family view', async ({ page }) => {
   await stubSession(page, 'member');
 

@@ -43,6 +43,7 @@ type Confirmation =
  */
 const wordingFor = (
   confirmation: NonNullable<Confirmation>,
+  currentMemberId: string,
 ): { title: string; body: string; confirm: string } => {
   if (confirmation.kind === 'delete') {
     return {
@@ -54,13 +55,19 @@ const wordingFor = (
   if ('status' in confirmation.update) {
     return {
       title: 'Revoke this member?',
-      body: `Revoke ${confirmation.member.email}? They will immediately lose access to this family space.`,
+      body:
+        confirmation.member.id === currentMemberId
+          ? 'Revoke your own membership? First confirm another active owner has signed in and can manage members. You will immediately lose access to this family space.'
+          : `Revoke ${confirmation.member.email}? They will immediately lose access to this family space.`,
       confirm: 'Revoke member',
     };
   }
   return {
     title: 'Remove owner permissions?',
-    body: `Make ${confirmation.member.email} a family member? They will immediately lose owner permissions.`,
+    body:
+      confirmation.member.id === currentMemberId
+        ? 'Make yourself a family member? First confirm another active owner has signed in and can manage members. You will immediately lose owner permissions.'
+        : `Make ${confirmation.member.email} a family member? They will immediately lose owner permissions.`,
     confirm: 'Make member',
   };
 };
@@ -216,7 +223,9 @@ export function FamilySpace() {
     void updateMember(member, update);
   };
 
-  const wording = confirmation ? wordingFor(confirmation) : null;
+  const wording = confirmation
+    ? wordingFor(confirmation, session.member.id)
+    : null;
 
   let memberList: ReactNode;
   if (!membersLoaded) {
@@ -371,6 +380,11 @@ export function FamilySpace() {
           <Title id="members-title" order={2}>
             Members
           </Title>
+          <Text mt="xs">
+            To transfer ownership, make an active member an owner. Ask them to
+            sign in and confirm they can manage members. Then make yourself a
+            member or revoke your membership. Keep at least one active owner.
+          </Text>
           <form noValidate onSubmit={(event) => void addMember(event)}>
             <Stack gap="sm" mt="md">
               <TextInput
