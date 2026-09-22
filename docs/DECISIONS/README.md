@@ -12,3 +12,4 @@ decisions.
 - [0005 — Production deployment approval on private GitHub Pro](./0005-production-deployment-approval-on-github-pro.md)
 - [0006 — Component library for the family interface](./0006-component-library.md)
 - [0007 — Navigation and information architecture](./0007-navigation-and-information-architecture.md)
+- [0008 — Household transfer and decommissioning](./0008-household-decommissioning.md) (proposed)
