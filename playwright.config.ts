@@ -20,7 +20,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium-desktop',
-      testIgnore: /security-headers\.spec\.ts/u,
+      testIgnore: /(security-headers|shell-fallback)\.spec\.ts/u,
       use: {
         ...devices['Desktop Chrome'],
         baseURL: 'http://127.0.0.1:5173',
@@ -28,7 +28,7 @@ export default defineConfig({
     },
     {
       name: 'chromium-mobile',
-      testIgnore: /security-headers\.spec\.ts/u,
+      testIgnore: /(security-headers|shell-fallback)\.spec\.ts/u,
       use: {
         ...devices['Pixel 7'],
         baseURL: 'http://127.0.0.1:5174',
@@ -36,7 +36,7 @@ export default defineConfig({
     },
     {
       name: 'webkit-desktop',
-      testIgnore: /security-headers\.spec\.ts/u,
+      testIgnore: /(security-headers|shell-fallback)\.spec\.ts/u,
       use: {
         ...devices['Desktop Safari'],
         baseURL: 'http://127.0.0.1:5175',
@@ -46,7 +46,7 @@ export default defineConfig({
       // iOS is half the family's devices, and Chromium at a phone viewport
       // does not render like Safari — form controls especially.
       name: 'webkit-mobile',
-      testIgnore: /security-headers\.spec\.ts/u,
+      testIgnore: /(security-headers|shell-fallback)\.spec\.ts/u,
       use: {
         ...devices['iPhone 15'],
         baseURL: 'http://127.0.0.1:5176',
@@ -56,7 +56,7 @@ export default defineConfig({
       // The production build served through the real Cloudflare asset
       // pipeline, which is the only place `public/_headers` takes effect.
       name: 'asset-pipeline',
-      testMatch: /security-headers\.spec\.ts/u,
+      testMatch: /(security-headers|shell-fallback)\.spec\.ts/u,
       use: { baseURL: 'http://127.0.0.1:4175' },
     },
   ],

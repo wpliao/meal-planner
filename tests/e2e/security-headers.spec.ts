@@ -45,6 +45,13 @@ test('does not serve the headers configuration file itself', async ({
 }) => {
   const response = await request.get('/_headers');
 
-  expect(response.status()).toBe(404);
-  expect(await response.text()).not.toContain('frame-ancestors');
+  // Since the Worker gained its shell fallback, an unknown path outside /api
+  // answers with the application shell rather than a 404 — normal for a
+  // single-page application. The security property is unchanged and is what
+  // this asserts: the configuration file's own contents are never served.
+  expect(response.status()).toBe(200);
+  const body = await response.text();
+  expect(body).toContain('<div id="root">');
+  expect(body).not.toContain('frame-ancestors');
+  expect(body).not.toContain('X-Frame-Options');
 });
