@@ -12,8 +12,9 @@ export default defineConfig({
       provider: 'istanbul',
       reportsDirectory: './coverage/client',
       reporter: ['text', 'lcov'],
-      include: ['src/client/**/*.{ts,tsx}'],
-      exclude: ['src/client/**/*.test.{ts,tsx}'],
+      // Shared contracts run in the client too, so their unit tests report here.
+      include: ['src/client/**/*.{ts,tsx}', 'src/shared/**/*.ts'],
+      exclude: ['src/client/**/*.test.{ts,tsx}', 'src/shared/**/*.test.ts'],
       thresholds: {
         branches: 80,
         functions: 80,

@@ -17,6 +17,14 @@ import {
   type PantryItemsResponse,
   type PantryStatus,
 } from '../shared/pantry';
+import {
+  validateCreateRecipe,
+  validateRecipeVersion,
+  validateUpdateRecipe,
+  type RecipeResponse,
+  type RecipesResponse,
+  type RecipeValidation,
+} from '../shared/recipes';
 import { getVerifiedIdentity } from './auth/access-identity';
 import {
   isValidEmail,
@@ -43,6 +51,13 @@ import {
   updatePantryItem,
   type PantryItemChange,
 } from './data/pantry-repository';
+import {
+  createRecipe,
+  deleteRecipe,
+  getRecipe,
+  listRecipes,
+  updateRecipe,
+} from './data/recipe-repository';
 import { ApiError, invalidRequest } from './errors';
 import {
   errorResponse,
@@ -66,6 +81,12 @@ const MEMBER_PATH =
   /^\/api\/household\/members\/([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/iu;
 const PANTRY_ITEM_PATH =
   /^\/api\/pantry\/items\/([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/iu;
+const RECIPE_PATH =
+  /^\/api\/recipes\/([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/iu;
+
+// A recipe at every bound is about 134,000 code points; at up to four UTF-8
+// bytes each plus JSON framing it stays under 1 MiB. Other routes keep 8 KiB.
+const RECIPE_MAX_JSON_BYTES = 1024 * 1024;
 
 const toReadySession = (member: MemberContext): SessionResponse => ({
   status: 'ready',
@@ -401,6 +422,117 @@ const handlePantryItem = async (
   throw new ApiError(404, 'not_found', 'Not found.');
 };
 
+const noContent = (): Response =>
+  new Response(null, {
+    status: 204,
+    headers: {
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+    },
+  });
+
+/** Turns shared validation errors into one 400 without echoing input. */
+const requireValid = <T>(result: RecipeValidation<T>): T => {
+  if (!result.ok) {
+    throw invalidRequest(result.errors.map((error) => error.message).join(' '));
+  }
+  return result.value;
+};
+
+// Every active member shares the recipe library; owner role is not required.
+const handleRecipesCollection = async (
+  request: Request,
+  env: AppEnv,
+  identityProvider: IdentityProvider,
+): Promise<Response> => {
+  if (request.method === 'GET') {
+    const member = await requireMemberForRequest(
+      request,
+      env,
+      identityProvider,
+    );
+    const body: RecipesResponse = {
+      recipes: await listRecipes(env.DB, member.householdId),
+    };
+    return json(body);
+  }
+
+  if (request.method === 'POST') {
+    requireMutationHeaders(request);
+    const member = await requireMemberForRequest(
+      request,
+      env,
+      identityProvider,
+    );
+    const input = await readJsonObject(request, RECIPE_MAX_JSON_BYTES);
+    const recipe = await createRecipe(
+      env.DB,
+      member.householdId,
+      requireValid(validateCreateRecipe(input)),
+    );
+    const body: RecipeResponse = { recipe };
+    return json(body, { status: 201 });
+  }
+
+  throw new ApiError(404, 'not_found', 'Not found.');
+};
+
+const handleRecipe = async (
+  request: Request,
+  env: AppEnv,
+  recipeId: string,
+  identityProvider: IdentityProvider,
+): Promise<Response> => {
+  if (request.method === 'GET') {
+    const member = await requireMemberForRequest(
+      request,
+      env,
+      identityProvider,
+    );
+    const recipe = await getRecipe(env.DB, member.householdId, recipeId);
+    if (!recipe) {
+      throw new ApiError(404, 'not_found', 'That recipe no longer exists.');
+    }
+    const body: RecipeResponse = { recipe };
+    return json(body);
+  }
+
+  if (request.method === 'PATCH') {
+    requireMutationHeaders(request);
+    const member = await requireMemberForRequest(
+      request,
+      env,
+      identityProvider,
+    );
+    const input = await readJsonObject(request, RECIPE_MAX_JSON_BYTES);
+    const recipe = await updateRecipe(
+      env.DB,
+      member.householdId,
+      recipeId,
+      requireValid(validateUpdateRecipe(input)),
+    );
+    const body: RecipeResponse = { recipe };
+    return json(body);
+  }
+
+  if (request.method === 'DELETE') {
+    requireMutationHeaders(request);
+    const member = await requireMemberForRequest(
+      request,
+      env,
+      identityProvider,
+    );
+    const input = await readJsonObject(request);
+    requireExactFields(input, ['version']);
+    const version = validateRecipeVersion(input.version);
+    if (!version.ok) throw invalidRequest(version.message);
+    await deleteRecipe(env.DB, member.householdId, recipeId, version.value);
+    return noContent();
+  }
+
+  throw new ApiError(404, 'not_found', 'Not found.');
+};
+
 const route = async (
   request: Request,
   env: AppEnv,
@@ -441,6 +573,15 @@ const route = async (
   const pantryMatch = url.pathname.match(PANTRY_ITEM_PATH);
   if (pantryMatch) {
     return handlePantryItem(request, env, pantryMatch[1], identityProvider);
+  }
+
+  if (url.pathname === '/api/recipes') {
+    return handleRecipesCollection(request, env, identityProvider);
+  }
+
+  const recipeMatch = url.pathname.match(RECIPE_PATH);
+  if (recipeMatch) {
+    return handleRecipe(request, env, recipeMatch[1], identityProvider);
   }
 
   // The API boundary is unchanged: an unknown API path is still a JSON 404,
