@@ -195,6 +195,22 @@ makes snapshot approval dangerous. It was found by opening a screenshot.
 concatenated `@mantine/core/styles.css`, and was itself verified by
 reintroducing the fault.
 
+A **missing** import is the same failure with a different cause, and the order
+check cannot see it. Two shipped before one was noticed by eye:
+
+- `InlineInput.css`, which Mantine's radio and checkbox layout lives in. Its
+  absence put every radio's label below the control instead of beside it, and
+  combined with a leftover global `input[type='radio']` size rule it left the
+  selected radio's dot visibly off-centre.
+- `Title.css`. Every heading in the application fell back to the browser
+  default, so the serif heading family configured in `theme.ts` never applied
+  at all. Nothing looked broken — it looked like a different, plainer design.
+
+`tests/e2e/visual.spec.ts` now asserts that every Mantine `m_…` class present
+in the DOM has a matching rule in the loaded CSS. That is exactly the signature
+of a stylesheet that was never imported, and it found `Title.css` immediately —
+it had been missing since the migration landed.
+
 ### Mantine's default secondary text fails WCAG AA here
 
 `--mantine-color-dimmed` measures 3.11:1 against this project's cream ground,

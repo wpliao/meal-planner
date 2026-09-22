@@ -161,6 +161,78 @@ test('text meets WCAG AA contrast against its own background', async ({
   expect(failures, `low-contrast text: ${failures.join(' | ')}`).toEqual([]);
 });
 
+/**
+ * Every Mantine component on screen must have its stylesheet loaded.
+ *
+ * `src/client/mantine.ts` imports Mantine's per-component CSS rather than the
+ * whole core sheet, which keeps the CSS at a third of the size and makes two
+ * silent failures possible: importing a file in the wrong order, and not
+ * importing it at all. Both happened while building this. Neither produced an
+ * error, neither failed a behaviour test, and a pixel baseline cannot catch
+ * them either — regenerating the baselines simply records the broken
+ * rendering as correct.
+ *
+ * Mantine gives every styled element a hashed `m_…` class. If one is in the
+ * DOM with no rule behind it anywhere in the loaded CSS, its stylesheet is
+ * missing. `mantine.test.ts` covers ordering; this covers absence.
+ */
+const assertEveryMantineClassIsStyled = async (page: Page) => {
+  const unstyled = await page.evaluate(() => {
+    const rules = new Set<string>();
+    for (const sheet of Array.from(document.styleSheets)) {
+      let cssRules: CSSRuleList;
+      try {
+        cssRules = sheet.cssRules;
+      } catch {
+        continue; // Cross-origin sheet; nothing of ours lives there.
+      }
+      const walk = (list: CSSRuleList) => {
+        for (const rule of Array.from(list)) {
+          const selector = (rule as CSSStyleRule).selectorText;
+          if (selector) {
+            for (const match of selector.matchAll(/\.(m_[a-z0-9]+)/gu)) {
+              rules.add(match[1]);
+            }
+          }
+          const nested = (rule as CSSGroupingRule).cssRules;
+          if (nested) walk(nested);
+        }
+      };
+      walk(cssRules);
+    }
+
+    const missing = new Set<string>();
+    for (const element of Array.from(document.querySelectorAll('[class]'))) {
+      for (const name of Array.from(element.classList)) {
+        if (/^m_[a-z0-9]+$/u.test(name) && !rules.has(name)) missing.add(name);
+      }
+    }
+    return Array.from(missing);
+  });
+
+  expect(
+    unstyled,
+    `Mantine classes with no CSS rule — a per-component stylesheet is missing from src/client/mantine.ts: ${unstyled.join(', ')}`,
+  ).toEqual([]);
+};
+
+test('every Mantine component on the pantry has its stylesheet', async ({
+  page,
+}) => {
+  await stub(page);
+  // Open the menu and a rename field so the lazier components render too.
+  await page.getByRole('button', { name: 'Actions for rice' }).click();
+  await page.getByRole('menuitem', { name: 'Rename' }).click();
+  await assertEveryMantineClassIsStyled(page);
+});
+
+test('every Mantine component on the family page has its stylesheet', async ({
+  page,
+}) => {
+  await stub(page, '/family', 'Family');
+  await assertEveryMantineClassIsStyled(page);
+});
+
 test('status control group', async ({ page }) => {
   await stub(page);
   // Catches oversized or overlapping form controls, which WebKit sized very
