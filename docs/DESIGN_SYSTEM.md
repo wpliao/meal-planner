@@ -69,20 +69,28 @@ small on a phone.
 3. **Add the component's stylesheet to
    [`mantine.ts`](../src/client/mantine.ts), in Mantine's order.** A missing
    import renders an unstyled control and a misordered one silently overrides a
-   styled component. `mantine.test.ts` enforces the order; it cannot know about
-   a missing import, so check the screen.
-4. **Query by container, not by viewport.** A panel's width is not the screen's
+   styled component. Both are checked: `mantine.test.ts` enforces the order,
+   and the visual suite asserts that every Mantine class on screen has a rule
+   behind it. Remember that a component can pull in another component's
+   stylesheet — a `Radio` needs `InlineInput.css`, a `Title` needs its own —
+   so add what the rendered page needs, not only what you imported in JSX.
+4. **Do not restyle a Mantine control from the global sheet.** Sizing a
+   control there fights the component's own variables: a leftover
+   `input[type='radio'] { width: 1.25rem }` shrank the box while the dot stayed
+   positioned for the theme's 24px size, so the selection sat off-centre. Set
+   the size through the theme instead.
+5. **Query by container, not by viewport.** A panel's width is not the screen's
    width. Phase 2's collapsed rename field was a media query standing in for a
    container query. See [`members-table.css`](../src/client/members-table.css).
-5. **Keep native semantics.** Mantine wraps real elements; keep it that way.
+6. **Keep native semantics.** Mantine wraps real elements; keep it that way.
    Where a Mantine component's props cannot express a semantic the screen
    needs, use `renderRoot` to put the attribute on the real element rather than
    wrapping it in another one — `Button.Group` gets its `role="group"` and
    accessible name this way.
-6. **Use `Alert` with `role="status"` for results, and Mantine's `Modal` for
+7. **Use `Alert` with `role="status"` for results, and Mantine's `Modal` for
    confirmations.** The layout owns one result region so a message survives its
    section unmounting; `Modal` owns focus trapping and return.
-7. **Look at the screen before regenerating a baseline.** Snapshot approval
+8. **Look at the screen before regenerating a baseline.** Snapshot approval
    records whatever is rendered, including a regression.
 
 ## Changing a token

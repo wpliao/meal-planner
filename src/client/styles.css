@@ -34,12 +34,3 @@ input[type='email'],
 input[type='text'] {
   min-height: var(--mp-touch-target);
 }
-
-/* The item menu and status buttons are sized by Mantine; only the radio
-   inputs are unstyled native controls, which WebKit grows to fill a flex
-   row unless they are given a fixed box. */
-input[type='radio'] {
-  flex: 0 0 auto;
-  width: 1.25rem;
-  height: 1.25rem;
-}
