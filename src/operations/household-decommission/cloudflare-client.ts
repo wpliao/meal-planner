@@ -109,6 +109,14 @@ const errorCodes = (body: unknown): string => {
   return codes.length > 0 ? codes.join(',') : 'none';
 };
 
+const shapeError = (operation: string): CloudflareApiError =>
+  new CloudflareApiError(
+    operation,
+    'unexpected response shape',
+    undefined,
+    false,
+  );
+
 const isTransientStatus = (status: number): boolean =>
   status === 429 || status >= 500;
 
@@ -197,12 +205,7 @@ export const createCloudflareClient = (
     result: unknown,
   ): D1StatementResult[] => {
     if (!Array.isArray(result)) {
-      throw new CloudflareApiError(
-        operation,
-        'unexpected response shape',
-        undefined,
-        false,
-      );
+      throw shapeError(operation);
     }
     return result.map((entry): D1StatementResult => {
       const record = isRecord(entry) ? entry : {};
@@ -223,12 +226,7 @@ export const createCloudflareClient = (
         typeof result.uuid !== 'string' ||
         typeof result.name !== 'string'
       ) {
-        throw new CloudflareApiError(
-          'Read D1 database',
-          'unexpected response shape',
-          undefined,
-          false,
-        );
+        throw shapeError('Read D1 database');
       }
       return { uuid: result.uuid, name: result.name };
     },
@@ -270,12 +268,7 @@ export const createCloudflareClient = (
         `${database(databaseId)}/time_travel/bookmark`,
       );
       if (!isRecord(result) || typeof result.bookmark !== 'string') {
-        throw new CloudflareApiError(
-          'Read Time Travel bookmark',
-          'unexpected response shape',
-          undefined,
-          false,
-        );
+        throw shapeError('Read Time Travel bookmark');
       }
       return result.bookmark;
     },
@@ -286,12 +279,7 @@ export const createCloudflareClient = (
         `${account}/workers/subdomain`,
       );
       if (!isRecord(result) || typeof result.subdomain !== 'string') {
-        throw new CloudflareApiError(
-          'Read account workers.dev subdomain',
-          'unexpected response shape',
-          undefined,
-          false,
-        );
+        throw shapeError('Read account workers.dev subdomain');
       }
       return result.subdomain;
     },
@@ -306,12 +294,7 @@ export const createCloudflareClient = (
         typeof result.enabled !== 'boolean' ||
         typeof result.previews_enabled !== 'boolean'
       ) {
-        throw new CloudflareApiError(
-          'Read Worker workers.dev state',
-          'unexpected response shape',
-          undefined,
-          false,
-        );
+        throw shapeError('Read Worker workers.dev state');
       }
       return {
         enabled: result.enabled,
@@ -326,12 +309,7 @@ export const createCloudflareClient = (
         `${account}/workers/domains?service=${encodeURIComponent(scriptName)}`,
       );
       if (!Array.isArray(result)) {
-        throw new CloudflareApiError(
-          operation,
-          'unexpected response shape',
-          undefined,
-          false,
-        );
+        throw shapeError(operation);
       }
       return asRecords(result).map(({ hostname }) =>
         typeof hostname === 'string' ? hostname : '',
@@ -345,12 +323,7 @@ export const createCloudflareClient = (
         `${account}/access/apps/${encodeURIComponent(appId)}`,
       );
       if (!isRecord(result)) {
-        throw new CloudflareApiError(
-          operation,
-          'unexpected response shape',
-          undefined,
-          false,
-        );
+        throw shapeError(operation);
       }
       const hosts = new Set<string>();
       if (typeof result.domain === 'string') hosts.add(result.domain);
@@ -372,12 +345,7 @@ export const createCloudflareClient = (
         `${account}/access/apps/${encodeURIComponent(appId)}/policies`,
       );
       if (!Array.isArray(result)) {
-        throw new CloudflareApiError(
-          operation,
-          'unexpected response shape',
-          undefined,
-          false,
-        );
+        throw shapeError(operation);
       }
       return asRecords(result).map((policy): AccessPolicy => ({
         decision:
