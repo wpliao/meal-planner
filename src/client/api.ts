@@ -10,6 +10,22 @@ const messageFor = (response: Response, body: unknown): string => {
   return 'The family space could not be updated. Please try again.';
 };
 
+/**
+ * A rejected API response. It is still an `Error` whose message is fit to show
+ * the family, and it also keeps the status and parsed body for a screen that
+ * has to act on them — a recipe conflict carries the current recipe.
+ */
+export class ApiRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly body: unknown,
+  ) {
+    super(message);
+    this.name = 'ApiRequestError';
+  }
+}
+
 /** Throws with a message fit to show the family; callers render it directly. */
 export async function api<T>(
   input: RequestInfo | URL,
@@ -18,7 +34,13 @@ export async function api<T>(
   const response = await fetch(input, init);
   if (response.status === 204) return undefined as T;
   const body: unknown = await response.json().catch(() => undefined);
-  if (!response.ok) throw new Error(messageFor(response, body));
+  if (!response.ok) {
+    throw new ApiRequestError(
+      messageFor(response, body),
+      response.status,
+      body,
+    );
+  }
   return body as T;
 }
 
