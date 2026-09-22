@@ -119,21 +119,21 @@ export function FamilySpace() {
     }
   };
 
-  const updateMember = async (
-    member: HouseholdMember,
-    update: { role: MemberRole } | { status: 'active' | 'revoked' },
+  /**
+   * Every owner mutation follows the same shape: close the confirmation,
+   * reconcile from the server, then report. Sharing it keeps the two callers
+   * from drifting apart, and keeps the recovery wording consistent when the
+   * refresh itself fails.
+   */
+  const runMemberAction = async (
+    action: () => Promise<unknown>,
+    done: string,
+    failed: string,
   ) => {
     setPending(true);
     notify(null);
     try {
-      await api<HouseholdMemberResponse>(
-        `/api/household/members/${encodeURIComponent(member.id)}`,
-        {
-          method: 'PATCH',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(update),
-        },
-      );
+      await action();
       setConfirmation(null);
       await reloadSession();
       const refreshed = await loadMembers()
@@ -142,58 +142,50 @@ export function FamilySpace() {
       notify({
         tone: 'success',
         message: refreshed
-          ? 'Member access was updated.'
-          : 'Member access was updated, but the page could not be refreshed.',
+          ? done
+          : `${done.replace(/\.$/u, '')}, but the page could not be refreshed.`,
       });
     } catch (error: unknown) {
       setConfirmation(null);
       notify({
         tone: 'error',
-        message:
-          error instanceof Error
-            ? error.message
-            : 'Member access could not be updated. Please try again.',
+        message: error instanceof Error ? error.message : failed,
       });
     } finally {
       setPending(false);
     }
   };
 
+  const updateMember = (
+    member: HouseholdMember,
+    update: { role: MemberRole } | { status: 'active' | 'revoked' },
+  ) =>
+    runMemberAction(
+      () =>
+        api<HouseholdMemberResponse>(
+          `/api/household/members/${encodeURIComponent(member.id)}`,
+          {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(update),
+          },
+        ),
+      'Member access was updated.',
+      'Member access could not be updated. Please try again.',
+    );
+
   const deleteMember = async () => {
     if (confirmation?.kind !== 'delete') return;
-    setPending(true);
-    notify(null);
-    try {
-      await api(
-        `/api/household/members/${encodeURIComponent(confirmation.member.id)}`,
-        {
+    const { member } = confirmation;
+    await runMemberAction(
+      () =>
+        api(`/api/household/members/${encodeURIComponent(member.id)}`, {
           method: 'DELETE',
           headers: { 'content-type': 'application/json' },
-        },
-      );
-      setConfirmation(null);
-      await reloadSession();
-      const refreshed = await loadMembers()
-        .then(() => true)
-        .catch(() => false);
-      notify({
-        tone: 'success',
-        message: refreshed
-          ? 'Member was removed.'
-          : 'Member was removed, but the page could not be refreshed.',
-      });
-    } catch (error: unknown) {
-      setConfirmation(null);
-      notify({
-        tone: 'error',
-        message:
-          error instanceof Error
-            ? error.message
-            : 'Member could not be removed. Please try again.',
-      });
-    } finally {
-      setPending(false);
-    }
+        }),
+      'Member was removed.',
+      'Member could not be removed. Please try again.',
+    );
   };
 
   return (

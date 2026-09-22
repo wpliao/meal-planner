@@ -1,8 +1,25 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 // The layout owns one result region for session and member outcomes; routed
 // sections such as the pantry have their own. Target the layout's notice
 // directly so assertions stay unambiguous.
+
+/** Both mocked journeys stub the same session shape, varying only the role. */
+const stubSession = (page: Page, role: 'owner' | 'member') =>
+  page.route('**/api/session', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status: 'ready',
+        member: {
+          id: `${role}-1`,
+          email: `${role}@example.test`,
+          role,
+        },
+        household: { id: 'household-1', name: 'The test family' },
+      }),
+    }),
+  );
 
 test('local owner can bootstrap and invite a family member', async ({
   page,
@@ -64,20 +81,7 @@ test('local owner can bootstrap and invite a family member', async ({
 });
 
 test('active member sees only their family view', async ({ page }) => {
-  await page.route('**/api/session', async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        status: 'ready',
-        member: {
-          id: 'member-1',
-          email: 'member@example.test',
-          role: 'member',
-        },
-        household: { id: 'household-1', name: 'The test family' },
-      }),
-    });
-  });
+  await stubSession(page, 'member');
 
   await page.goto('/family');
 
@@ -99,20 +103,7 @@ test('adapts member information and actions to the panel without horizontal scro
     width: isMobile ? 390 : 1100,
     height: 800,
   });
-  await page.route('**/api/session', async (route) => {
-    await route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        status: 'ready',
-        member: {
-          id: 'owner-1',
-          email: 'owner@example.test',
-          role: 'owner',
-        },
-        household: { id: 'household-1', name: 'The test family' },
-      }),
-    });
-  });
+  await stubSession(page, 'owner');
   await page.route('**/api/household/members', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
