@@ -114,6 +114,12 @@ export const parseCounts = (
 const allZero = (counts: HouseholdCounts): boolean =>
   COUNT_FIELDS.every((field) => counts[field] === 0);
 
+/** Only a Cloudflare client error's own message is written to be printable. */
+const safeMessage = (error: unknown): string =>
+  error instanceof CloudflareApiError
+    ? error.message
+    : 'The procedure stopped on an unexpected error.';
+
 export const runDecommission = async (
   config: DecommissionConfig,
   { client, log, now }: ProcedureDependencies,
@@ -305,13 +311,7 @@ export const runDecommission = async (
     const failure =
       error instanceof ProcedureFailure
         ? error
-        : new ProcedureFailure(
-            stage,
-            d1,
-            error instanceof CloudflareApiError
-              ? error.message
-              : 'The procedure stopped on an unexpected error.',
-          );
+        : new ProcedureFailure(stage, d1, safeMessage(error));
     emit({
       stage: failure.stage,
       status: 'failed',

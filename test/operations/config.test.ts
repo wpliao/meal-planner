@@ -163,7 +163,9 @@ describe('repository target', () => {
     const files = await readdir(new URL('migrations/', repositoryRoot));
     const migrations = repositoryMigrations(files);
     expect(migrations.length).toBeGreaterThan(0);
-    expect(migrations).toEqual([...migrations].sort());
+    expect(migrations).toEqual(
+      [...migrations].sort((a, b) => a.localeCompare(b, 'en')),
+    );
     expect(migrations).not.toContain('README.md');
     expect(
       repositoryMigrations(['0002_b.sql', 'README.md', '0001_a.sql']),
@@ -254,5 +256,6 @@ describe('JSONC parsing', () => {
 
   it('treats an unterminated block comment as the end of input', () => {
     expect(parseJsonc('{"a": 1} /* open')).toEqual({ a: 1 });
+    expect(parseJsonc('{"a": 1} // no newline')).toEqual({ a: 1 });
   });
 });

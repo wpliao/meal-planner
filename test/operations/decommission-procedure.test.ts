@@ -239,7 +239,11 @@ describe('household decommission procedure', () => {
       ],
       [
         'an unaccounted table such as recipes',
-        { tables: [...TABLES, 'recipes'].sort() },
+        {
+          tables: [...TABLES, 'recipes'].sort((a, b) =>
+            a.localeCompare(b, 'en'),
+          ),
+        },
       ],
       [
         'a missing table',

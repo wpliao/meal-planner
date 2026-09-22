@@ -69,54 +69,69 @@ const requirePattern = (
   return value;
 };
 
+/** Index just past the JSON string literal that starts at `start`. */
+const stringEnd = (source: string, start: number): number => {
+  let end = start + 1;
+  while (end < source.length && source[end] !== '"') {
+    end += source[end] === '\\' ? 2 : 1;
+  }
+  return end + 1;
+};
+
+/** Index just past the comment that starts at `start`. */
+const commentEnd = (source: string, start: number): number => {
+  if (source.startsWith('//', start)) {
+    const newline = source.indexOf('\n', start);
+    return newline === -1 ? source.length : newline;
+  }
+  const close = source.indexOf('*/', start + 2);
+  return close === -1 ? source.length : close + 2;
+};
+
+/**
+ * Walks `source` outside string literals, letting `visit` decide what to keep
+ * for each position. `visit` returns the text to emit and where to continue.
+ */
+const transformOutsideStrings = (
+  source: string,
+  visit: (index: number) => { emit: string; next: number },
+): string => {
+  let output = '';
+  let index = 0;
+  while (index < source.length) {
+    if (source[index] === '"') {
+      const end = stringEnd(source, index);
+      output += source.slice(index, end);
+      index = end;
+    } else {
+      const { emit, next } = visit(index);
+      output += emit;
+      index = next;
+    }
+  }
+  return output;
+};
+
 /**
  * Strips `//` and `/* *\/` comments and trailing commas from JSONC text such
  * as `wrangler.jsonc`, leaving string contents untouched.
  */
 export const parseJsonc = (text: string): unknown => {
-  const stringEnd = (source: string, start: number): number => {
-    let end = start + 1;
-    while (end < source.length && source[end] !== '"') {
-      end += source[end] === '\\' ? 2 : 1;
-    }
-    return end + 1;
-  };
-
-  let withoutComments = '';
-  let index = 0;
-  while (index < text.length) {
-    const pair = text.slice(index, index + 2);
-    if (text[index] === '"') {
-      const end = stringEnd(text, index);
-      withoutComments += text.slice(index, end);
-      index = end;
-    } else if (pair === '//') {
-      while (index < text.length && text[index] !== '\n') index += 1;
-    } else if (pair === '/*') {
-      const end = text.indexOf('*/', index + 2);
-      index = end === -1 ? text.length : end + 2;
-    } else {
-      withoutComments += text[index];
-      index += 1;
-    }
-  }
-
-  let output = '';
-  index = 0;
-  while (index < withoutComments.length) {
-    const char = withoutComments[index];
-    if (char === '"') {
-      const end = stringEnd(withoutComments, index);
-      output += withoutComments.slice(index, end);
-      index = end;
-      continue;
-    }
-    const isTrailingComma =
-      char === ',' && /^\s*[}\]]/u.test(withoutComments.slice(index + 1));
-    if (!isTrailingComma) output += char;
-    index += 1;
-  }
-  return JSON.parse(output);
+  const withoutComments = transformOutsideStrings(text, (index) =>
+    text.startsWith('//', index) || text.startsWith('/*', index)
+      ? { emit: '', next: commentEnd(text, index) }
+      : { emit: text[index], next: index + 1 },
+  );
+  const withoutTrailingCommas = transformOutsideStrings(
+    withoutComments,
+    (index) => {
+      const char = withoutComments[index];
+      const trailing =
+        char === ',' && /^\s*[}\]]/u.test(withoutComments.slice(index + 1));
+      return { emit: trailing ? '' : char, next: index + 1 };
+    },
+  );
+  return JSON.parse(withoutTrailingCommas);
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -160,7 +175,9 @@ export const repositoryTargetFor = (
 
 /** Migration files committed in the repository, in apply order. */
 export const repositoryMigrations = (fileNames: readonly string[]): string[] =>
-  fileNames.filter((name) => MIGRATION_FILE.test(name)).sort();
+  fileNames
+    .filter((name) => MIGRATION_FILE.test(name))
+    .sort((a, b) => a.localeCompare(b, 'en'));
 
 export interface ParseConfigSources {
   readonly inputs: Inputs;
