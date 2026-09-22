@@ -58,7 +58,7 @@ eligible for use. Acceptance does not authorize a production deletion.
 These stable identifiers mirror
 [issue #32](https://github.com/wpliao/meal-planner/issues/32).
 
-- [ ] `AC-01`: A documented, tested ownership-transfer sequence moves owner
+- [x] `AC-01`: A documented, tested ownership-transfer sequence moves owner
       responsibility to an active member and preserves the last-active-owner
       rule throughout; failures leave at least one active owner.
 - [ ] `AC-02`: A documented household-deletion design covers authorization,
@@ -220,13 +220,15 @@ post-restore authorization check.
 ## Traceability
 
 Exact evidence replaces planned entries as implementation and validation
-proceed. `AC-01` has implementation and tests; `AC-02` and `AC-03` remain open.
+proceed. `AC-01` is implemented, tested, and validated in development
+(`V-DEV-H1`). `AC-02` is open. `AC-03` has development validation for the
+transfer path only; the deletion path is not yet built.
 
-| Criterion | Planned implementation                                                                                                                | Planned evidence                                                                                                                                                                                                                                                                                                                                                                                                                                      | Release evidence |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| `AC-01`   | `src/client/FamilySpace.tsx` transfer guidance and self-step-down confirmation; existing `changeMemberRole` and `changeMemberStatus`  | `test/worker/members.test.ts` — `transfers ownership only after an active successor confirms owner access`, `protects the final active owner from demotion and revocation`, `preserves an active owner under concurrent owner demotions`; `tests/e2e/family-boundary.spec.ts` — `successor confirms owner access before the first owner steps down`; `src/client/App.test.tsx` — `names the other owner when confirming their demotion or revocation` | Pending          |
-| `AC-02`   | `scripts/` decommission procedure; `.github/workflows/` operator workflow; [ADR 0008](../DECISIONS/0008-household-decommissioning.md) | Workers-runtime cascade/rollback cases; operator-script target and redaction tests; approved runbook                                                                                                                                                                                                                                                                                                                                                  | Pending          |
-| `AC-03`   | Development rehearsal and guarded production workflow                                                                                 | `./scripts/verify.sh`; PR CI/Sonar; development workflow run and owner acceptance                                                                                                                                                                                                                                                                                                                                                                     | Pending          |
+| Criterion | Planned implementation                                                                                                                | Planned evidence                                                                                                                                                                                                                                                                                                                                                                                                                                      | Release evidence                |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `AC-01`   | `src/client/FamilySpace.tsx` transfer guidance and self-step-down confirmation; existing `changeMemberRole` and `changeMemberStatus`  | `test/worker/members.test.ts` — `transfers ownership only after an active successor confirms owner access`, `protects the final active owner from demotion and revocation`, `preserves an active owner under concurrent owner demotions`; `tests/e2e/family-boundary.spec.ts` — `successor confirms owner access before the first owner steps down`; `src/client/App.test.tsx` — `names the other owner when confirming their demotion or revocation` | `V-DEV-H1`; CI and Sonar passed |
+| `AC-02`   | `scripts/` decommission procedure; `.github/workflows/` operator workflow; [ADR 0008](../DECISIONS/0008-household-decommissioning.md) | Workers-runtime cascade/rollback cases; operator-script target and redaction tests; approved runbook                                                                                                                                                                                                                                                                                                                                                  | Pending                         |
+| `AC-03`   | Development rehearsal and guarded production workflow                                                                                 | `./scripts/verify.sh`; PR CI/Sonar; development workflow run and owner acceptance                                                                                                                                                                                                                                                                                                                                                                     | Pending                         |
 
 ## Rollout and rollback
 
@@ -260,6 +262,7 @@ back automatically.
 | 2026-09-22 | Propose owner-approved operator deletion with development rehearsal | Product-owner preference over a self-service control                | [Owner decision](https://github.com/wpliao/meal-planner/issues/32#issuecomment-5773995645) |
 | 2026-09-22 | Accept design and stabilize `AC-01`–`AC-03`                         | Product owner approved PR #34 design; operational gates remain      | [Approval](https://github.com/wpliao/meal-planner/issues/32#issuecomment-5774536685)       |
 | 2026-09-22 | Begin `AC-01` ownership-transfer implementation                     | The existing role API supports the accepted sequence                | [PR #35](https://github.com/wpliao/meal-planner/pull/35)                                   |
+| 2026-09-22 | Record `V-DEV-H1` transfer validation in development                | `af7ecbf` deployed and checked by the owner                         | [Deploy run](https://github.com/wpliao/meal-planner/actions/runs/35730748359)              |
 
 ## Release record
 
@@ -271,7 +274,17 @@ back automatically.
   and 96 Playwright tests across Chromium and WebKit at desktop and phone
   sizes). The `members panel` visual baselines were regenerated for the added
   transfer guidance after the rendered images were reviewed.
-- Development validation: Pending
+- Development validation: `V-DEV-H1` (transfer path, `AC-01`) complete on
+  2026-09-22. `af7ecbf` was deployed to development by
+  [Deploy run 35730748359](https://github.com/wpliao/meal-planner/actions/runs/35730748359)
+  (Worker version `90971fe0-23ce-4ac1-8ed1-0543116b0ed4`; the in-workflow
+  `./scripts/verify.sh` passed with 61 client, 77 Workers-runtime, and 96
+  Playwright tests). There is no migration, and none was applied. The owner
+  reported completing the transfer check with real Cloudflare Access
+  identities: invite and activate a successor, promote them, confirm the
+  successor reaches member management, then step the first owner down through
+  the self-demotion warning. The last-active-owner refusal was part of the
+  same check. The deletion path has no development validation yet.
 - Production release: Pending; no deletion is authorized
 - Known follow-up work: Phase 3 recipes must link its rows to this procedure;
   future R2-backed data requires a further deletion design update.
