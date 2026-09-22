@@ -5,7 +5,8 @@
 - Issue: [#32](https://github.com/wpliao/meal-planner/issues/32)
 - Product owner: Repository owner
 - Last updated: 2026-09-22
-- Pull requests: Pending design proposal
+- Pull requests: [#34](https://github.com/wpliao/meal-planner/pull/34) (design
+  proposal)
 
 ## Problem and outcome
 
