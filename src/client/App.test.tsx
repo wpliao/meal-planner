@@ -376,6 +376,9 @@ describe('App', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Make member' }));
     const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveTextContent(
+      'First confirm another active owner has signed in',
+    );
     expect(dialog).toHaveTextContent('immediately lose owner permissions');
     fireEvent.click(
       within(dialog).getByRole('button', { name: 'Make member' }),
@@ -419,6 +422,9 @@ describe('App', () => {
       (await screen.findAllByRole('button', { name: 'Revoke' }))[0],
     );
     const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveTextContent(
+      'First confirm another active owner has signed in',
+    );
     expect(dialog).toHaveTextContent('immediately lose access');
     fireEvent.click(
       within(dialog).getByRole('button', { name: 'Revoke member' }),
@@ -437,6 +443,56 @@ describe('App', () => {
         body: JSON.stringify({ status: 'revoked' }),
       }),
     );
+  });
+
+  it('names the other owner when confirming their demotion or revocation', async () => {
+    const coOwners = [
+      members[0],
+      {
+        id: 'owner-2',
+        email: 'successor@example.test',
+        role: 'owner' as const,
+        status: 'active' as const,
+      },
+    ];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) =>
+        Promise.resolve(
+          input === '/api/session'
+            ? json(ownerSession)
+            : json({ members: coOwners }),
+        ),
+      ),
+    );
+    renderAt('/family');
+
+    expect(
+      await screen.findByText(/To transfer ownership, make an active member/),
+    ).toBeInTheDocument();
+    const successorRow = await screen.findByRole('row', {
+      name: /successor@example\.test/,
+    });
+
+    fireEvent.click(
+      within(successorRow).getByRole('button', { name: 'Make member' }),
+    );
+    let dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveTextContent(
+      'Make successor@example.test a family member?',
+    );
+    expect(dialog).not.toHaveTextContent('First confirm another active owner');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+
+    fireEvent.click(
+      within(successorRow).getByRole('button', { name: 'Revoke' }),
+    );
+    dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveTextContent('Revoke successor@example.test?');
+    expect(dialog).not.toHaveTextContent('First confirm another active owner');
   });
 
   it('keeps a bootstrap failure visible after refreshing the session', async () => {
