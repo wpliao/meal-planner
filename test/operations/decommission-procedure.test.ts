@@ -119,7 +119,7 @@ describe('household decommission procedure', () => {
       ({ body }) => (body as { batch?: unknown } | undefined)?.batch,
     );
     const accessIndex = fake.calls.findIndex(({ path }) =>
-      path.endsWith('/policies'),
+      path.includes('/policies'),
     );
     expect(accessIndex).toBeGreaterThan(-1);
     expect(accessIndex).toBeLessThan(batchIndex);
@@ -447,6 +447,63 @@ describe('household decommission procedure', () => {
       });
     });
 
+    it('reads every page of Access policies and finds an allow policy on a later page', async () => {
+      const policies = [
+        denyEveryonePolicy(),
+        { ...denyEveryonePolicy(), id: 'policy-2' },
+        { decision: 'allow', include: [{ everyone: {} }] },
+      ];
+      const fake = withState({ policies, policyPageSize: 2 });
+      const { exitCode, records } = await run(fake);
+      expect(exitCode).toBe(1);
+      expectD1Untouched(fake);
+      expect(fake.callsTo('access-policies').map(({ path }) => path)).toEqual([
+        expect.stringContaining('page=1') as unknown,
+        expect.stringContaining('page=2') as unknown,
+      ]);
+      expect(failureRecord(records)).toMatchObject({
+        stage: 'close-access',
+        message: expect.stringContaining('not a deny policy') as unknown,
+      });
+    });
+
+    it('accepts deny-only policies spread across pages', async () => {
+      const policies = [
+        denyEveryonePolicy(),
+        { ...denyEveryonePolicy(), id: 'policy-2' },
+        { ...denyEveryonePolicy(), id: 'policy-3' },
+      ];
+      const fake = withState({ policies, policyPageSize: 2 });
+      expect((await run(fake)).exitCode).toBe(0);
+    });
+
+    it('fails closed when fewer policies are returned than the API reports', async () => {
+      const fake = withState({ reportedPolicyTotal: 2 });
+      const { exitCode, records } = await run(fake);
+      expect(exitCode).toBe(1);
+      expectD1Untouched(fake);
+      expect(failureRecord(records)).toMatchObject({
+        stage: 'close-access',
+        message: expect.stringContaining('only 1 of 2 policies') as unknown,
+      });
+    });
+
+    it.each([
+      ['a path under the host', `${WORKER_HOST}/app`],
+      ['a nested path', `https://${WORKER_HOST}/api/session`],
+    ])('refuses an Access application scoped to %s', async (_, uri) => {
+      const fake = withState({
+        accessApp: { destinations: [{ type: 'public', uri }] },
+      });
+      const { exitCode, records } = await run(fake);
+      expect(exitCode).toBe(1);
+      expectD1Untouched(fake);
+      expect(failureRecord(records)).toMatchObject({
+        stage: 'close-access',
+        message: expect.stringContaining('whole Worker hostname') as unknown,
+      });
+    });
+
     it('fails verification if access reopens after deletion', async () => {
       const fake = createFakeCloudflare();
       fake.queue(
@@ -713,6 +770,41 @@ describe('household decommission procedure', () => {
       const { output, records } = await run(fake);
       expect(output).not.toContain(API_TOKEN);
       expect(failureRecord(records)?.message).toContain('error codes 10000');
+    });
+
+    it('applies redaction to printed lines, not only to discarded error text', async () => {
+      // A token that equals a printed value proves every line passes through
+      // redact(): the household ID field must come out redacted.
+      const fake = createFakeCloudflare();
+      const { exitCode, records, output } = await run(
+        fake,
+        validInputs({ CLOUDFLARE_DECOMMISSION_API_TOKEN: HOUSEHOLD_ID }),
+      );
+      expect(exitCode).toBe(0);
+      expect(output).not.toContain(HOUSEHOLD_ID);
+      expect(records.length).toBeGreaterThan(5);
+      for (const record of records.filter((line) => 'householdId' in line)) {
+        expect(record.householdId).toBe('[REDACTED]');
+      }
+    });
+
+    it('redacts the trimmed token that the procedure actually uses', async () => {
+      const fake = createFakeCloudflare();
+      const { exitCode, records, output } = await run(
+        fake,
+        validInputs({
+          CLOUDFLARE_DECOMMISSION_API_TOKEN: `  ${HOUSEHOLD_ID}\n`,
+        }),
+      );
+      expect(exitCode).toBe(0);
+      expect(fake.calls[0]?.headers.authorization).toBe(
+        `Bearer ${HOUSEHOLD_ID}`,
+      );
+      expect(output).not.toContain(HOUSEHOLD_ID);
+      expect(records[0]).toMatchObject({
+        stage: 'approval',
+        householdId: '[REDACTED]',
+      });
     });
 
     it('keeps the token out of output for every failure stage', async () => {

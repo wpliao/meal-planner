@@ -77,11 +77,18 @@ const sameList = (
 const names = (rows: readonly Record<string, unknown>[]): string[] =>
   rows.map(({ name }) => (typeof name === 'string' ? name : ''));
 
-const hostOf = (value: string): string =>
-  value
-    .replace(/^https?:\/\//u, '')
-    .split('/')[0]
-    .toLowerCase();
+/**
+ * The hostname an Access destination protects in full, or undefined when the
+ * destination is limited to a path: `host/app` leaves the rest of the host
+ * outside that application.
+ */
+export const wholeHostOf = (value: string): string | undefined => {
+  const withoutScheme = value.replace(/^https?:\/\//u, '');
+  const slash = withoutScheme.indexOf('/');
+  const host = slash === -1 ? withoutScheme : withoutScheme.slice(0, slash);
+  const path = slash === -1 ? '' : withoutScheme.slice(slash);
+  return path === '' || path === '/' ? host.toLowerCase() : undefined;
+};
 
 const isUnconditionalDenyEveryone = (policy: AccessPolicy): boolean =>
   policy.decision === 'deny' &&
@@ -179,10 +186,10 @@ export const runDecommission = async (
 
     const hosts = (
       await client.getAccessApplicationHosts(config.accessAppId)
-    ).map(hostOf);
+    ).map(wholeHostOf);
     if (!hosts.includes(workerHost)) {
       fail(
-        "The Access application does not protect this environment's Worker hostname.",
+        "The Access application does not protect this environment's whole Worker hostname.",
       );
     }
 

@@ -24,7 +24,9 @@ export interface CliDependencies {
  * failures that happen before any Cloudflare call.
  */
 export const runCli = async (deps: CliDependencies): Promise<number> => {
-  const secrets = [deps.env.CLOUDFLARE_DECOMMISSION_API_TOKEN ?? ''];
+  // Config uses the trimmed token; redact both forms in case they differ.
+  const rawToken = deps.env.CLOUDFLARE_DECOMMISSION_API_TOKEN ?? '';
+  const secrets = [rawToken, rawToken.trim()];
   const logLine = (record: Record<string, unknown>): void => {
     deps.log(
       redact(

@@ -12,7 +12,11 @@
 > call. Production becomes eligible only after the development rehearsal below
 > is recorded, all three implementation gates in the feature design are closed,
 > and the owner gives a separate production approval. Enabling it is a reviewed
-> code change, not a workflow input.
+> code change, not a workflow input. In particular, production stays
+> ineligible until the rehearsal proves the D1 REST batch is atomic (gate 2):
+> without that proof, a failed run could leave the installation pointer
+> deleted and the household present (see
+> [pointer gone, household still present](#pointer-gone-household-still-present)).
 
 ## What the owner is agreeing to
 
@@ -59,7 +63,11 @@ variable.
    - Account › Workers Scripts › Read
 
    Restrict it to the one account, give it a short expiry, and create it just
-   before a planned run.
+   before a planned run. **D1 Edit is account-wide: this token can also change
+   the production D1 database.** Only the script's target checks and the
+   workflow's development-only, `main`-only path keep it away from
+   production, so keep the expiry short and delete the token as soon as the
+   run is recorded.
 
 2. In the GitHub Environment `development`, add the secret
    `CLOUDFLARE_DECOMMISSION_API_TOKEN` with that token. `CLOUDFLARE_ACCOUNT_ID`
@@ -96,12 +104,23 @@ Do not add these to the `production` environment.
 1. In Cloudflare Zero Trust, open the environment's Access application.
    Remove or disable every Allow, Bypass, and Service Auth policy and leave one
    **Deny** policy that includes **Everyone** with no Require or Exclude rules.
+   Make sure the application covers the whole Worker hostname, not only a path
+   under it. Then revoke existing Access tokens and sessions for the
+   application, so an already-signed-in browser cannot keep using the app.
 2. In the Worker's **Settings › Domains & Routes**, disable the `workers.dev`
    route and **Preview URLs**. Confirm there is no custom domain.
 3. Ask the owner to sign in from a formerly authorized account and confirm the
    app is no longer reached. Record that confirmation in the approval thread.
 
 If any of these cannot be done or confirmed, stop. D1 is untouched.
+
+From this point, do not dispatch **Deploy** for this environment until it is
+retired or the owner explicitly decides to reopen it: a deploy re-enables the
+`workers.dev` route and applies migrations. Both workflows share the
+`cloudflare-<environment>` concurrency group, so a deploy dispatched during a
+decommission waits rather than overlapping. GitHub keeps only one pending run
+per group, though, so a newer queued run replaces an older queued one. Check
+the Actions list before dispatching.
 
 The workflow re-checks the closure with read-only API calls before and after
 deleting (see [what the checks prove](#what-the-closure-checks-prove)).
@@ -143,7 +162,7 @@ development and production evidence separate.
 
 Then, as separate reviewed steps: retire the Access application and Worker
 route, and remove environment secrets that are no longer needed. Keep Access
-denying until then.
+denying until then, and do not run Deploy for the environment.
 
 ## What the closure checks prove
 
@@ -169,11 +188,11 @@ owner's real sign-in experience, which remains the manual confirmation in step
 Every failure leaves Access closed. Each failure line names the stage and the
 D1 state:
 
-| D1 state    | Meaning                                                   | Next step                                                                                                                                  |
-| ----------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `untouched` | The deletion batch was never sent.                        | Fix the cause (inputs, target, closure, or credentials). Re-dispatch once resolved; the run repeats preflight.                             |
-| `unknown`   | The batch was sent, but success was not confirmed.        | **Do not re-dispatch blindly.** Re-dispatching is safe only because it starts with read-only preflight; read its counts before any change. |
-| `deleted`   | The batch reported success, but verification then failed. | Investigate the remaining counts or reopened access. Keep access closed.                                                                   |
+| D1 state    | Meaning                                                   | Next step                                                                                                                                                              |
+| ----------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `untouched` | The deletion batch was never sent.                        | Fix the cause (inputs, target, closure, or credentials). Re-dispatch once resolved; the run repeats preflight.                                                         |
+| `unknown`   | The batch was sent, but success was not confirmed.        | **Do not re-dispatch blindly.** A re-dispatch only repeats read-only preflight; read its counts, and if the pointer is gone but rows remain, follow the section below. |
+| `deleted`   | The batch reported success, but verification then failed. | Investigate the remaining counts or reopened access. Keep access closed.                                                                                               |
 
 Specific cases:
 
@@ -187,6 +206,24 @@ Specific cases:
 - **Unexpected affected-row counts.** The household delete may report either
   `1` or `1 + members + pantry rows`, depending on whether cascaded rows are
   counted; anything else fails. Record the reported numbers.
+
+#### Pointer gone, household still present
+
+This is the outcome a non-atomic REST batch would leave: the first statement
+committed and the second did not. A delete-stage failure reports D1
+`unknown`, or preflight on a later run reports zero installation rows while
+the household, members, or pantry rows remain (it fails with "does not hold
+exactly one installed household").
+
+- Keep Access denying and the Worker route disabled. With the pointer gone,
+  the bootstrap path would offer setup again if the Worker became reachable.
+- **Do not re-dispatch.** The procedure is not designed to finish a partial
+  deletion, and its preflight refuses this state by design.
+- Record the counts and escalate to the owner. Recovery (a reviewed manual
+  completion, or a Time Travel restore to the preflight bookmark) is a
+  separate owner decision.
+- In development, this result fails gate 2: production stays ineligible
+  until the transport is shown to be atomic.
 
 Read-only calls retry up to three times on HTTP 429, 5xx, and network errors.
 The deletion batch is never retried. Recovery through Time Travel restore

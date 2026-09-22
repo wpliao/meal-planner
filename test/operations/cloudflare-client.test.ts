@@ -49,7 +49,7 @@ describe('Cloudflare client', () => {
       `GET ${account}/workers/scripts/worker-name/subdomain`,
       `GET ${account}/workers/domains?service=worker-name`,
       `GET ${account}/access/apps/app-id`,
-      `GET ${account}/access/apps/app-id/policies`,
+      `GET ${account}/access/apps/app-id/policies?page=1&per_page=50`,
     ]);
     for (const { headers } of fake.calls) {
       expect(headers.authorization).toBe(`Bearer ${API_TOKEN}`);

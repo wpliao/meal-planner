@@ -94,6 +94,8 @@ export interface CloudflareClient {
 const DEFAULT_BASE_URL = 'https://api.cloudflare.com/client/v4';
 const DEFAULT_TIMEOUT_MS = 30_000;
 const BASE_BACKOFF_MS = 500;
+const POLICY_PAGE_SIZE = 50;
+const MAX_POLICY_PAGES = 20;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -139,7 +141,7 @@ export const createCloudflareClient = (
     method: 'GET' | 'POST',
     path: string,
     body?: unknown,
-  ): Promise<unknown> => {
+  ): Promise<Record<string, unknown>> => {
     let response: Response;
     try {
       response = await options.fetch(`${baseUrl}${path}`, {
@@ -172,14 +174,15 @@ export const createCloudflareClient = (
         isTransientStatus(response.status),
       );
     }
-    return parsed.result;
+    return parsed;
   };
 
-  const read = async (
+  /** A read-only call, retried on transient failures; returns the envelope. */
+  const readEnvelope = async (
     operation: string,
     path: string,
     body?: unknown,
-  ): Promise<unknown> => {
+  ): Promise<Record<string, unknown>> => {
     for (let attempt = 1; ; attempt += 1) {
       try {
         return await requestOnce(
@@ -196,6 +199,12 @@ export const createCloudflareClient = (
       }
     }
   };
+
+  const read = async (
+    operation: string,
+    path: string,
+    body?: unknown,
+  ): Promise<unknown> => (await readEnvelope(operation, path, body)).result;
 
   const database = (databaseId: string): string =>
     `${account}/d1/database/${encodeURIComponent(databaseId)}`;
@@ -251,7 +260,7 @@ export const createCloudflareClient = (
 
     async executeD1Batch(databaseId, statements) {
       const operation = 'Deletion batch';
-      const result = await requestOnce(
+      const envelope = await requestOnce(
         operation,
         'POST',
         `${database(databaseId)}/query`,
@@ -259,7 +268,7 @@ export const createCloudflareClient = (
           batch: statements.map(({ sql, params }) => ({ sql, params })),
         },
       );
-      return toStatementResults(operation, result);
+      return toStatementResults(operation, envelope.result);
     },
 
     async getTimeTravelBookmark(databaseId) {
@@ -340,14 +349,36 @@ export const createCloudflareClient = (
 
     async listAccessPolicies(appId) {
       const operation = 'List Access policies';
-      const result = await read(
-        operation,
-        `${account}/access/apps/${encodeURIComponent(appId)}/policies`,
-      );
-      if (!Array.isArray(result)) {
-        throw shapeError(operation);
+      const policies: Record<string, unknown>[] = [];
+      let totalCount: number | undefined;
+      // A deny-only check that misses a later page could pass while an allow
+      // policy remains, so every page is read and the total must be reached.
+      for (let page = 1; page <= MAX_POLICY_PAGES; page += 1) {
+        const envelope = await readEnvelope(
+          operation,
+          `${account}/access/apps/${encodeURIComponent(appId)}/policies?page=${page}&per_page=${POLICY_PAGE_SIZE}`,
+        );
+        if (!Array.isArray(envelope.result)) {
+          throw shapeError(operation);
+        }
+        const pageItems = asRecords(envelope.result);
+        policies.push(...pageItems);
+        const info = isRecord(envelope.result_info) ? envelope.result_info : {};
+        totalCount =
+          typeof info.total_count === 'number' ? info.total_count : undefined;
+        const totalPages =
+          typeof info.total_pages === 'number' ? info.total_pages : page;
+        if (page >= totalPages || pageItems.length === 0) break;
       }
-      return asRecords(result).map((policy): AccessPolicy => ({
+      if (totalCount !== undefined && policies.length < totalCount) {
+        throw new CloudflareApiError(
+          operation,
+          `only ${policies.length} of ${totalCount} policies could be read`,
+          undefined,
+          false,
+        );
+      }
+      return policies.map((policy): AccessPolicy => ({
         decision:
           typeof policy.decision === 'string' ? policy.decision : 'unknown',
         include: asRecords(policy.include),

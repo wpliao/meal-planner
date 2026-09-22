@@ -89,6 +89,10 @@ export interface FakeState {
   customDomains: string[];
   accessApp: Record<string, unknown>;
   policies: Record<string, unknown>[];
+  /** Page size the fake Access API uses, whatever the client asks for. */
+  policyPageSize: number;
+  /** Overrides `result_info.total_count`, to model an inconsistent API. */
+  reportedPolicyTotal: number | undefined;
 }
 
 export const denyEveryonePolicy = (): Record<string, unknown> => ({
@@ -100,8 +104,8 @@ export const denyEveryonePolicy = (): Record<string, unknown> => ({
   exclude: [],
 });
 
-const envelope = (result: unknown): Response =>
-  Response.json({ success: true, errors: [], messages: [], result });
+const envelope = (result: unknown, extra: object = {}): Response =>
+  Response.json({ success: true, errors: [], messages: [], result, ...extra });
 
 const statementResult = (
   rows: readonly Record<string, unknown>[],
@@ -132,6 +136,8 @@ export const createFakeCloudflare = (
     customDomains: [],
     accessApp: { id: ACCESS_APP_ID, domain: WORKER_HOST },
     policies: [denyEveryonePolicy()],
+    policyPageSize: 50,
+    reportedPolicyTotal: undefined,
     ...options.state,
   };
   const calls: RecordedCall[] = [];
@@ -176,7 +182,7 @@ export const createFakeCloudflare = (
     if (path.endsWith('/workers/subdomain')) return 'account-subdomain';
     if (path.endsWith('/subdomain')) return 'worker-subdomain';
     if (path.includes('/workers/domains')) return 'custom-domains';
-    if (path.endsWith('/policies')) return 'access-policies';
+    if (path.split('?')[0].endsWith('/policies')) return 'access-policies';
     if (path.includes('/access/apps/')) return 'access-app';
     return `${method} ${path}`;
   };
@@ -210,8 +216,6 @@ export const createFakeCloudflare = (
         }));
       case 'access-app':
         return state.accessApp;
-      case 'access-policies':
-        return state.policies;
       default:
         throw new Error(`Unexpected request in fake: ${key}`);
     }
@@ -239,6 +243,19 @@ export const createFakeCloudflare = (
       );
     }
     if (reply?.kind === 'result') return envelope(reply.result);
+    if (key === 'access-policies') {
+      const page = Number(url.searchParams.get('page') ?? '1');
+      const size = state.policyPageSize;
+      const totalPages = Math.max(1, Math.ceil(state.policies.length / size));
+      return envelope(state.policies.slice((page - 1) * size, page * size), {
+        result_info: {
+          page,
+          per_page: size,
+          total_pages: totalPages,
+          total_count: state.reportedPolicyTotal ?? state.policies.length,
+        },
+      });
+    }
     return envelope(await defaultReply(key, body));
   };
 

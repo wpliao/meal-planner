@@ -18,8 +18,10 @@ on:
 permissions:
   contents: read
 
+# Shared with household-decommission.yml: a deploy must never overlap a
+# household decommission of the same environment.
 concurrency:
-  group: deploy-${{ inputs.environment }}
+  group: cloudflare-${{ inputs.environment }}
   cancel-in-progress: false
 
 jobs:

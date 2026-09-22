@@ -36,7 +36,8 @@ at runtime; configure them before dispatch as described in
 `.github/workflows/household-decommission.yml` is a separate, manually
 dispatched operator workflow that deletes the one installed household from an
 environment's live D1 database. It has no automatic trigger, reads only
-`contents`, runs one environment at a time, and is dispatchable for
+`contents`, shares the `cloudflare-<environment>` concurrency group with
+Deploy so the two never overlap, and is dispatchable for
 development from `main` only. It uses a dedicated
 `CLOUDFLARE_DECOMMISSION_API_TOKEN` environment secret that the owner creates
 for a planned run. It refuses to touch D1 unless Access and the Worker route
