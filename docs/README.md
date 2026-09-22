@@ -6,6 +6,8 @@
 - [ENVIRONMENTS.md](./ENVIRONMENTS.md): local, development, and production setup.
 - [CI_CD.md](./CI_CD.md): quality gates and deployment controls.
 - [SECURITY.md](./SECURITY.md): threat model and operating rules.
+- [operations/household-decommission.md](./operations/household-decommission.md):
+  owner-approved household deletion runbook.
 - [DESIGN_SYSTEM.md](./DESIGN_SYSTEM.md): design tokens and the rules for
   building a screen from them.
 - [FEATURE_LIFECYCLE.md](./FEATURE_LIFECYCLE.md): feature discovery, design,

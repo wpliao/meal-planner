@@ -31,6 +31,19 @@ do not block Wrangler deployment but cause identity-dependent APIs to fail close
 at runtime; configure them before dispatch as described in
 [environments](ENVIRONMENTS.md#phase-1-worker-configuration).
 
+## Household decommission
+
+`.github/workflows/household-decommission.yml` is a separate, manually
+dispatched operator workflow that deletes the one installed household from an
+environment's live D1 database. It has no automatic trigger, reads only
+`contents`, runs one environment at a time, and is dispatchable for
+development from `main` only. It uses a dedicated
+`CLOUDFLARE_DECOMMISSION_API_TOKEN` environment secret that the owner creates
+for a planned run. It refuses to touch D1 unless Access and the Worker route
+are already closed. Production is not eligible: its job always fails before
+any credentialed step. Follow the
+[household decommission runbook](operations/household-decommission.md).
+
 ## Release policy
 
 - Pull requests never deploy production.
