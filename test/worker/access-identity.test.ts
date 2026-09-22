@@ -226,6 +226,7 @@ describe('Cloudflare Access identity verification', () => {
       {
         DB: testEnv.DB,
         UPLOADS: testEnv.UPLOADS,
+        ASSETS: testEnv.ASSETS,
         APP_ENV: 'development',
         CF_ACCESS_TEAM_DOMAIN: 'https://dannyliao.cloudflareaccess.com',
         CF_ACCESS_AUD: audience,

@@ -443,7 +443,27 @@ const route = async (
     return handlePantryItem(request, env, pantryMatch[1], identityProvider);
   }
 
-  throw new ApiError(404, 'not_found', 'Not found.');
+  // The API boundary is unchanged: an unknown API path is still a JSON 404,
+  // and never falls through to the shell.
+  if (url.pathname === '/api' || url.pathname.startsWith('/api/')) {
+    throw new ApiError(404, 'not_found', 'Not found.');
+  }
+
+  // Anything else reaching the Worker matched no static asset, so it belongs
+  // to the client router. Serve the application shell so a deep link resolves
+  // instead of returning a JSON error.
+  //
+  // Two deliberate limits: only read methods are answered this way, and the
+  // shell is always fetched from "/" rather than the requested path, so this
+  // branch can never be used to reach some other asset. The shell carries no
+  // household data; every value still comes from an authorised API call.
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    throw new ApiError(404, 'not_found', 'Not found.');
+  }
+
+  return env.ASSETS.fetch(
+    new Request(new URL('/', url), { method: request.method }),
+  );
 };
 
 export const createWorker = (

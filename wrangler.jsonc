@@ -13,6 +13,9 @@
   "preview_urls": false,
   "assets": {
     "not_found_handling": "single-page-application",
+    // The Worker owns every path that is not a static asset, so it needs this
+    // binding to hand an application path back to the asset pipeline.
+    "binding": "ASSETS",
   },
   "vars": {
     "APP_ENV": "local",
