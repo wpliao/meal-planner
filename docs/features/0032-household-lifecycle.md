@@ -284,7 +284,8 @@ back automatically.
   identities: invite and activate a successor, promote them, confirm the
   successor reaches member management, then step the first owner down through
   the self-demotion warning. The owner also confirmed that the successor,
-  as the last active owner, was refused when trying to demote themselves. The deletion path has no development validation yet.
+  as the last active owner, was refused when trying to demote themselves.
+  The deletion path has no development validation yet.
 - Production release: Pending; no deletion is authorized
 - Known follow-up work: Phase 3 recipes must link its rows to this procedure;
   future R2-backed data requires a further deletion design update.
