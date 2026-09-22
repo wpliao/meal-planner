@@ -1,11 +1,11 @@
 # Feature: UI foundation
 
-- Status: Accepted
+- Status: Released
 - Phase: Foundation — between Phase 2 and Phase 3
 - Issue: [#23](https://github.com/wpliao/meal-planner/issues/23)
 - Product owner: Repository owner
-- Last updated: 2026-09-21
-- Pull requests: design proposal pending
+- Last updated: 2026-09-22
+- Pull requests: [#24 — design proposal](https://github.com/wpliao/meal-planner/pull/24); [#25 — visual regression coverage](https://github.com/wpliao/meal-planner/pull/25); [#26 — Worker shell fallback](https://github.com/wpliao/meal-planner/pull/26); [#27 — routing and page structure](https://github.com/wpliao/meal-planner/pull/27); [#28 — component layer and design tokens](https://github.com/wpliao/meal-planner/pull/28); [#29 — missing stylesheets](https://github.com/wpliao/meal-planner/pull/29)
 
 ## Problem and outcome
 
@@ -73,7 +73,7 @@ and stay stable after acceptance.
 - [x] `AC-06`: Accessibility is preserved or improved — native semantics,
       keyboard operation, visible focus, focus-trapped dialogs, WCAG AA contrast.
 - [x] `AC-07`: The measured production bundle change is recorded and justified.
-- [ ] `AC-08`: Development and production release evidence is recorded before
+- [x] `AC-08`: Development and production release evidence is recorded before
       completion.
 
 ## Experience design
@@ -172,16 +172,16 @@ reopening any of them requires a change recorded in the decision log below.
 
 ## Traceability
 
-| Criterion | Planned implementation                                                   | Planned evidence                        | Release evidence |
-| --------- | ------------------------------------------------------------------------ | --------------------------------------- | ---------------- |
-| `AC-01`   | [ADR 0006](../DECISIONS/0006-component-library.md)                       | Measured bundle comparison              | `V-LOCAL-U4`     |
-| `AC-02`   | [ADR 0007](../DECISIONS/0007-navigation-and-information-architecture.md) | Routing and Worker fallback tests       | `V-LOCAL-U3`     |
-| `AC-03`   | [DESIGN_SYSTEM.md](../DESIGN_SYSTEM.md) and `src/client/theme.ts`        | Interface built from tokens             | `V-LOCAL-U4`     |
-| `AC-04`   | Migrated Phase 1 and Phase 2 interfaces                                  | Existing suites still passing           | `V-LOCAL-U4`     |
-| `AC-05`   | Visual regression project                                                | Fails on the three reintroduced defects | `V-LOCAL-U1`     |
-| `AC-06`   | Component layer on Mantine `Modal` and `Alert`                           | Accessibility and keyboard tests        | `V-LOCAL-U4`     |
-| `AC-07`   | Build output                                                             | Before and after measurement            | `V-LOCAL-U4`     |
-| `AC-08`   | Deployment workflow                                                      | Development and production records      | Pending          |
+| Criterion | Planned implementation                                                   | Planned evidence                        | Release evidence        |
+| --------- | ------------------------------------------------------------------------ | --------------------------------------- | ----------------------- |
+| `AC-01`   | [ADR 0006](../DECISIONS/0006-component-library.md)                       | Measured bundle comparison              | `V-LOCAL-U4`            |
+| `AC-02`   | [ADR 0007](../DECISIONS/0007-navigation-and-information-architecture.md) | Routing and Worker fallback tests       | `V-LOCAL-U3`            |
+| `AC-03`   | [DESIGN_SYSTEM.md](../DESIGN_SYSTEM.md) and `src/client/theme.ts`        | Interface built from tokens             | `V-LOCAL-U4`            |
+| `AC-04`   | Migrated Phase 1 and Phase 2 interfaces                                  | Existing suites still passing           | `V-LOCAL-U4`            |
+| `AC-05`   | Visual regression project                                                | Fails on the three reintroduced defects | `V-LOCAL-U1`            |
+| `AC-06`   | Component layer on Mantine `Modal` and `Alert`                           | Accessibility and keyboard tests        | `V-LOCAL-U4`            |
+| `AC-07`   | Build output                                                             | Before and after measurement            | `V-LOCAL-U4`            |
+| `AC-08`   | Deployment workflow                                                      | Development and production records      | `V-DEV-U1`; `V-PROD-U1` |
 
 ## Rollout and rollback
 
@@ -238,9 +238,28 @@ There is no migration to reverse. Rollback is redeploying the previous version.
 - Local verification: `V-LOCAL-U5` (2026-09-22) — missing stylesheets. Full
   gate green with 92 browser tests, including the new missing-stylesheet guard
   on both sections.
-- Development validation: In progress — the first deployment surfaced the
-  off-centre radio, which led to the two missing stylesheets above. Needs
-  re-validating on Android and iOS after the fix deploys.
-- Production release: Pending separate explicit approval
+- Development validation: `V-DEV-U1` complete on 2026-09-22. `523bdc5`
+  deployed to development through the protected workflow and validated by the
+  owner on both Android and iOS against real Cloudflare Access identities; the
+  Phase 1 and Phase 2 journeys still work. There are no migrations in this
+  feature, so nothing was applied to the development database.
+
+  The gate did not catch what this round did. The first development deployment
+  surfaced a selected radio whose dot sat off-centre, and chasing it found two
+  per-component stylesheets that had never been imported — `InlineInput.css`
+  and `Title.css`. The second meant every heading in the application had been
+  falling back to the browser default since the migration landed, so the serif
+  heading family in `theme.ts` had never once applied. Fixed in
+  [#29](https://github.com/wpliao/meal-planner/pull/29), re-validated, and now
+  covered by a test that asserts every Mantine class in the DOM has a rule
+  behind it.
+
+- Production release: `V-PROD-U1` complete on 2026-09-22. Approved in the
+  [approval record](https://github.com/wpliao/meal-planner/issues/23#issuecomment-5772717202)
+  before dispatch, then `523bdc5` deployed through the protected workflow
+  ([run 35699752373](https://github.com/wpliao/meal-planner/actions/runs/35699752373))
+  as version `9802e83b-257d-4328-9243-e70813a6e808` of
+  `family-meal-planner-production`. The owner smoke-tested the deployed
+  interface. No migrations were applied, because this feature adds none.
 - Known follow-up work: Household deletion and ownership transfer remain
   outstanding from Phase 1 and must be designed before further product data.
