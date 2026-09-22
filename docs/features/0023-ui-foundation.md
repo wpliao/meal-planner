@@ -181,7 +181,7 @@ reopening any of them requires a change recorded in the decision log below.
 | `AC-05`   | Visual regression project                                                | Fails on the three reintroduced defects | `V-LOCAL-U1`     |
 | `AC-06`   | Component layer on Mantine `Modal` and `Alert`                           | Accessibility and keyboard tests        | `V-LOCAL-U4`     |
 | `AC-07`   | Build output                                                             | Before and after measurement            | `V-LOCAL-U4`     |
-| `AC-08`   | Deployment workflow                                                      | Development and production records      | Pending          |
+| `AC-08`   | Deployment workflow                                                      | Development and production records      | `V-DEV-U1`       |
 
 ## Rollout and rollback
 
@@ -238,9 +238,24 @@ There is no migration to reverse. Rollback is redeploying the previous version.
 - Local verification: `V-LOCAL-U5` (2026-09-22) — missing stylesheets. Full
   gate green with 92 browser tests, including the new missing-stylesheet guard
   on both sections.
-- Development validation: In progress — the first deployment surfaced the
-  off-centre radio, which led to the two missing stylesheets above. Needs
-  re-validating on Android and iOS after the fix deploys.
-- Production release: Pending separate explicit approval
+- Development validation: `V-DEV-U1` complete on 2026-09-22. `523bdc5`
+  deployed to development through the protected workflow and validated by the
+  owner on both Android and iOS against real Cloudflare Access identities; the
+  Phase 1 and Phase 2 journeys still work. There are no migrations in this
+  feature, so nothing was applied to the development database.
+
+  The gate did not catch what this round did. The first development deployment
+  surfaced a selected radio whose dot sat off-centre, and chasing it found two
+  per-component stylesheets that had never been imported — `InlineInput.css`
+  and `Title.css`. The second meant every heading in the application had been
+  falling back to the browser default since the migration landed, so the serif
+  heading family in `theme.ts` had never once applied. Fixed in
+  [#29](https://github.com/wpliao/meal-planner/pull/29), re-validated, and now
+  covered by a test that asserts every Mantine class in the DOM has a rule
+  behind it.
+
+- Production release: Approved on 2026-09-22
+  ([approval record](https://github.com/wpliao/meal-planner/issues/23#issuecomment-5772717202)).
+  Dispatch pending.
 - Known follow-up work: Household deletion and ownership transfer remain
   outstanding from Phase 1 and must be designed before further product data.
