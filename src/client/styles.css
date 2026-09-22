@@ -452,14 +452,10 @@ td:first-child {
 }
 
 .pantry-item__name {
+  font-size: 1.15rem;
   font-weight: 600;
+  line-height: 1.25;
   overflow-wrap: anywhere;
-}
-
-.pantry-item__status {
-  font-size: 0.85rem;
-  font-weight: 600;
-  text-transform: uppercase;
 }
 
 .pantry-item__meta {
@@ -468,21 +464,28 @@ td:first-child {
   opacity: 0.75;
 }
 
-.pantry-item__signals,
-.pantry-item__actions {
+.pantry-item__signals {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
+  border: 1px solid var(--line, #d9cfc0);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  width: fit-content;
+  max-width: 100%;
 }
 
-.pantry-item__signals button,
-.pantry-item__actions button {
+.pantry-item__signals button {
   background: transparent;
-  border: 1px solid var(--line, #d9cfc0);
-  border-radius: 0.4rem;
+  border: 0;
+  border-left: 1px solid var(--line, #d9cfc0);
   cursor: pointer;
+  flex: 1 1 auto;
   font: inherit;
-  padding: 0.35rem 0.7rem;
+  padding: 0.4rem 0.75rem;
+  white-space: nowrap;
+}
+
+.pantry-item__signals button:first-child {
+  border-left: 0;
 }
 
 .pantry-item__signals button[aria-pressed='true'] {
@@ -497,18 +500,6 @@ td:first-child {
  * Give the destructive action dark-on-light contrast instead, and invert it
  * only on hover, where the solid background returns.
  */
-.pantry-item__actions .button--danger {
-  background: transparent;
-  border-color: #882f25;
-  color: #882f25;
-  font-weight: 600;
-}
-
-.pantry-item__actions .button--danger:hover:not(:disabled),
-.pantry-item__actions .button--danger:focus-visible:not(:disabled) {
-  background: #a73c2e;
-  color: #fff;
-}
 
 .pantry-item__signals button:disabled {
   cursor: default;
@@ -520,12 +511,81 @@ td:first-child {
  * about the space this row actually has — a four-column layout keyed on the
  * viewport squeezed the input to about 40px on desktop.
  */
-.pantry-item__rename {
-  display: grid;
-  gap: 0.4rem;
+.pantry-item__menu {
+  position: relative;
+  flex: none;
 }
 
-.pantry-item__rename input {
+.pantry-item__menu-trigger {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0.4rem;
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+  min-height: 2.25rem;
+  min-width: 2.25rem;
+  padding: 0 0.5rem;
+}
+
+.pantry-item__menu-trigger:hover:not(:disabled),
+.pantry-item__menu-trigger[aria-expanded='true'] {
+  border-color: var(--line, #d9cfc0);
+}
+
+.pantry-item__menu-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.25rem);
+  z-index: 5;
+  display: grid;
+  min-width: 9rem;
+  padding: 0.25rem;
+  background: #fffdf9;
+  border: 1px solid var(--line, #d9cfc0);
+  border-radius: 0.5rem;
+  box-shadow: 0 0.5rem 1.5rem rgb(76 54 35 / 18%);
+}
+
+.pantry-item__menu-list button {
+  background: transparent;
+  border: 0;
+  border-radius: 0.35rem;
+  cursor: pointer;
+  font: inherit;
+  padding: 0.5rem 0.65rem;
+  text-align: left;
+}
+
+.pantry-item__menu-list button:hover,
+.pantry-item__menu-list button:focus-visible {
+  background: #f1ece3;
+}
+
+.pantry-item__menu-danger {
+  color: #882f25;
+  font-weight: 600;
+}
+
+.pantry-item__rename {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
   width: 100%;
+}
+
+/* The field takes its own row so Save and Cancel always sit together, rather
+   than one of them wrapping away from the other in a narrow card. */
+.pantry-item__rename input {
+  flex: 1 1 100%;
   min-width: 0;
+}
+
+.pantry-item__rename button {
+  background: transparent;
+  border: 1px solid var(--line, #d9cfc0);
+  border-radius: 0.4rem;
+  cursor: pointer;
+  font: inherit;
+  padding: 0.35rem 0.8rem;
 }

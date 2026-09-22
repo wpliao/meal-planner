@@ -8,6 +8,15 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI ? 'github' : 'list',
   use: { trace: 'on-first-retry' },
+  expect: {
+    toHaveScreenshot: {
+      // Absorbs font antialiasing differences between the Dev Container and
+      // the CI runner, while staying far below the scale of a real styling
+      // regression — the Phase 2 defects changed whole controls, not edges.
+      maxDiffPixelRatio: 0.02,
+      animations: 'disabled',
+    },
+  },
   projects: [
     {
       name: 'chromium-desktop',

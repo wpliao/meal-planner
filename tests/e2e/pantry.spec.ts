@@ -50,6 +50,14 @@ const addItem = async (page: Page, name: string, signal: string) => {
 const itemCard = (page: Page, name: string) =>
   page.locator('.pantry-item').filter({ hasText: name });
 
+/** Rename and Remove live behind the per-item actions menu. */
+const itemAction = async (page: Page, name: string, action: string) => {
+  await itemCard(page, name)
+    .getByRole('button', { name: `Actions for ${name}` })
+    .click();
+  await page.getByRole('menuitem', { name: action }).click();
+};
+
 test('an item moves through Needed, Shopping, and Available', async ({
   page,
 }) => {
@@ -99,21 +107,22 @@ test('an item can be renamed and removed with confirmation', async ({
 
   await addItem(page, name, 'Low');
 
-  await itemCard(page, name).getByRole('button', { name: 'Rename' }).click();
+  await itemAction(page, name, 'Rename');
+  // The card no longer contains the old name once the input replaces it.
   await page.getByLabel('New name').fill(renamed);
-  await page.getByRole('button', { name: 'Save name' }).click();
+  await page.getByRole('button', { name: 'Save' }).click();
   await expect(pantryStatus(page)).toContainText(
     `The item was renamed to ${renamed}.`,
   );
 
   // Escape dismisses the confirmation without deleting.
-  await itemCard(page, renamed).getByRole('button', { name: 'Remove' }).click();
+  await itemAction(page, renamed, 'Remove');
   await expect(page.getByRole('dialog')).toContainText(`Remove ${renamed}?`);
   await page.getByRole('dialog').press('Escape');
   await expect(page.getByRole('dialog')).toBeHidden();
   await expect(itemCard(page, renamed)).toBeVisible();
 
-  await itemCard(page, renamed).getByRole('button', { name: 'Remove' }).click();
+  await itemAction(page, renamed, 'Remove');
   await page
     .getByRole('dialog')
     .getByRole('button', { name: 'Remove item' })
@@ -136,12 +145,13 @@ test('pantry names and actions fit the panel without sideways scrolling', async 
   await addItem(page, name, 'Low');
 
   const card = itemCard(page, name);
-  await expect(card.getByRole('button', { name: 'Rename' })).toBeVisible();
-  await expect(card.getByRole('button', { name: 'Remove' })).toBeVisible();
+  await expect(
+    card.getByRole('button', { name: `Actions for ${name}` }),
+  ).toBeVisible();
 
   const panelBox = await page.locator('.card').first().boundingBox();
   const cardBox = await card.boundingBox();
-  const actionsBox = await card.locator('.pantry-item__actions').boundingBox();
+  const actionsBox = await card.locator('.pantry-item__signals').boundingBox();
   expect(panelBox).not.toBeNull();
   expect(cardBox).not.toBeNull();
   expect(actionsBox).not.toBeNull();
@@ -194,7 +204,7 @@ test('signal controls and the rename field are usably sized', async ({
   }
 
   // The rename field must be wide enough to read what you are typing.
-  await itemCard(page, name).getByRole('button', { name: 'Rename' }).click();
+  await itemAction(page, name, 'Rename');
   const field = await page.getByLabel('New name').boundingBox();
   expect(field).not.toBeNull();
   expect(field!.width).toBeGreaterThan(120);

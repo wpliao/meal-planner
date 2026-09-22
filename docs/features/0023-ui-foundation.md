@@ -188,8 +188,10 @@ reopening any of them requires a change recorded in the decision log below.
 1. Accept this design and both decision records in
    [issue #23](https://github.com/wpliao/meal-planner/issues/23). No
    implementation begins while the status is `Designing`.
-2. Implement in reviewable steps — tokens and component layer, then routing and
-   the Worker fallback, then visual regression — each passing the full gate.
+2. Implement in reviewable steps, each passing the full gate. The order was
+   revised on 2026-09-22 to **visual regression first**, then routing and the
+   Worker fallback, then the component layer and tokens; the decision log
+   records why.
 3. Validate in development against real Cloudflare Access identities, confirming
    Phase 1 and Phase 2 journeys still work on Android and iOS.
 4. Production release after separate explicit approval, recorded in the issue
@@ -199,17 +201,24 @@ There is no migration to reverse. Rollback is redeploying the previous version.
 
 ## Decision and change log
 
-| Date       | Change                                                                                              | Reason                                                                                                                                                | Evidence                                                                                    |
-| ---------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| 2026-09-21 | Proposed the UI foundation as one piece of work covering component layer, tokens and page structure | The three parts touch the same files; doing them separately would migrate the interface two or three times                                            | [Issue #23](https://github.com/wpliao/meal-planner/issues/23)                               |
-| 2026-09-21 | Measured the bundle cost of both component options rather than relying on published figures         | Public numbers were contradictory, and the prior assumption that the copied-in option was smaller proved wrong for this component set in this bundler | ADR 0006                                                                                    |
-| 2026-09-21 | Product owner accepted the design and both decision records, and authorised implementation          | The component choice, the navigation model and the foundation-only scope match the intended work                                                      | [Approval record](https://github.com/wpliao/meal-planner/issues/23#issuecomment-5763375016) |
-| 2026-09-21 | The initial Mantine theme approximates the current palette rather than adopting Mantine defaults    | Avoids a visible lurch during migration, and keeps deliberate theme design out of the same change while still preceding visual-regression baselines   | Owner decision                                                                              |
+| Date       | Change                                                                                                                       | Reason                                                                                                                                                                                                                                                                                                  | Evidence                                                                                    |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| 2026-09-21 | Proposed the UI foundation as one piece of work covering component layer, tokens and page structure                          | The three parts touch the same files; doing them separately would migrate the interface two or three times                                                                                                                                                                                              | [Issue #23](https://github.com/wpliao/meal-planner/issues/23)                               |
+| 2026-09-21 | Measured the bundle cost of both component options rather than relying on published figures                                  | Public numbers were contradictory, and the prior assumption that the copied-in option was smaller proved wrong for this component set in this bundler                                                                                                                                                   | ADR 0006                                                                                    |
+| 2026-09-21 | Product owner accepted the design and both decision records, and authorised implementation                                   | The component choice, the navigation model and the foundation-only scope match the intended work                                                                                                                                                                                                        | [Approval record](https://github.com/wpliao/meal-planner/issues/23#issuecomment-5763375016) |
+| 2026-09-21 | The initial Mantine theme approximates the current palette rather than adopting Mantine defaults                             | Avoids a visible lurch during migration, and keeps deliberate theme design out of the same change while still preceding visual-regression baselines                                                                                                                                                     | Owner decision                                                                              |
+| 2026-09-22 | Implementation reordered: visual regression first, then routing and the Worker fallback, then the component layer and tokens | `AC-05` requires the suite to demonstrably catch the three Phase 2 defects, and those defects only exist in the current hand-rolled CSS — after migrating, the proof cannot be constructed. It also gives the two riskier migrations a safety net. Cost: baselines churn twice, each as a reviewed diff | Deviation from step 2 of the accepted rollout                                               |
+| 2026-09-22 | Visual regression pairs pixel snapshots with a computed-contrast assertion, and adds a tightly scoped action-row snapshot    | Proving the suite against the real defects showed pixel diffing alone **missed** the unreadable destructive action: the affected text was too small a share of the panel to clear the ratio tolerance that absorbs font antialiasing                                                                    | `V-LOCAL-U1`                                                                                |
+| 2026-09-22 | End-to-end specs moved to their own `tsconfig.e2e.json` with the DOM library                                                 | Playwright specs legitimately contain browser-context code inside `page.evaluate`; the node project deliberately has no DOM types and should keep it that way                                                                                                                                           | `V-LOCAL-U1`                                                                                |
 
 ## Release record
 
 - Design approval: Accepted on 2026-09-21 ([approval record](https://github.com/wpliao/meal-planner/issues/23#issuecomment-5763375016))
-- Local verification: Not run; design only
+- Local verification: `V-LOCAL-U1` (2026-09-22) — visual regression added and
+  proven. Each of the three Phase 2 defects was reintroduced in turn and the
+  suite failed on each; with the tree clean it passes. The first attempt showed
+  pixel diffing alone missing the contrast defect, which is why a computed
+  contrast assertion and a scoped action-row snapshot were added.
 - Development validation: Pending
 - Production release: Pending separate explicit approval
 - Known follow-up work: Household deletion and ownership transfer remain

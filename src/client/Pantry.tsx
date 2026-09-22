@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type KeyboardEvent,
   type MouseEvent,
 } from 'react';
 import type { ApiErrorResponse } from '../shared/api';
@@ -61,6 +62,9 @@ export function Pantry() {
   const [pending, setPending] = useState(false);
   const [confirming, setConfirming] = useState<PantryItem | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [menuId, setMenuId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuTriggerRef = useRef<HTMLElement | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const resultRef = useRef<HTMLOutputElement>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
@@ -147,6 +151,44 @@ export function Pantry() {
         mutation('PATCH', { version: item.version, status: next }),
       );
     }, `${item.name} is now marked ${STATUS_LABEL[next]}.`);
+
+  // Focus the first entry on open, close on an outside press, and return
+  // focus to the trigger when dismissed by keyboard.
+  useEffect(() => {
+    if (!menuId) return;
+    const [first] = dialogControls(menuRef.current);
+    first?.focus();
+
+    const onPointerDown = (event: Event) => {
+      const target = event.target as Node | null;
+      if (
+        target &&
+        !menuRef.current?.contains(target) &&
+        !menuTriggerRef.current?.contains(target)
+      ) {
+        setMenuId(null);
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [menuId]);
+
+  const handleMenuKeys = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      setMenuId(null);
+      menuTriggerRef.current?.focus();
+      return;
+    }
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+
+    event.preventDefault();
+    const items = dialogControls(menuRef.current);
+    if (!items.length) return;
+    const current = items.indexOf(document.activeElement as HTMLElement);
+    const step = event.key === 'ArrowDown' ? 1 : -1;
+    items[(current + step + items.length) % items.length]?.focus();
+  };
 
   const startRename = (item: PantryItem) => {
     setRenamingId(item.id);
@@ -287,10 +329,88 @@ export function Pantry() {
           {visible.map((item) => (
             <li className="pantry-item" key={item.id}>
               <div className="pantry-item__head">
-                <span className="pantry-item__name">{item.name}</span>
-                <span className="pantry-item__status">
-                  {STATUS_LABEL[item.status]}
-                </span>
+                {renamingId === item.id ? (
+                  <form
+                    className="pantry-item__rename"
+                    noValidate
+                    onSubmit={(event) => void submitRename(event, item)}
+                  >
+                    <label
+                      className="sr-only"
+                      htmlFor={`pantry-rename-${item.id}`}
+                    >
+                      New name
+                    </label>
+                    <input
+                      autoFocus
+                      id={`pantry-rename-${item.id}`}
+                      maxLength={PANTRY_NAME_MAX_LENGTH}
+                      onChange={(event) => setRenameValue(event.target.value)}
+                      value={renameValue}
+                    />
+                    <button disabled={pending} type="submit">
+                      Save
+                    </button>
+                    <button
+                      disabled={pending}
+                      onClick={() => setRenamingId(null)}
+                      type="button"
+                    >
+                      Cancel
+                    </button>
+                  </form>
+                ) : (
+                  <>
+                    <span className="pantry-item__name">{item.name}</span>
+                    <div className="pantry-item__menu">
+                      <button
+                        aria-expanded={menuId === item.id}
+                        aria-haspopup="menu"
+                        aria-label={`Actions for ${item.name}`}
+                        className="pantry-item__menu-trigger"
+                        disabled={pending}
+                        onClick={(event: MouseEvent<HTMLElement>) => {
+                          menuTriggerRef.current = event.currentTarget;
+                          setMenuId(menuId === item.id ? null : item.id);
+                        }}
+                        type="button"
+                      >
+                        <span aria-hidden="true">…</span>
+                      </button>
+                      {menuId === item.id && (
+                        <div
+                          className="pantry-item__menu-list"
+                          onKeyDown={handleMenuKeys}
+                          ref={menuRef}
+                          role="menu"
+                        >
+                          <button
+                            onClick={() => {
+                              setMenuId(null);
+                              startRename(item);
+                            }}
+                            role="menuitem"
+                            type="button"
+                          >
+                            Rename
+                          </button>
+                          <button
+                            className="pantry-item__menu-danger"
+                            onClick={() => {
+                              setMenuId(null);
+                              triggerRef.current = menuTriggerRef.current;
+                              setConfirming(item);
+                            }}
+                            role="menuitem"
+                            type="button"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
               <p className="pantry-item__meta">
                 Last changed {new Date(item.updatedAt).toLocaleDateString()}
@@ -311,53 +431,6 @@ export function Pantry() {
                     {STATUS_LABEL[option]}
                   </button>
                 ))}
-              </div>
-              {renamingId === item.id && (
-                <form
-                  className="pantry-item__rename"
-                  noValidate
-                  onSubmit={(event) => void submitRename(event, item)}
-                >
-                  <label htmlFor={`pantry-rename-${item.id}`}>New name</label>
-                  <input
-                    autoFocus
-                    id={`pantry-rename-${item.id}`}
-                    maxLength={PANTRY_NAME_MAX_LENGTH}
-                    onChange={(event) => setRenameValue(event.target.value)}
-                    value={renameValue}
-                  />
-                  <button className="button" disabled={pending} type="submit">
-                    Save name
-                  </button>
-                  <button
-                    className="button button--quiet"
-                    disabled={pending}
-                    onClick={() => setRenamingId(null)}
-                    type="button"
-                  >
-                    Cancel rename
-                  </button>
-                </form>
-              )}
-              <div className="pantry-item__actions">
-                <button
-                  disabled={pending}
-                  onClick={() => startRename(item)}
-                  type="button"
-                >
-                  Rename
-                </button>
-                <button
-                  className="button--danger"
-                  disabled={pending}
-                  onClick={(event: MouseEvent<HTMLElement>) => {
-                    triggerRef.current = event.currentTarget;
-                    setConfirming(item);
-                  }}
-                  type="button"
-                >
-                  Remove
-                </button>
               </div>
             </li>
           ))}
