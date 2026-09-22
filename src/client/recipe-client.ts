@@ -86,12 +86,12 @@ export const setRecipeFlash = (notice: Notice): void => {
  * Reads the pending result once per mounted screen. The state initializer only
  * peeks, because React may call it twice; the effect clears it.
  */
-export const useRecipeFlash = () => {
-  const notice = useState<Notice>(() => pendingFlash);
+export const useRecipeFlash = (): [Notice, (notice: Notice) => void] => {
+  const [notice, setNotice] = useState<Notice>(() => pendingFlash);
   useEffect(() => {
     pendingFlash = null;
   }, []);
-  return notice;
+  return [notice, setNotice];
 };
 
 // ---------------------------------------------------------------------------

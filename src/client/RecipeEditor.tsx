@@ -74,6 +74,23 @@ const NO_ERRORS: RecipeFormErrors = { ingredientLines: {}, stepLines: {} };
 
 const count = (value: number) => value.toLocaleString('en-US');
 
+/**
+ * Mantine's `inputContainer` render prop, built outside the component so the
+ * row is not a component defined during render. The label stays above the
+ * whole row; the field and its controls share the line below it, and when the
+ * list is too narrow for both — a phone — the controls wrap under the field
+ * instead of squeezing it. A step's textarea always takes the full width.
+ */
+const lineRow =
+  (controls: ReactNode, multiline: boolean) => (control: ReactNode) => (
+    <Group align="flex-start" gap="xs" wrap="wrap">
+      <div style={{ flex: multiline ? '1 1 100%' : '1 1 14rem', minWidth: 0 }}>
+        {control}
+      </div>
+      {controls}
+    </Group>
+  );
+
 interface LineListProps {
   legend: string;
   /** "Ingredient" or "Step": names each line and its controls. */
@@ -103,7 +120,7 @@ function LineList({
   multiline = false,
   error,
   lineErrors,
-}: LineListProps) {
+}: Readonly<LineListProps>) {
   const id = useId();
   const controls = useRef(new Map<string, HTMLElement>());
   // Where focus goes once the reordered, added, or removed lines render.
@@ -220,26 +237,10 @@ function LineList({
               </ActionIcon>
             </Group>
           );
-          // The label spans the row; the field and its controls share the
-          // line below it. When the list is too narrow for both — a phone —
-          // the controls wrap under the field instead of squeezing it. A
-          // step's textarea always takes the full width.
           const field = {
             error: lineErrors[index],
             label: `${itemLabel} ${index + 1}`,
-            inputContainer: (control: ReactNode) => (
-              <Group align="flex-start" gap="xs" wrap="wrap">
-                <div
-                  style={{
-                    flex: multiline ? '1 1 100%' : '1 1 14rem',
-                    minWidth: 0,
-                  }}
-                >
-                  {control}
-                </div>
-                {buttons}
-              </Group>
-            ),
+            inputContainer: lineRow(buttons, multiline),
             onChange: (
               event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
             ) => {
@@ -320,7 +321,7 @@ export function RecipeEditor({
   onSubmit,
   onCancel,
   children,
-}: RecipeEditorProps) {
+}: Readonly<RecipeEditorProps>) {
   const [title, setTitle] = useState(initialDraft.title);
   const [ingredients, setIngredients] = useState<Line[]>(() =>
     toLines(initialDraft.ingredients),

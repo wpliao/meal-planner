@@ -35,13 +35,13 @@ export function RecipePage({
   eyebrow = 'Recipes',
   back,
   children,
-}: {
+}: Readonly<{
   titleId: string;
   title: ReactNode;
   eyebrow?: string;
   back?: { to: string; label: string };
   children: ReactNode;
-}) {
+}>) {
   return (
     <Card
       aria-labelledby={titleId}
@@ -72,7 +72,7 @@ export function RecipePage({
  * A result message. It takes focus when it appears so a screen reader hears
  * it and a phone scrolls to it; see DESIGN_SYSTEM.md rule 7.
  */
-export function RecipeNotice({ notice }: { notice: Notice }) {
+export function RecipeNotice({ notice }: Readonly<{ notice: Notice }>) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (notice) ref.current?.focus();
@@ -98,11 +98,11 @@ export function RecipeBody({
   recipe,
   headingOrder = 2,
   idPrefix,
-}: {
+}: Readonly<{
   recipe: Pick<Recipe, 'ingredients' | 'steps' | 'notes'>;
   headingOrder?: TitleOrder;
   idPrefix: string;
-}) {
+}>) {
   return (
     <Stack gap="lg">
       <section aria-labelledby={`${idPrefix}-ingredients`}>
@@ -111,7 +111,7 @@ export function RecipeBody({
         </Title>
         <List data-testid="recipe-ingredients" spacing="xs">
           {recipe.ingredients.map((line, index) => (
-            <List.Item key={index} style={wrap}>
+            <List.Item key={`${index}-${line}`} style={wrap}>
               {line}
             </List.Item>
           ))}
@@ -123,7 +123,7 @@ export function RecipeBody({
         </Title>
         <List data-testid="recipe-steps" spacing="sm" type="ordered">
           {recipe.steps.map((step, index) => (
-            <List.Item key={index} style={wrap}>
+            <List.Item key={`${index}-${step}`} style={wrap}>
               {step}
             </List.Item>
           ))}
@@ -151,7 +151,10 @@ export function RecipeBody({
  * giving the page a handle on this one or a referrer, and its name says where
  * it goes and that it opens a new tab.
  */
-export function SourceLink({ href, host }: { href: string; host: string }) {
+export function SourceLink({
+  href,
+  host,
+}: Readonly<{ href: string; host: string }>) {
   return (
     <Anchor
       href={href}
@@ -168,10 +171,10 @@ export function SourceLink({ href, host }: { href: string; host: string }) {
 export function RecipeUnavailable({
   state,
   retry,
-}: {
+}: Readonly<{
   state: Exclude<RecipeLoadState, { kind: 'ready' }>;
   retry: () => void;
-}) {
+}>) {
   if (state.kind === 'loading') {
     return (
       <RecipePage

@@ -48,7 +48,7 @@ export interface RecipeCreateProps {
 export function RecipeCreate({
   initialDraft = EMPTY_RECIPE_DRAFT,
   importContext,
-}: RecipeCreateProps) {
+}: Readonly<RecipeCreateProps>) {
   const navigate = useNavigate();
   const location = useLocation();
   const [pending, setPending] = useState(false);
@@ -123,12 +123,12 @@ function ConflictPanel({
   draft,
   onKeep,
   onDiscard,
-}: {
+}: Readonly<{
   current: Recipe;
   draft: RecipeContent;
   onKeep: () => void;
   onDiscard: () => void;
-}) {
+}>) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     ref.current?.focus();
