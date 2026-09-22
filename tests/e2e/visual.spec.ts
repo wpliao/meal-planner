@@ -78,8 +78,7 @@ const stub = async (page: Page, path = '/pantry', heading = 'Pantry') => {
   ).toBeVisible();
 };
 
-const pantry = (page: Page) =>
-  page.getByRole('complementary', { name: 'Pantry' });
+const pantry = (page: Page) => page.getByRole('region', { name: 'Pantry' });
 
 test('pantry panel', async ({ page }) => {
   await stub(page);
@@ -88,7 +87,7 @@ test('pantry panel', async ({ page }) => {
 
 test('item actions menu', async ({ page }) => {
   await stub(page);
-  const card = page.locator('.pantry-item').filter({ hasText: 'rice' });
+  const card = page.getByTestId('pantry-item').filter({ hasText: 'rice' });
   await card.getByRole('button', { name: 'Actions for rice' }).click();
   // Scoped tightly on purpose. The same fault inside the whole panel changes
   // too few pixels to clear the ratio tolerance; here the affected text is a
@@ -166,7 +165,7 @@ test('status control group', async ({ page }) => {
   await stub(page);
   // Catches oversized or overlapping form controls, which WebKit sized very
   // differently from Chromium.
-  await expect(page.locator('.pantry-signals')).toHaveScreenshot(
+  await expect(page.getByTestId('status-field')).toHaveScreenshot(
     'status-controls.png',
   );
 });
@@ -176,7 +175,7 @@ test('pantry item with rename open', async ({ page }) => {
   // Address the card by position, not by its text: inline renaming replaces
   // the name with an input, whose value hasText cannot see. Order is fixed by
   // the mocked data — needed, then low, then available.
-  const card = page.locator('.pantry-item').nth(1);
+  const card = page.getByTestId('pantry-item').nth(1);
   await expect(card).toContainText('olive oil');
   await card.getByRole('button', { name: 'Actions for olive oil' }).click();
   await page.getByRole('menuitem', { name: 'Rename' }).click();
@@ -188,7 +187,7 @@ test('pantry item with rename open', async ({ page }) => {
 test('remove confirmation dialog', async ({ page }) => {
   await stub(page);
   await page
-    .locator('.pantry-item')
+    .getByTestId('pantry-item')
     .filter({ hasText: 'rice' })
     .getByRole('button', { name: 'Actions for rice' })
     .click();

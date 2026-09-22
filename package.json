@@ -30,6 +30,8 @@
     "verify": "./scripts/verify.sh"
   },
   "dependencies": {
+    "@mantine/core": "9.6.2",
+    "@mantine/hooks": "9.6.2",
     "jose": "6.1.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",

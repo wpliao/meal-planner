@@ -1,4 +1,7 @@
+import { MantineProvider } from '@mantine/core';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import './mantine';
+import { cssVariablesResolver, theme } from './theme';
 import { AppLayout } from './AppLayout';
 import { FamilySpace } from './FamilySpace';
 import { Pantry } from './Pantry';
@@ -11,15 +14,26 @@ import { Pantry } from './Pantry';
  */
 export function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route element={<AppLayout />} path="/">
-          <Route element={<Navigate replace to="/pantry" />} index />
-          <Route element={<Pantry />} path="pantry" />
-          <Route element={<FamilySpace />} path="family" />
-          <Route element={<Navigate replace to="/pantry" />} path="*" />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+    <MantineProvider
+      cssVariablesResolver={cssVariablesResolver}
+      defaultColorScheme="light"
+      // Under the test runner Mantine skips floating-ui's detached-reference
+      // hiding, which jsdom always triggers because it computes no layout.
+      // Without this, menus and modals render but are invisible to role
+      // queries — present in the DOM, absent from the accessibility tree.
+      env={import.meta.env.MODE === 'test' ? 'test' : undefined}
+      theme={theme}
+    >
+      <BrowserRouter>
+        <Routes>
+          <Route element={<AppLayout />} path="/">
+            <Route element={<Navigate replace to="/pantry" />} index />
+            <Route element={<Pantry />} path="pantry" />
+            <Route element={<FamilySpace />} path="family" />
+            <Route element={<Navigate replace to="/pantry" />} path="*" />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </MantineProvider>
   );
 }

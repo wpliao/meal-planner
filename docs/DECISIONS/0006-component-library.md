@@ -122,3 +122,82 @@ superseded rather than worked around.
 
 This decision does not address the layout defect class. Visual regression
 coverage does, and is required by the feature design regardless of this choice.
+
+## Implementation findings
+
+Recorded after the migration. The decision stands; three things were only
+learnable by building it.
+
+### Measured bundle cost
+
+The estimate above was taken from a scratch build of an equivalent component
+set. These are the real figures for this application, gzipped, measured on the
+routing branch immediately before the migration and on the finished one.
+
+| Build               | JS (gzip)    | CSS (gzip)  | Total        |
+| ------------------- | ------------ | ----------- | ------------ |
+| Before (no Mantine) | 84.4 KB      | 2.6 KB      | 87.0 KB      |
+| After (Mantine)     | 144.0 KB     | 12.1 KB     | 156.2 KB     |
+| **Added**           | **+59.7 KB** | **+9.5 KB** | **+69.2 KB** |
+
+Exact gzipped bytes: 86,423 → 147,509 (JS) and 2,648 → 12,407 (CSS).
+
+That is higher than the +46.5 KB the decision was taken on. The estimate
+covered only the component set; the real application also pulls in Mantine's
+provider, theming runtime, floating-ui (used by `Menu` and `Modal`) and the
+hooks those depend on. The CSS figure is close to the 9.3 KB the estimate predicted.
+
+The decision is unchanged: the comparison that mattered was against React Aria
+Components' 66.2 KB floor for behaviour alone, and that floor moves with the
+same runtime costs. The absolute number is worth restating plainly — this is a
+private family application behind Cloudflare Access, served to a handful of
+returning devices on a warm cache, so 69 KB of additional first-load payload is
+a cost the project can carry. It would not be self-evidently acceptable for a
+public, first-visit-sensitive site.
+
+### The Content Security Policy had to change
+
+Mantine sets inline `style` attributes on nearly every element it renders —
+spacing, colour, layout, and every button's variant colours. `public/_headers`
+set `default-src 'self'` with no `style-src`, which blocks all of them. The
+symptom was not an error: the application rendered with its layout and
+typography intact and **every button reduced to bare text**, with no
+background, padding or border.
+
+No narrower fix exists. A nonce covers `<style>` elements but has no effect on
+style attributes, and `'unsafe-hashes'` cannot cover values computed per render.
+The choice was `style-src 'self' 'unsafe-inline'` or abandoning the component
+layer, and the owner chose to add the directive.
+
+What this gives up is real but narrow: an attacker who can already inject
+markup could use CSS to exfiltrate data through attribute selectors, or to
+redress the interface. It does not weaken script execution — `default-src
+'self'` still governs scripts — and `base-uri 'none'`, `object-src 'none'`,
+`form-action 'self'` and `frame-ancestors 'none'` are unchanged. The
+application renders no user-supplied HTML. `tests/e2e/security-headers.spec.ts`
+asserts the exact policy, so any further loosening is a deliberate, reviewed
+edit.
+
+### Per-component stylesheets must be imported in Mantine's order
+
+The per-component imports that make the CSS cost 12.1 KB instead of 33.6 KB are
+not independent of each other. A `Button` is also an `UnstyledButton` and a
+`Card` is also a `Paper`: the rules share a root element at equal specificity,
+so the file imported last wins. Alphabetical order put `UnstyledButton.css`
+after `Button.css` and silently stripped every button's styling.
+
+Nothing caught it. All 58 tests passed, because they assert behaviour and
+accessible names. The visual suite did not catch it either — its baselines had
+been regenerated against the broken rendering, which is the failure mode that
+makes snapshot approval dangerous. It was found by opening a screenshot.
+
+`src/client/mantine.test.ts` now checks the import order against the
+concatenated `@mantine/core/styles.css`, and was itself verified by
+reintroducing the fault.
+
+### Mantine's default secondary text fails WCAG AA here
+
+`--mantine-color-dimmed` measures 3.11:1 against this project's cream ground,
+below the 4.5:1 minimum. The computed-contrast assertion in the visual suite
+caught it; nothing looked wrong. `theme.ts` overrides the token. Adopting a
+library's defaults does not transfer responsibility for meeting the bar.
