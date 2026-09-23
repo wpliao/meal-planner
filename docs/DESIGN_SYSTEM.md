@@ -59,10 +59,16 @@ Spacing and radius come from Mantine's scales (`xs` … `xl`) through props such
 as `mt`, `gap` and `radius`. `defaultRadius` is `md`.
 
 Interactive controls default to `size="md"`, and `--mp-touch-target`
-(`2.75rem`) is a floor applied to every `button` and text input in
-[`styles.css`](../src/client/styles.css). Mantine's `md` sizes land just under
-44px, and Phase 2 QA found controls that were comfortable with a mouse and too
-small on a phone.
+(`2.75rem`) is a floor applied in [`styles.css`](../src/client/styles.css) to
+every `button`, every text, email, or URL input, and every element carrying
+Mantine's button class. Mantine's `md` sizes land just under 44px, and Phase 2
+QA found controls that were comfortable with a mouse and too small on a phone.
+
+The button class is in that list because a `Button` given `component={Link}`
+renders an `<a>`, which an element-only rule misses; two such buttons measured
+42px before #31's import screen added a phone test that caught it. A new
+control that is a button by role belongs in the floor, whatever element it
+ends up as.
 
 ## Ordered lists the member edits
 
