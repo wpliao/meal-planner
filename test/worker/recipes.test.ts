@@ -595,14 +595,19 @@ describe('recipe API', () => {
       expect(await getOk(recipe.id)).toEqual(recipe);
     });
 
-    it('answers unknown methods, malformed IDs, and the unbuilt import route with 404', async () => {
+    it('answers unknown methods, malformed IDs, and unknown recipe paths with 404', async () => {
       const recipe = await createOk();
       const cases: Request[] = [
         new Request(RECIPES_URL, mutationInit('PATCH', {})),
         new Request(recipeUrl(recipe.id), mutationInit('POST', {})),
         new Request(`${RECIPES_URL}/not-a-uuid`),
+        // The import preview answers POST only, and nothing hangs off it.
+        // Neither case reaches the adapter, so neither can leave the runtime;
+        // `test/worker/recipe-import.test.ts` covers the route with a fake
+        // fetch instead.
+        new Request(`${RECIPES_URL}/import-preview`),
         new Request(
-          `${RECIPES_URL}/import-preview`,
+          `${RECIPES_URL}/import-preview/extra`,
           mutationInit('POST', { url: 'https://budgetbytes.com/a' }),
         ),
       ];
