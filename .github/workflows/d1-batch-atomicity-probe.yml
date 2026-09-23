@@ -1,0 +1,56 @@
+name: D1 batch atomicity probe
+
+# Proves whether a D1 REST batch rolls back when a later statement fails
+# (#32 gate 2). It inserts one probe household and then the same ID again in a
+# single batch, inspects what committed, and removes only its own probe row.
+# Development only. Read docs/operations/household-decommission.md first.
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_d1_database_id:
+        description: Development D1 database ID; must match wrangler.jsonc
+        type: string
+        required: true
+      confirmation:
+        description: Type PROBE_DEVELOPMENT_D1_BATCH to confirm
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+# Shared with deploy.yml and household-decommission.yml so the probe never
+# overlaps a migration or a decommission on the same database.
+concurrency:
+  group: cloudflare-development
+  cancel-in-progress: false
+
+jobs:
+  probe-development:
+    name: Probe development D1 batch atomicity
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: development
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      # Node built-ins only: no dependencies are installed in the job that
+      # holds the Cloudflare token.
+      - name: Run probe
+        run: node scripts/d1-batch-atomicity-probe.ts
+        env:
+          PROBE_ENVIRONMENT: development
+          PROBE_EXPECTED_D1_DATABASE_ID: ${{ inputs.expected_d1_database_id }}
+          PROBE_CONFIRMATION: ${{ inputs.confirmation }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

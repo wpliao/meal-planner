@@ -95,6 +95,7 @@ export interface CloudflareClient {
   executeD1Batch(
     databaseId: string,
     statements: readonly BoundStatement[],
+    operation?: string,
   ): Promise<readonly D1StatementResult[]>;
   getTimeTravelBookmark(databaseId: string): Promise<string>;
   getAccountWorkersSubdomain(): Promise<string>;
@@ -273,8 +274,7 @@ export const createCloudflareClient = (
       return first.rows;
     },
 
-    async executeD1Batch(databaseId, statements) {
-      const operation = 'Deletion batch';
+    async executeD1Batch(databaseId, statements, operation = 'Deletion batch') {
       const envelope = await requestOnce(
         operation,
         'POST',

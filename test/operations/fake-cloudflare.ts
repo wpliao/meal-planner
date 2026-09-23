@@ -310,3 +310,25 @@ export const validInputs = (
   GITHUB_REF: 'refs/heads/main',
   ...overrides,
 });
+
+/**
+ * Turns an error thrown by a fake D1 handler into the HTTP 400 envelope the
+ * D1 REST API returns for a failed statement, instead of a network error.
+ */
+export const withHttpFailures =
+  (fetch: FetchLike): FetchLike =>
+  async (input, init) => {
+    try {
+      return await fetch(input, init);
+    } catch {
+      return Response.json(
+        {
+          success: false,
+          errors: [{ code: 7500, message: 'SQLITE_CONSTRAINT' }],
+          messages: [],
+          result: null,
+        },
+        { status: 400 },
+      );
+    }
+  };

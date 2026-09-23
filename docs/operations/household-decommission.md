@@ -258,14 +258,48 @@ data. If development holds family data, get a separately approved reset first.
 2. Follow steps 1 to 4 above.
 3. Record the stage lines, the reported affected-row counts, zero verification,
    the owner-observed denial, and that bootstrap stays unreachable.
-4. Prove REST batch atomicity (gate 2). The Workers-runtime tests prove
-   rollback through the D1 binding; the REST transport must be shown
-   separately. The recommended way is an isolated, disposable D1 database with
-   the repository migrations, a temporary `BEFORE DELETE ON households` trigger
-   that raises an error, and the same two-statement request, then confirming
-   the pointer row is still present. Delete the disposable database afterwards.
+4. Prove REST batch atomicity (gate 2) with the
+   [batch atomicity probe](#d1-batch-atomicity-probe-gate-2). The
+   Workers-runtime tests prove rollback through the D1 binding; the REST
+   transport must be shown separately.
 5. Re-establish a usable development environment before future feature
    validation.
+
+## D1 batch atomicity probe (gate 2)
+
+- Workflow: `.github/workflows/d1-batch-atomicity-probe.yml`
+- Script: `scripts/d1-batch-atomicity-probe.ts` (logic in
+  `src/operations/household-decommission/atomicity-probe.ts` and
+  `probe-cli.ts`)
+
+The probe sends **one** D1 REST batch to the development database: it inserts
+a household named `D1 batch atomicity probe` under a fresh random ID, then
+inserts the same ID again, so the second statement fails on the primary key.
+It then counts rows with that ID:
+
+- **0 rows: `atomic`.** D1 rolled back the whole batch. The run is green.
+- **1 row: `not-atomic`.** The first statement committed on its own. The probe
+  deletes its own row (only that ID, only while it has no members), verifies
+  it is gone, and the run is red. Production decommissioning must then change
+  its transport before it can become eligible.
+
+It touches no other row, changes no schema, and needs no new token: it uses
+the development environment's existing Deploy token, which already writes to
+development D1 when it applies migrations. It shares the
+`cloudflare-development` concurrency group with Deploy and decommission, so it
+never overlaps them. It works whether development is open or closed; a probe
+household has no members or installation pointer, so the app never sees it.
+
+Dispatch from **Actions › D1 batch atomicity probe › Run workflow** on `main`:
+
+| Input                     | Value                                  |
+| ------------------------- | -------------------------------------- |
+| `expected_d1_database_id` | `5f5e98ba-7b27-4fcf-8c2b-ab1605461082` |
+| `confirmation`            | `PROBE_DEVELOPMENT_D1_BATCH`           |
+
+Record the run URL and the verdict in the #32 design's gate 2 and release
+record. If a run fails at `cleanup`, delete the probe row by its logged
+`probeId` before anything else, and record it.
 
 ## What stays manual
 
