@@ -1,11 +1,11 @@
 # Feature: Recipe library
 
-- Status: Designing
+- Status: Accepted
 - Phase: 3 — recipes
 - Issue: [#31](https://github.com/wpliao/meal-planner/issues/31)
 - Product owner: Repository owner
 - Last updated: 2026-09-22
-- Pull requests: [#33 — design proposal](https://github.com/wpliao/meal-planner/pull/33)
+- Pull requests: [#33 — design proposal](https://github.com/wpliao/meal-planner/pull/33); [#37 — design decisions](https://github.com/wpliao/meal-planner/pull/37)
 
 ## Problem and outcome
 
@@ -14,8 +14,11 @@ may be entered by a member or copied from a website. An imported copy must be
 reviewed before saving and must retain its original link and provenance, because
 website extraction is imperfect and the family may want to revisit the source.
 
-This is a **proposal**, not an accepted design. The [product roadmap](../PRODUCT.md)
-defines the Phase 3 outcome but does not authorize implementation on its own.
+The product owner resolved every open design decision and [accepted this
+design](https://github.com/wpliao/meal-planner/issues/31#issuecomment-5779088363) on 2026-09-22; see
+[Resolved design decisions](#resolved-design-decisions). Acceptance authorizes
+implementation. It does not authorize applying migration `0003` remotely,
+deploying, or changing production, which keep their existing approval gates.
 
 ## User scenarios
 
@@ -42,16 +45,16 @@ defines the Phase 3 outcome but does not authorize implementation on its own.
 
 ## Acceptance criteria
 
-These identifiers mirror [issue #31](https://github.com/wpliao/meal-planner/issues/31)
-and are **proposed**. They become stable only when the issue and design are
-accepted. No criterion is marked complete at this stage.
+These stable identifiers mirror
+[issue #31](https://github.com/wpliao/meal-planner/issues/31). `AC-02` gained
+"plus optional notes" before acceptance. No criterion is complete yet.
 
 - [ ] `AC-01`: Active members can list, view, create, edit, and delete only their
       household's recipes; unauthenticated visitors and non-members cannot read
       or change them.
 - [ ] `AC-02`: A manually entered recipe records a title, an ordered ingredient
-      list, and ordered instructions; validation, empty, loading, success, and
-      failure states work on phone and desktop.
+      list, and ordered instructions, plus optional notes; validation, empty,
+      loading, success, and failure states work on phone and desktop.
 - [ ] `AC-03`: An active member can submit a public recipe-page URL, review and
       edit an extracted draft, and explicitly save it. The saved recipe retains
       the original URL and source/provenance; a failed or unsupported import does
@@ -104,7 +107,7 @@ identity and active membership boundary from
 on **every** recipe request; household scope comes from `MemberContext`, never
 from a URL or request body.
 
-Proposed API: `GET /api/recipes`, `GET /api/recipes/:id`, `POST /api/recipes`,
+API: `GET /api/recipes`, `GET /api/recipes/:id`, `POST /api/recipes`,
 `PATCH /api/recipes/:id`, `DELETE /api/recipes/:id`, and
 `POST /api/recipes/import-preview`. Mutations retain the existing same-origin
 and JSON content-type checks. Update and delete require the current version and
@@ -113,50 +116,93 @@ non-disclosing `404`. Import preview performs no D1 write. The same create API
 saves manual and imported recipes after validation.
 
 The import adapter accepts a URL and returns text fields and source metadata.
-It fetches and parses only after member authorization. A first proposal is to
-read a page's structured `Recipe` data and return `unsupported_source` when it
-is absent or incomplete; arbitrary HTML scraping and AI are outside this
-phase. This extraction rule needs product-owner acceptance and a Worker-runtime
-feasibility check before design acceptance.
+It fetches and parses only after member authorization. It reads only
+schema.org `Recipe` objects from `<script type="application/ld+json">`
+elements, including top-level arrays and `@graph` containers and `@type`
+arrays that include `Recipe`. The script text is collected with the Workers
+runtime `HTMLRewriter` from a byte-bounded response stream; each script's JSON
+is parsed with `JSON.parse` and never evaluated. The draft uses `name` as the
+title, `recipeIngredient` as ingredient lines, and `recipeInstructions` as
+steps: plain strings, `HowToStep.text` (or `name` when `text` is absent), and
+the steps inside each `HowToSection`, in document order. Any other property
+(yield, times, images, ratings, nutrition, author) is ignored. A page without
+a usable name, at least one ingredient, and at least one instruction returns
+`unsupported_source`, and the member is offered manual entry. Microdata,
+heuristic HTML scraping, and AI are outside this release.
+
+Worker-runtime feasibility: `fetch` with `redirect: 'manual'` exposes the
+`3xx` status and `Location` header, `AbortSignal.timeout` bounds the total
+duration, and `HTMLRewriter` streams text content by selector. Each of these
+is proven by Workers-runtime tests against a fake fetch adapter. Real host
+behavior is checked during development validation, not in automated tests.
 
 ### Data and migrations
 
-The proposed forward migration is `0003_create_recipes.sql`; it is **not yet
-created or applied**. A `recipes` row belongs to a household and carries an
-opaque ID, title, version, creation/update times, and `manual` or `website`
-source kind. A website copy also carries the submitted original URL, final
-resolved URL if different, source site/title when available, and import time.
-Ordered ingredient and step rows belong to the recipe and delete with it.
-Titles need not be unique: two different sources can use the same title.
+The forward migration is `0003_create_recipes.sql`; it is **not yet created
+or applied**. A `recipes` row belongs to a household and carries an opaque ID,
+title, optional notes, version, creation/update times, and `manual` or
+`website` source kind. A website copy also carries the submitted original URL,
+final resolved URL if different, source host, source page title when available,
+and import time. Ordered `recipe_ingredients` and `recipe_steps` rows belong to
+the recipe. Titles need not be unique: two different sources can use the same
+title.
 
-Ingredient text must remain usable even when the source page has no reliable
-quantity or unit. The design must decide whether Phase 3 stores optional
-structured quantity/unit fields alongside source text. Unparsed text must
-never be treated as a nutrition-ready quantity. No remote HTML, script, or
-import debug body is retained. Preserve the original source link, but do not
-store unrelated request headers or cookies. Confirm exact field bounds and
-household recipe limit before migration review.
+Deletion semantics are fixed by the accepted
+[#32 design](./0032-household-lifecycle.md) and
+[ADR 0008](../DECISIONS/0008-household-decommissioning.md):
+`recipes.household_id` references `households(id)` with `ON DELETE CASCADE`,
+and `recipe_ingredients.recipe_id` and `recipe_steps.recipe_id` reference
+`recipes(id)` with `ON DELETE CASCADE`. The accepted operator batch (clear
+`app_installation`, then delete the household) therefore removes every recipe
+row without change, as it does for `pantry_items`. Deleting one recipe removes
+its lines. Migration tests prove both cascades.
+
+Each ingredient is one ordered, unstructured plain-text line, for example
+`2 tbsp soy sauce` or `大さじ2 しょうゆ`, for manual and imported recipes
+alike. There are no quantity or unit columns in this release; unparsed text is
+never treated as a nutrition-ready quantity. Structured quantities, if a later
+nutrition or pantry-matching feature needs them, arrive as a forward migration.
+No remote HTML, script, or import debug body is retained. Preserve the original
+source link, but do not store unrelated request headers or cookies.
+
+Bounds are shared constants in `src/shared/recipes.ts`. The migration enforces
+the storage bounds with `CHECK` constraints:
+
+| Field                          | Bound                                                              |
+| ------------------------------ | ------------------------------------------------------------------ |
+| Title                          | 1–120 characters after whitespace normalization                    |
+| Ingredients                    | 1–100 lines; each 1–300 characters                                 |
+| Steps                          | 1–50 steps; each 1–2,000 characters                                |
+| Notes                          | Optional; up to 4,000 characters                                   |
+| Recipes per household          | 500, checked on create like the pantry item limit                  |
+| Source URL (submitted / final) | Up to 2,048 characters each; the source page title up to 200 chars |
+
+An imported draft that exceeds a recipe bound is truncated to the bound (extra
+lines dropped, long lines cut at a character boundary) and the preview carries
+a notice so the member reviews it before saving. Saving always revalidates
+against the same bounds.
 
 Household deletion and ownership transfer remain an explicit Phase 1 follow-up
 ([feature #7](./0007-trusted-family-boundary.md)), now tracked in
 [issue #32](https://github.com/wpliao/meal-planner/issues/32) and its
 [design](./0032-household-lifecycle.md). The current
 schema restricts household deletion while `app_installation` points to it, and
-pantry rows cascade only after that pointer is handled. The proposed ordinary
-transfer uses the existing owner APIs: promote an active successor, have the
+pantry rows cascade only after that pointer is handled. Ordinary transfer,
+released as #32 `AC-01`, uses the existing owner APIs: promote an active successor, have the
 successor verify owner access, then let the previous owner step down. The
 last-active-owner guard remains in force. An unavailable previous owner needs a
 separate recovery decision.
 
-The proposed household deletion remains an explicitly approved operational
-procedure until a self-service design is accepted. It must identify the one
-household from a verified owner request, rehearse in development, handle the
-installation pointer before deleting the household, verify that members,
-pantry items, and recipe rows were removed, and account separately for Access
-configuration and D1 Time Travel history. The exact authorization,
-confirmation, backup, and recovery steps belong to #32 and must be accepted
-before recipe implementation. No production deletion is authorized by this
-proposal.
+Household deletion is the owner-approved operator procedure accepted in the
+#32 design and ADR 0008. It identifies the one household from a verified owner
+request, rehearses in development, handles the installation pointer before
+deleting the household, verifies that members, pantry items, and recipe rows
+were removed, and accounts separately for Access configuration and D1 Time
+Travel history. That procedure's post-deletion count check must include
+`recipes` (and its child tables) once migration `0003` exists. Whichever of the
+recipe migration pull request and the #32 `AC-02` pull request merges second
+adds that check, and both pull requests say so. No production deletion is
+authorized by this design.
 
 ### Security and privacy
 
@@ -167,18 +213,56 @@ An import request discloses the requested URL to the source site, so the UI
 states that a site will be contacted. No Access assertion, cookie,
 authorization header, or family data is forwarded.
 
-The Worker should accept only public `http`/`https` recipe pages, reject URL
-credentials and local/private destinations, handle redirects manually and
-revalidate each hop, cap redirect count, response bytes, content type, and
-duration, and reject anything whose safety cannot be established. Cloudflare
-[documents](https://developers.cloudflare.com/workers/runtime-apis/request/)
-that automatic redirect following can forward headers to another host; the
-proposal uses explicit redirect handling and no incoming credentials. Exact
-destination-validation feasibility in the Workers runtime is an **open design
-gate**, with unsafe cases tested against a fake fetch adapter. Never fetch an
-import URL in the browser.
+**Destination policy: exact-host allowlist.** A Worker cannot resolve DNS and
+check the resulting address before `fetch()`, so "any public page" cannot be
+fully enforced. The first release fetches only these hosts, each with and
+without a leading `www.`:
 
-Only normalized plain text enters the preview or database. The client renders
+| Site                  | Allowed hostnames                                            |
+| --------------------- | ------------------------------------------------------------ |
+| Budget Bytes          | `budgetbytes.com`, `www.budgetbytes.com`                     |
+| Minimalist Baker      | `minimalistbaker.com`, `www.minimalistbaker.com`             |
+| Sally's Baking        | `sallysbakingaddiction.com`, `www.sallysbakingaddiction.com` |
+| Just One Cookbook     | `justonecookbook.com`, `www.justonecookbook.com`             |
+| The Woks of Life      | `thewoksoflife.com`, `www.thewoksoflife.com`                 |
+| Kikkoman Home Cooking | `kikkoman.co.jp`, `www.kikkoman.co.jp`                       |
+
+The submitted URL must parse with the WHATWG `URL` parser, use `https:`, have
+no username or password, use the default port, and have a lowercase ASCII
+hostname exactly equal to an entry; subdomain or suffix matching is not used.
+The fragment is dropped before fetching. A disallowed or malformed URL returns
+`unsafe_destination` before any network request. The allowlist is a reviewed
+constant, so adding or removing a host is a small code change with tests. A
+host that fails development validation, or whose terms of use the owner finds
+do not permit a private family copy, is removed before production. Maangchi is
+excluded because a direct fetch returns `403`; access controls are never
+bypassed.
+
+**Redirects.** Every request uses `redirect: 'manual'`. A `301`, `302`, `303`,
+`307`, or `308` response with a `Location` header is resolved against the
+current URL and the result is revalidated against the full destination policy
+above. A redirect to `http:` (no downgrade), a non-allowlisted host, or a URL
+with credentials returns `unsafe_destination`. At most **3** redirects are
+followed; the fourth returns `unsafe_destination`. Each hop is a fresh `GET`
+without a body, cookies, the incoming `Cf-Access-*` headers, or any incoming
+header; the request sends only a fixed `Accept: text/html` and a fixed
+identifying `User-Agent`. The final URL is stored as the resolved URL when it
+differs from the submitted URL. Cloudflare
+[documents](https://developers.cloudflare.com/workers/runtime-apis/request/)
+that automatic redirect following can forward headers to another host, which
+this avoids.
+
+**Response limits.** The final response must be `200` with a `Content-Type`
+of `text/html` (optionally with parameters); anything else returns
+`unsupported_source`, and `4xx`/`5xx` return `source_unavailable`. The body is
+read as a stream and abandoned at **2 MiB**, returning `too_large`. The whole
+import, including redirects and parsing, is aborted after **10 seconds**,
+returning `timeout`. Unsafe cases are tested against a fake fetch adapter;
+tests never contact a real site. Never fetch an import URL in the browser.
+
+Only normalized plain text enters the preview or database: HTML entities in
+JSON-LD strings are decoded, any tags are stripped, control characters are
+removed, and whitespace is collapsed before bounds are applied. The client renders
 it as text, never through `innerHTML` or a markup renderer. This matters because
 the current Content Security Policy allows inline styles for Mantine; see
 [ADR 0006](../DECISIONS/0006-component-library.md) and [SECURITY.md](../SECURITY.md).
@@ -194,8 +278,10 @@ open with safe link attributes.
 
 ### Reliability and observability
 
-No partial recipe is stored during preview. Timeouts, unsupported page format,
-too-large pages, and blocked destinations have distinct user-safe messages.
+No partial recipe is stored during preview. The preview returns one of the
+failure classes `unsafe_destination`, `source_unavailable`,
+`unsupported_source`, `too_large`, or `timeout`, each with a distinct
+user-safe message.
 An import failure leaves manual entry available. Failed writes keep the user's
 draft and reconcile with the server. Metrics may count import outcome classes
 without recording URLs or content. A bounded import avoids unpredictable
@@ -232,9 +318,8 @@ passing test names during implementation; no recipe tests exist yet.
 
 ## Rollout and rollback
 
-1. Resolve the open design gates and record product-owner acceptance in the
-   issue; set this document to `Accepted` on `main` before any feature code or
-   migration is written.
+1. Record product-owner acceptance in the issue and set this document to
+   `Accepted` on `main` before any feature code or migration is written.
 2. Implement on focused `codex/` branches. Add the migration and tests together.
    Run the full Dev Container gate and require CI, Sonar, and security review.
 3. Apply the migration in development through the protected workflow and
@@ -242,30 +327,48 @@ passing test names during implementation; no recipe tests exist yet.
 4. Obtain separate, explicit production approval before applying the migration
    and deploying. Record the exact run, Worker version, and owner validation.
 
-The proposed migration is additive. A code rollback redeploys the prior Worker
+The migration is additive. A code rollback redeploys the prior Worker
 while keeping the unused table; it does not reverse an applied migration or
 silently delete family recipes. Recovery from a bad data write is a forward fix
 or an explicitly approved restore after examining D1 backup scope.
 
-## Open decisions before acceptance
+## Resolved design decisions
 
-1. Confirm the minimum recipe fields: title, ordered ingredients and steps,
-   plus whether yield, prep time, notes, tags, or ingredient quantity/unit are
-   useful now. The proposal keeps the first version small and treats uncertain
-   imported ingredient quantities as unstructured text.
-2. Confirm that structured recipe data only is an acceptable first import
-   boundary, with unsupported pages falling back to manual entry. Establish a
-   safe destination policy that the actual Worker runtime can enforce.
-3. Resolve [issue #32](https://github.com/wpliao/meal-planner/issues/32) before
-   adding recipe records, including who may request deletion and how D1 history
-   and Access configuration are handled.
+The product owner answered these on 2026-09-22 in the design session and
+accepted them with the design. Each
+chose the recommended option unless noted.
+
+1. **Import destinations:** an exact-host allowlist of the six candidate sites
+   from [issue #31](https://github.com/wpliao/meal-planner/issues/31), each
+   with and without `www.`, HTTPS only. "Any public HTTPS page with guards" and
+   "three verified hosts only" were rejected.
+2. **Redirects:** manual handling, at most 3 hops, with every hop revalidated
+   against the allowlist and no downgrade to `http:`. "No redirects" and
+   "same host only" were rejected.
+3. **Extraction:** structured JSON-LD `Recipe` data only, with manual entry
+   as the fallback for unsupported pages. Microdata and heuristic scraping
+   were rejected for this release.
+4. **Ingredients:** unstructured ordered text lines; no quantity or unit
+   fields.
+5. **Deletion cascade:** recipes cascade from households, and ingredient and
+   step rows cascade from recipes, as the #32 design and ADR 0008 require.
+6. **Fields:** title, ordered ingredients, ordered steps, and **optional
+   notes** (the owner chose notes over the smaller recommended set). Import
+   never fills notes. Yield and times remain out of scope.
+7. **Limits:** the bounds in [Data and migrations](#data-and-migrations) and
+   the import limits in [Security and privacy](#security-and-privacy);
+   over-limit imports are truncated with a review notice. The 4,000-character
+   notes bound was proposed after the owner chose notes and accepted with the
+   design.
 
 ## Decision and change log
 
-| Date       | Change                                                                                             | Reason                                                                           | Evidence                                                                                  |
-| ---------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| 2026-09-22 | Initial design proposal; status `Designing`                                                        | Start Phase 3 with reviewable scope and explicit open gates                      | [Issue #31](https://github.com/wpliao/meal-planner/issues/31)                             |
-| 2026-09-22 | Product owner endorsed the proposed direction; retain `Designing` while prerequisites are resolved | Household lifecycle and import-destination policy still need concrete acceptance | [Review record](https://github.com/wpliao/meal-planner/issues/31#issuecomment-5774034983) |
+| Date       | Change                                                                                                                                                                              | Reason                                                                            | Evidence                                                                                  |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| 2026-09-22 | Initial design proposal; status `Designing`                                                                                                                                         | Start Phase 3 with reviewable scope and explicit open gates                       | [Issue #31](https://github.com/wpliao/meal-planner/issues/31)                             |
+| 2026-09-22 | Product owner endorsed the proposed direction; retain `Designing` while prerequisites are resolved                                                                                  | Household lifecycle and import-destination policy still need concrete acceptance  | [Review record](https://github.com/wpliao/meal-planner/issues/31#issuecomment-5774034983) |
+| 2026-09-22 | Resolve open decisions: six-host allowlist, manual redirects (≤3, revalidated), JSON-LD `Recipe` only, unstructured ingredient lines, household cascade, optional notes, and bounds | Product-owner answers in the design session; #32 deletion design already accepted | [PR #37](https://github.com/wpliao/meal-planner/pull/37)                                  |
+| 2026-09-22 | Accept design; status `Accepted`; `AC-01`–`AC-06` stable                                                                                                                            | Product owner: “I accept the #31 design”                                          | [Approval](https://github.com/wpliao/meal-planner/issues/31#issuecomment-5779088363)      |
 
 ## Release record
 
