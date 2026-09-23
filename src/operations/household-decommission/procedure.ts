@@ -90,6 +90,14 @@ export const wholeHostOf = (value: string): string | undefined => {
   return path === '' || path === '/' ? host.toLowerCase() : undefined;
 };
 
+/**
+ * A printable form of a policy's action. Cloudflare's actions are a fixed
+ * vocabulary (`allow`, `deny`, `bypass`, `non_identity`); anything else is
+ * shown as `other`, so no owner-written text can reach the log.
+ */
+const printableDecision = ({ decision }: AccessPolicy): string =>
+  /^[a-z_]{1,20}$/u.test(decision) ? decision : 'other';
+
 const isUnconditionalDenyEveryone = (policy: AccessPolicy): boolean =>
   policy.decision === 'deny' &&
   policy.require.length === 0 &&
@@ -207,7 +215,7 @@ export const runDecommission = async (
     const policies = await client.listAccessPolicies(config.accessAppId);
     if (policies.some(({ decision }) => decision !== 'deny')) {
       fail(
-        'The Access application still has a policy that is not a deny policy.',
+        `The Access application still has a policy that is not a deny policy (actions: ${policies.map(printableDecision).join(', ')}).`,
       );
     }
     if (!policies.some(isUnconditionalDenyEveryone)) {

@@ -214,6 +214,10 @@ Specific cases:
 - **Table inventory differs.** A migration added a table this procedure does
   not cover (for example, a future meal-plan table). Do not run it until the procedure is
   updated and reviewed.
+- **A policy that is not a deny policy.** The message lists every attached
+  policy's action in order (for example `actions: deny, allow`). Remove each
+  `allow`, `bypass`, or `non_identity` (Service Auth) policy from the
+  application, including reusable policies attached to it, and re-dispatch.
 - **Unexpected affected-row counts.** The household delete may report either
   `1` or `1 + members + pantry rows + recipes + ingredient lines + step lines`,
   depending on whether cascaded rows are
