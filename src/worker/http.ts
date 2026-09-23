@@ -23,7 +23,9 @@ export const errorResponse = (error: ApiError): Response => {
   const body: ApiErrorResponse = {
     error: { code: error.code, message: error.message },
   };
-  return json(body, { status: error.status });
+  return json(error.details ? { ...error.details, ...body } : body, {
+    status: error.status,
+  });
 };
 
 export const requireMutationHeaders = (request: Request): void => {
@@ -51,9 +53,10 @@ export const requireMutationHeaders = (request: Request): void => {
 
 export const readJsonObject = async (
   request: Request,
+  maxBytes: number = MAX_JSON_BYTES,
 ): Promise<Record<string, unknown>> => {
   const declaredLength = request.headers.get('content-length');
-  if (declaredLength && Number(declaredLength) > MAX_JSON_BYTES) {
+  if (declaredLength && Number(declaredLength) > maxBytes) {
     throw new ApiError(413, 'payload_too_large', 'Request body is too large.');
   }
 
@@ -69,7 +72,7 @@ export const readJsonObject = async (
         if (done) break;
 
         byteLength += value.byteLength;
-        if (byteLength > MAX_JSON_BYTES) {
+        if (byteLength > maxBytes) {
           await reader.cancel().catch(() => undefined);
           throw new ApiError(
             413,

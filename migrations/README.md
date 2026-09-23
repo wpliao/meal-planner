@@ -5,6 +5,18 @@ household/member authorization boundary. It creates `households`,
 `household_members`, and the singleton `app_installation` table; it does not
 create pantry, recipe, nutrition, image, or meal-plan data.
 
+Migration `0002_create_pantry_items.sql` adds the household pantry for
+[feature #16](../docs/features/0016-lightweight-pantry.md).
+
+Migration `0003_create_recipes.sql` adds the household recipe library for
+[feature #31](../docs/features/0031-recipe-library.md): `recipes`,
+`recipe_ingredients`, and `recipe_steps`, with cascading foreign keys from the
+household and the recipe, and `CHECK` constraints for the shared bounds. It is
+additive and alters no existing table. Rolling back the Worker leaves the
+unused tables in place; reversing the migration would delete family recipes
+and needs a separately approved forward migration, not an edit to `0003`.
+See `docs/DATA_MODEL.md`.
+
 Migrations are immutable and ordered. Test each migration against a fresh local
 D1 database, apply it to the development D1 database before any production
 rollout, and obtain explicit production approval before applying it to
