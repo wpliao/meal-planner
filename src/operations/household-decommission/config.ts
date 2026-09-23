@@ -36,11 +36,11 @@ export class ConfigurationError extends Error {
   }
 }
 
-const UUID =
+export const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const HOUSEHOLD_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
-const ACCOUNT_ID = /^[0-9a-f]{32}$/u;
+export const ACCOUNT_ID = /^[0-9a-f]{32}$/u;
 const APPROVAL_REFERENCE =
   /^https:\/\/github\.com\/wpliao\/meal-planner\/issues\/[1-9]\d*#issuecomment-[1-9]\d*$/u;
 const MIGRATION_FILE = /^\d{4}_[a-z0-9_]+\.sql$/u;
@@ -48,15 +48,15 @@ const MIGRATION_FILE = /^\d{4}_[a-z0-9_]+\.sql$/u;
 export const confirmationFor = (environment: string): string =>
   `DECOMMISSION_${environment.toUpperCase()}_HOUSEHOLD`;
 
-type Inputs = Readonly<Record<string, string | undefined>>;
+export type Inputs = Readonly<Record<string, string | undefined>>;
 
-const required = (inputs: Inputs, name: string): string => {
+export const required = (inputs: Inputs, name: string): string => {
   const value = inputs[name]?.trim();
   if (!value) throw new ConfigurationError(`${name} is required.`);
   return value;
 };
 
-const requirePattern = (
+export const requirePattern = (
   inputs: Inputs,
   name: string,
   pattern: RegExp,
