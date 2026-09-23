@@ -184,12 +184,23 @@ export const runDecommission = async (
       );
     }
 
-    const hosts = (
-      await client.getAccessApplicationHosts(config.accessAppId)
-    ).map(wholeHostOf);
-    if (!hosts.includes(workerHost)) {
+    const targets = await client.getAccessApplicationTargets(
+      config.accessAppId,
+    );
+    const protectsWholeHost = targets.hosts
+      .map(wholeHostOf)
+      .includes(workerHost);
+    // A `worker` destination covers every URL of that one Worker. It is
+    // matched by the Worker's immutable ID, never by a name in the app.
+    const protectsWorker =
+      !protectsWholeHost &&
+      targets.workerIds.length > 0 &&
+      targets.workerIds
+        .map((id) => id.toLowerCase())
+        .includes((await client.getWorkerId(config.workerName)).toLowerCase());
+    if (!protectsWholeHost && !protectsWorker) {
       fail(
-        "The Access application does not protect this environment's whole Worker hostname.",
+        "The Access application protects neither this environment's whole Worker hostname nor the Worker itself.",
       );
     }
 

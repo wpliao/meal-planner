@@ -104,8 +104,12 @@ Do not add these to the `production` environment.
 1. In Cloudflare Zero Trust, open the environment's Access application.
    Remove or disable every Allow, Bypass, and Service Auth policy and leave one
    **Deny** policy that includes **Everyone** with no Require or Exclude rules.
-   Make sure the application covers the whole Worker hostname, not only a path
-   under it. Then revoke existing Access tokens and sessions for the
+   Make sure the application covers the whole Worker: either its
+   **Destinations** show the Worker itself (type "A Worker's production and
+   preview URLs", scope `family-meal-planner-<environment>`), or a public
+   hostname that is the whole Worker hostname, not only a path under it. A
+   preview-only destination or one covering every Worker is refused; the
+   second would also lock out production. Then revoke existing Access tokens and sessions for the
    application, so an already-signed-in browser cannot keep using the app.
 2. In the Worker's **Settings › Domains & Routes**, disable the `workers.dev`
    route and **Preview URLs**. Confirm there is no custom domain.
@@ -174,8 +178,14 @@ assertion, using only the scoped API token, which is never printed:
   `enabled: false` and `previews_enabled: false`.
 - `GET /accounts/{account}/workers/domains?service={worker}` lists no custom
   domain.
-- `GET /accounts/{account}/access/apps/{app}` lists the Worker's `workers.dev`
-  hostname, so the checked application is the right one.
+- `GET /accounts/{account}/access/apps/{app}` either lists the Worker's whole
+  `workers.dev` hostname, or has a `worker` destination whose `worker_id`
+  equals the Worker's immutable ID from
+  `GET /accounts/{account}/workers/workers/{worker}`, so the checked
+  application is the right one. A `worker` destination covers the Worker's
+  routes, custom domains, `workers.dev` hostname, and previews
+  ([Cloudflare docs](https://developers.cloudflare.com/workers/configuration/cloudflare-access/)).
+  `preview_worker` and `all_workers` destinations do not count.
 - `GET /accounts/{account}/access/apps/{app}/policies` contains only `deny`
   policies, including one unconditional deny for everyone.
 
