@@ -870,6 +870,29 @@ describe('POST /api/recipes/import-preview', () => {
     });
   });
 
+  it('cannot reach a real site, even through the deployed worker', async () => {
+    // This is the case that once passed for the wrong reason: the route was
+    // unbuilt, so a live budgetbytes.com request returned 404. When the route
+    // arrived the same request started really fetching the site and answered
+    // 422. The suite guard in `setup.ts` now refuses the call, so the import
+    // reports an unavailable source instead of quietly talking to a stranger.
+    await expect(fetch('https://www.budgetbytes.com/')).rejects.toThrow(
+      /never contact a site/u,
+    );
+
+    const response = await fetchWorker(
+      new Request(
+        PREVIEW_URL,
+        mutationInit('POST', { url: 'https://www.budgetbytes.com/gnocchi/' }),
+      ),
+    );
+    expect(response.status).toBe(502);
+    await expect(response.json()).resolves.toMatchObject({
+      reason: 'source_unavailable',
+    });
+    expect(await recipeRows()).toBe(0);
+  });
+
   it('refuses an unsupported destination through the deployed worker, which never fetches', async () => {
     // This one goes through SELF, which holds the real `fetch`. It is safe
     // only because the destination is refused before any request is made.

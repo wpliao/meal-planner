@@ -12,6 +12,8 @@ export default defineConfig({
   ],
   test: {
     include: ['test/worker/**/*.test.ts'],
+    // Refuses any real outbound request; see the file for why this exists.
+    setupFiles: ['./test/worker/setup.ts'],
     coverage: {
       provider: 'istanbul',
       reportsDirectory: './coverage/worker',
