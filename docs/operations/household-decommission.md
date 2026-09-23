@@ -12,11 +12,13 @@
 > call. Production becomes eligible only after the development rehearsal below
 > is recorded, all three implementation gates in the feature design are closed,
 > and the owner gives a separate production approval. Enabling it is a reviewed
-> code change, not a workflow input. In particular, production stays
-> ineligible until the rehearsal proves the D1 REST batch is atomic (gate 2):
-> without that proof, a failed run could leave the installation pointer
-> deleted and the household present (see
-> [pointer gone, household still present](#pointer-gone-household-still-present)).
+> code change, not a workflow input. As of 2026-09-23 the rehearsal is
+> recorded (`V-DEV-H2`) and all three gates are closed. Gate 2 was closed by
+> the [batch atomicity probe](#d1-batch-atomicity-probe-gate-2)
+> ([run 35844042767](https://github.com/wpliao/meal-planner/actions/runs/35844042767)), which showed a failed D1 REST batch rolling back completely, so a
+> failed run cannot leave the installation pointer deleted and the household
+> present. Production is still refused until that reviewed change and the
+> owner's separate approval exist.
 
 ## What the owner is agreeing to
 
