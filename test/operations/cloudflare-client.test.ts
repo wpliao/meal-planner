@@ -7,7 +7,13 @@ import {
   type FetchLike,
 } from '../../src/operations/household-decommission/cloudflare-client.ts';
 import { redact } from '../../src/operations/household-decommission/redact.ts';
-import { ACCOUNT_ID, API_TOKEN, createFakeCloudflare } from './fake-cloudflare';
+import {
+  ACCOUNT_ID,
+  API_TOKEN,
+  createFakeCloudflare,
+  WORKER_ID,
+  WORKER_NAME,
+} from './fake-cloudflare';
 
 const DATABASE_ID = '5f5e98ba-7b27-4fcf-8c2b-ab1605461082';
 
@@ -38,7 +44,8 @@ describe('Cloudflare client', () => {
     await client.getAccountWorkersSubdomain();
     await client.getWorkerSubdomainState('worker-name');
     await client.listWorkerCustomDomains('worker-name');
-    await client.getAccessApplicationHosts('app-id');
+    await expect(client.getWorkerId(WORKER_NAME)).resolves.toBe(WORKER_ID);
+    await client.getAccessApplicationTargets('app-id');
     await client.listAccessPolicies('app-id');
 
     const account = `/client/v4/accounts/${ACCOUNT_ID}`;
@@ -48,6 +55,7 @@ describe('Cloudflare client', () => {
       `GET ${account}/workers/subdomain`,
       `GET ${account}/workers/scripts/worker-name/subdomain`,
       `GET ${account}/workers/domains?service=worker-name`,
+      `GET ${account}/workers/workers/${WORKER_NAME}`,
       `GET ${account}/access/apps/app-id`,
       `GET ${account}/access/apps/app-id/policies?page=1&per_page=50`,
     ]);
@@ -69,7 +77,8 @@ describe('Cloudflare client', () => {
     ['account subdomain', (client) => client.getAccountWorkersSubdomain()],
     ['Worker subdomain', (client) => client.getWorkerSubdomainState('w')],
     ['custom domains', (client) => client.listWorkerCustomDomains('w')],
-    ['Access application', (client) => client.getAccessApplicationHosts('a')],
+    ['Worker', (client) => client.getWorkerId('w')],
+    ['Access application', (client) => client.getAccessApplicationTargets('a')],
     ['Access policies', (client) => client.listAccessPolicies('a')],
     [
       'D1 read',
@@ -79,6 +88,15 @@ describe('Cloudflare client', () => {
   ])('rejects a malformed %s result', async (_, call) => {
     const client = clientFor(respondWith('unexpected'));
     await expect(call(client)).rejects.toBeInstanceOf(CloudflareApiError);
+  });
+
+  it.each([
+    ['another Worker', { id: 'x', name: 'other-worker' }],
+    ['an empty ID', { id: '', name: 'w' }],
+  ])('rejects a Worker result for %s', async (_, result) => {
+    await expect(
+      clientFor(respondWith(result)).getWorkerId('w'),
+    ).rejects.toBeInstanceOf(CloudflareApiError);
   });
 
   it('rejects a read whose statement did not succeed', async () => {
@@ -108,18 +126,24 @@ describe('Cloudflare client', () => {
       { decision: 'unknown', include: [], require: [], exclude: [] },
     ]);
 
-    const hosts = await clientFor(
+    const targets = await clientFor(
       respondWith({
         domain: 'a.example.test',
         self_hosted_domains: ['a.example.test', 3, 'b.example.test'],
-        destinations: [{ uri: 'c.example.test' }, { type: 'private' }],
+        destinations: [
+          { uri: 'c.example.test' },
+          { type: 'private' },
+          { type: 'worker', worker_id: 'worker-1' },
+          { type: 'worker', worker_id: 5 },
+          { type: 'preview_worker', worker_id: 'preview-only' },
+          { type: 'all_workers' },
+        ],
       }),
-    ).getAccessApplicationHosts('a');
-    expect(hosts).toEqual([
-      'a.example.test',
-      'b.example.test',
-      'c.example.test',
-    ]);
+    ).getAccessApplicationTargets('a');
+    expect(targets).toEqual({
+      hosts: ['a.example.test', 'b.example.test', 'c.example.test'],
+      workerIds: ['worker-1'],
+    });
 
     const results = await clientFor(
       respondWith([{ success: true, meta: 'x', results: 'y' }, 'z']),

@@ -61,6 +61,19 @@ export interface WorkerSubdomainState {
   readonly previewsEnabled: boolean;
 }
 
+/**
+ * What an Access application covers: whole-or-partial hostnames, and the IDs
+ * of Workers it protects through a `worker` destination (every route, custom
+ * domain, `workers.dev` hostname, and preview of that one Worker).
+ * `preview_worker` and `all_workers` destinations are deliberately not
+ * collected: the first leaves production URLs open, and the second would
+ * also cover every other environment's Worker.
+ */
+export interface AccessApplicationTargets {
+  readonly hosts: readonly string[];
+  readonly workerIds: readonly string[];
+}
+
 export interface AccessPolicy {
   readonly decision: string;
   readonly include: readonly Record<string, unknown>[];
@@ -87,7 +100,9 @@ export interface CloudflareClient {
   getAccountWorkersSubdomain(): Promise<string>;
   getWorkerSubdomainState(scriptName: string): Promise<WorkerSubdomainState>;
   listWorkerCustomDomains(scriptName: string): Promise<readonly string[]>;
-  getAccessApplicationHosts(appId: string): Promise<readonly string[]>;
+  /** The immutable ID of the named Worker, as Access destinations cite it. */
+  getWorkerId(scriptName: string): Promise<string>;
+  getAccessApplicationTargets(appId: string): Promise<AccessApplicationTargets>;
   listAccessPolicies(appId: string): Promise<readonly AccessPolicy[]>;
 }
 
@@ -325,7 +340,24 @@ export const createCloudflareClient = (
       );
     },
 
-    async getAccessApplicationHosts(appId) {
+    async getWorkerId(scriptName) {
+      const operation = 'Read Worker';
+      const result = await read(
+        operation,
+        `${account}/workers/workers/${encodeURIComponent(scriptName)}`,
+      );
+      if (
+        !isRecord(result) ||
+        typeof result.id !== 'string' ||
+        result.id === '' ||
+        result.name !== scriptName
+      ) {
+        throw shapeError(operation);
+      }
+      return result.id;
+    },
+
+    async getAccessApplicationTargets(appId) {
       const operation = 'Read Access application';
       const result = await read(
         operation,
@@ -341,10 +373,17 @@ export const createCloudflareClient = (
           if (typeof host === 'string') hosts.add(host);
         }
       }
+      const workerIds = new Set<string>();
       for (const destination of asRecords(result.destinations)) {
         if (typeof destination.uri === 'string') hosts.add(destination.uri);
+        if (
+          destination.type === 'worker' &&
+          typeof destination.worker_id === 'string'
+        ) {
+          workerIds.add(destination.worker_id);
+        }
       }
-      return [...hosts];
+      return { hosts: [...hosts], workerIds: [...workerIds] };
     },
 
     async listAccessPolicies(appId) {

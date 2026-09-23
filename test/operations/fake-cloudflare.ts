@@ -16,6 +16,7 @@ export const ACCESS_APP_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
 export const WORKER_NAME = 'family-meal-planner-development';
 export const ACCOUNT_SUBDOMAIN = 'example-account';
 export const WORKER_HOST = `${WORKER_NAME}.${ACCOUNT_SUBDOMAIN}.workers.dev`;
+export const WORKER_ID = 'c81a2d22c29840ed9d61681a3270dbff';
 export const MIGRATIONS = [
   '0001_create_household_identity.sql',
   '0002_create_pantry_items.sql',
@@ -198,6 +199,7 @@ export const createFakeCloudflare = (
     if (path.endsWith('/workers/subdomain')) return 'account-subdomain';
     if (path.endsWith('/subdomain')) return 'worker-subdomain';
     if (path.includes('/workers/domains')) return 'custom-domains';
+    if (/\/workers\/workers\/[^/?]+$/u.test(path)) return 'worker';
     if (path.split('?')[0].endsWith('/policies')) return 'access-policies';
     if (path.includes('/access/apps/')) return 'access-app';
     return `${method} ${path}`;
@@ -230,6 +232,8 @@ export const createFakeCloudflare = (
           hostname,
           service: WORKER_NAME,
         }));
+      case 'worker':
+        return { id: WORKER_ID, name: WORKER_NAME };
       case 'access-app':
         return state.accessApp;
       default:

@@ -29,6 +29,8 @@ import {
   TABLES,
   validInputs,
   WORKER_HOST,
+  WORKER_ID,
+  WORKER_NAME,
   zeroCounts,
   type FakeState,
 } from './fake-cloudflare';
@@ -442,6 +444,54 @@ describe('household decommission procedure', () => {
       });
       expect((await run(fromLegacyList)).exitCode).toBe(0);
     });
+
+    it('accepts an Access application that protects this Worker by its ID', async () => {
+      const fake = withState({
+        accessApp: {
+          destinations: [
+            { type: 'worker', worker_id: WORKER_ID.toUpperCase() },
+          ],
+        },
+      });
+      expect((await run(fake)).exitCode).toBe(0);
+      expect(fake.callsTo('worker').map(({ path }) => path)).toEqual([
+        expect.stringContaining(`/workers/workers/${WORKER_NAME}`) as unknown,
+        expect.stringContaining(`/workers/workers/${WORKER_NAME}`) as unknown,
+      ]);
+    });
+
+    it('does not look up the Worker when the hostname already matches', async () => {
+      const fake = withState({
+        accessApp: {
+          domain: WORKER_HOST,
+          destinations: [{ type: 'worker', worker_id: WORKER_ID }],
+        },
+      });
+      expect((await run(fake)).exitCode).toBe(0);
+      expect(fake.callsTo('worker')).toHaveLength(0);
+    });
+
+    it.each([
+      ['another Worker', [{ type: 'worker', worker_id: 'another-worker-id' }]],
+      [
+        'only this Worker’s previews',
+        [{ type: 'preview_worker', worker_id: WORKER_ID }],
+      ],
+      ['every Worker in the account', [{ type: 'all_workers' }]],
+    ])(
+      'refuses an Access application that protects %s',
+      async (_, destinations) => {
+        const fake = withState({ accessApp: { destinations } });
+        const { exitCode, records } = await run(fake);
+        expect(exitCode).toBe(1);
+        expectD1Untouched(fake);
+        expect(failureRecord(records)).toMatchObject({
+          stage: 'close-access',
+          d1: 'untouched',
+          message: expect.stringContaining('nor the Worker itself') as unknown,
+        });
+      },
+    );
 
     it.each([
       ['the Access API denies the token', 'access-policies', 403],
