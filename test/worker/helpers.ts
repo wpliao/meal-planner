@@ -12,6 +12,9 @@ export const testEnv = env as TestEnv;
 export const applyMigrations = async (): Promise<void> => {
   await applyD1Migrations(testEnv.DB, testEnv.TEST_MIGRATIONS);
   await testEnv.DB.batch([
+    testEnv.DB.prepare('DELETE FROM recipe_steps'),
+    testEnv.DB.prepare('DELETE FROM recipe_ingredients'),
+    testEnv.DB.prepare('DELETE FROM recipes'),
     testEnv.DB.prepare('DELETE FROM pantry_items'),
     testEnv.DB.prepare('DELETE FROM app_installation'),
     testEnv.DB.prepare('DELETE FROM household_members'),
@@ -60,6 +63,42 @@ export const seedPantryItem = async (
   )
     .bind(id, householdId, name, name.toLowerCase(), status, now, now)
     .run();
+  return id;
+};
+
+/**
+ * Inserts a manual recipe directly, bypassing the API, with one ingredient and
+ * one step, so isolation and constraint tests can place rows anywhere.
+ */
+export const seedRecipe = async (
+  householdId: string,
+  title: string,
+  lines: { ingredients?: string[]; steps?: string[] } = {},
+): Promise<string> => {
+  const now = new Date().toISOString();
+  const id = crypto.randomUUID();
+  const ingredients = lines.ingredients ?? ['1 cup rice'];
+  const steps = lines.steps ?? ['Cook the rice.'];
+  await testEnv.DB.batch([
+    testEnv.DB.prepare(
+      `INSERT INTO recipes (
+         id, household_id, title, notes, version, write_token, source_kind,
+         created_at, updated_at
+       ) VALUES (?, ?, ?, NULL, 1, ?, 'manual', ?, ?)`,
+    ).bind(id, householdId, title, crypto.randomUUID(), now, now),
+    ...ingredients.map((text, index) =>
+      testEnv.DB.prepare(
+        `INSERT INTO recipe_ingredients (recipe_id, position, text)
+         VALUES (?, ?, ?)`,
+      ).bind(id, index + 1, text),
+    ),
+    ...steps.map((text, index) =>
+      testEnv.DB.prepare(
+        `INSERT INTO recipe_steps (recipe_id, position, text)
+         VALUES (?, ?, ?)`,
+      ).bind(id, index + 1, text),
+    ),
+  ]);
   return id;
 };
 

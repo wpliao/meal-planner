@@ -103,11 +103,7 @@ test('item actions menu', async ({ page }) => {
  * font antialiasing. This measures the rendered colours instead, so the check
  * is exact and immune to rendering differences between machines.
  */
-test('text meets WCAG AA contrast against its own background', async ({
-  page,
-}) => {
-  await stub(page);
-
+const assertTextContrast = async (page: Page) => {
   const failures = await page.evaluate(() => {
     const parse = (value: string): [number, number, number, number] => {
       const n = value.match(/[\d.]+/gu)?.map(Number) ?? [];
@@ -159,6 +155,13 @@ test('text meets WCAG AA contrast against its own background', async ({
   });
 
   expect(failures, `low-contrast text: ${failures.join(' | ')}`).toEqual([]);
+};
+
+test('text meets WCAG AA contrast against its own background', async ({
+  page,
+}) => {
+  await stub(page);
+  await assertTextContrast(page);
 });
 
 /**
@@ -272,4 +275,181 @@ test('members panel', async ({ page }) => {
   await expect(
     page.getByRole('complementary', { name: 'Members' }),
   ).toHaveScreenshot('members-panel.png');
+});
+
+// ---------------------------------------------------------------------------
+// Recipes
+
+const RECIPE_ID = '66666666-6666-4666-8666-666666666666';
+
+const RECIPE = {
+  id: RECIPE_ID,
+  title: 'Soy-glazed chicken thighs',
+  notes: 'Family favourite. Use a cast-iron pan for the glaze.',
+  ingredients: [
+    '2 tbsp soy sauce',
+    '1 tbsp honey',
+    '500 g boneless chicken thighs',
+  ],
+  steps: [
+    'Whisk the soy sauce and honey together.',
+    'Marinate the chicken for 20 minutes, then grill until cooked through, brushing with the glaze.',
+  ],
+  source: {
+    kind: 'website',
+    submittedUrl: 'https://www.justonecookbook.com/soy-chicken/',
+    resolvedUrl: null,
+    host: 'www.justonecookbook.com',
+    pageTitle: 'Soy Chicken',
+    importedAt: '2026-01-15T00:00:00.000Z',
+  },
+  version: 1,
+  createdAt: '2026-01-15T00:00:00.000Z',
+  updatedAt: '2026-01-15T00:00:00.000Z',
+};
+
+const RECIPES = {
+  recipes: [
+    {
+      id: RECIPE_ID,
+      title: RECIPE.title,
+      source: { kind: 'website', host: 'www.justonecookbook.com' },
+      version: 1,
+      createdAt: RECIPE.createdAt,
+      updatedAt: RECIPE.updatedAt,
+    },
+    {
+      id: '77777777-7777-4777-8777-777777777777',
+      title: 'Grandma’s miso soup',
+      source: { kind: 'manual' },
+      version: 1,
+      createdAt: RECIPE.createdAt,
+      updatedAt: RECIPE.updatedAt,
+    },
+  ],
+};
+
+const stubRecipes = async (page: Page, path: string, heading: string) => {
+  await page.route('**/api/recipes', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify(RECIPES),
+    }),
+  );
+  await page.route(`**/api/recipes/${RECIPE_ID}`, (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ recipe: RECIPE }),
+    }),
+  );
+  await stub(page, path, heading);
+};
+
+const recipePanel = (page: Page) => page.getByTestId('recipe-panel');
+
+const IMPORT_URL = 'https://www.justonecookbook.com/oyakodon/';
+
+/**
+ * The import preview always fails here, and it is answered at the network
+ * boundary: a styling check must never depend on a real recipe site, and must
+ * never cause a request to one.
+ */
+const stubImportFailure = (page: Page) =>
+  page.route('**/api/recipes/import-preview', (route) =>
+    route.fulfill({
+      status: 422,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: {
+          code: 'import_failed',
+          message: 'That page does not publish recipe details.',
+        },
+        reason: 'unsupported_source',
+      }),
+    }),
+  );
+
+test('recipe library', async ({ page }) => {
+  await stubRecipes(page, '/recipes', 'Recipes');
+  await expect(page.getByTestId('recipe-item')).toHaveCount(2);
+  await expect(recipePanel(page)).toHaveScreenshot('recipe-list.png');
+});
+
+test('recipe detail', async ({ page }) => {
+  await stubRecipes(page, `/recipes/${RECIPE_ID}`, RECIPE.title);
+  await expect(recipePanel(page)).toHaveScreenshot('recipe-detail.png');
+});
+
+test('recipe editor', async ({ page }) => {
+  await stubRecipes(
+    page,
+    `/recipes/${RECIPE_ID}/edit`,
+    `Edit “${RECIPE.title}”`,
+  );
+  await expect(page.getByTestId('ingredient-line')).toHaveCount(3);
+  // Catches the line controls squeezing the field or overlapping it on a
+  // phone, and control sizing in WebKit.
+  await expect(recipePanel(page)).toHaveScreenshot('recipe-editor.png');
+});
+
+test('recipe screens meet WCAG AA contrast, including field errors', async ({
+  page,
+}) => {
+  await stubRecipes(page, '/recipes', 'Recipes');
+  await assertTextContrast(page);
+
+  await page.getByRole('link', { name: RECIPE.title }).click();
+  await expect(
+    page.getByRole('heading', { level: 1, name: RECIPE.title }),
+  ).toBeVisible();
+  await assertTextContrast(page);
+
+  await page.goto('/recipes/new');
+  await page.getByRole('button', { name: 'Save recipe' }).click();
+  await expect(page.getByTestId('form-errors')).toBeVisible();
+  await assertTextContrast(page);
+
+  // The import screen, including the failure alert, whose clay colouring is
+  // the same one the field errors needed darkening for.
+  await stubImportFailure(page);
+  await page.goto('/recipes/import');
+  await page
+    .getByRole('textbox', { name: 'Recipe page link' })
+    .fill(IMPORT_URL);
+  await assertTextContrast(page);
+  await page.getByRole('button', { name: 'Get the recipe' }).click();
+  await expect(page.getByTestId('import-failed')).toBeVisible();
+  await assertTextContrast(page);
+});
+
+test('every Mantine component on the recipe screens has its stylesheet', async ({
+  page,
+}) => {
+  await stubRecipes(page, '/recipes', 'Recipes');
+  await assertEveryMantineClassIsStyled(page);
+
+  await page.goto(`/recipes/${RECIPE_ID}`);
+  await page.getByRole('button', { name: 'Delete recipe' }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await assertEveryMantineClassIsStyled(page);
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Cancel' })
+    .click();
+
+  await page.goto('/recipes/new');
+  await page.getByRole('button', { name: 'Save recipe' }).click();
+  await expect(page.getByTestId('form-errors')).toBeVisible();
+  await assertEveryMantineClassIsStyled(page);
+
+  await stubImportFailure(page);
+  await page.goto('/recipes/import');
+  await expect(page.getByTestId('import-sites')).toBeVisible();
+  await assertEveryMantineClassIsStyled(page);
+  await page
+    .getByRole('textbox', { name: 'Recipe page link' })
+    .fill(IMPORT_URL);
+  await page.getByRole('button', { name: 'Get the recipe' }).click();
+  await expect(page.getByTestId('import-failed')).toBeVisible();
+  await assertEveryMantineClassIsStyled(page);
 });

@@ -5,6 +5,10 @@ import { cssVariablesResolver, theme } from './theme';
 import { AppLayout } from './AppLayout';
 import { FamilySpace } from './FamilySpace';
 import { Pantry } from './Pantry';
+import { RecipeDetail } from './RecipeDetail';
+import { RecipeCreate, RecipeEdit } from './RecipeEditPages';
+import { RecipeImport } from './RecipeImport';
+import { Recipes } from './Recipes';
 
 /**
  * Sections are real routes so a link opens the right one and the device back
@@ -29,6 +33,13 @@ export function App() {
           <Route element={<AppLayout />} path="/">
             <Route element={<Navigate replace to="/pantry" />} index />
             <Route element={<Pantry />} path="pantry" />
+            <Route path="recipes">
+              <Route element={<Recipes />} index />
+              <Route element={<RecipeCreate />} path="new" />
+              <Route element={<RecipeImport />} path="import" />
+              <Route element={<RecipeDetail />} path=":id" />
+              <Route element={<RecipeEdit />} path=":id/edit" />
+            </Route>
             <Route element={<FamilySpace />} path="family" />
             <Route element={<Navigate replace to="/pantry" />} path="*" />
           </Route>

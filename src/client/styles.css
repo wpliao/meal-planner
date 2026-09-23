@@ -29,8 +29,16 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/*
+ * The floor is by role, not by element. A Mantine Button rendered as a link
+ * (`component={Link}`) is an `<a>` and was missing it: the recipe library's
+ * "Add recipe" and the import screen's "Enter it by hand" both measured 42px
+ * on a phone, under the 44px the design system promises.
+ */
 button,
+.mantine-Button-root,
 input[type='email'],
-input[type='text'] {
+input[type='text'],
+input[type='url'] {
   min-height: var(--mp-touch-target);
 }
