@@ -1,0 +1,107 @@
+name: Household decommission
+
+# Deletes the one installed household from an environment's live D1 database.
+# Read docs/operations/household-decommission.md before dispatching. The
+# workflow never closes Access or the Worker route itself; it refuses to touch
+# D1 unless both are already closed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment whose household is deleted
+        type: choice
+        required: true
+        options:
+          - development
+          - production
+      expected_household_id:
+        description: Reviewed household ID (opaque UUID)
+        type: string
+        required: true
+      expected_d1_database_id:
+        description: Reviewed D1 database ID; must match wrangler.jsonc
+        type: string
+        required: true
+      approval_reference:
+        description: Owner approval issue-comment URL on wpliao/meal-planner
+        type: string
+        required: true
+      confirmation:
+        description: Type DECOMMISSION_DEVELOPMENT_HOUSEHOLD to confirm
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+# Shared with deploy.yml so a deploy (which re-enables workers.dev and applies
+# migrations) can never run while a decommission is between preflight and
+# verification, and vice versa.
+concurrency:
+  group: cloudflare-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  refuse-production:
+    name: Refuse production
+    if: inputs.environment == 'production'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Production is not eligible
+        run: |
+          echo "::error::Production household decommissioning is not eligible until development rehearsal evidence and a separate owner approval exist (#32 AC-03)."
+          exit 1
+
+  validate-development-request:
+    name: Validate development request
+    if: inputs.environment == 'development'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require main and the literal confirmation
+        env:
+          GIT_REF: ${{ github.ref }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          if [ "$GIT_REF" != "refs/heads/main" ]; then
+            echo "::error::Dispatch the decommission workflow from main only."
+            exit 1
+          fi
+          if [ "$CONFIRMATION" != "DECOMMISSION_DEVELOPMENT_HOUSEHOLD" ]; then
+            echo "::error::The confirmation input must be exactly DECOMMISSION_DEVELOPMENT_HOUSEHOLD."
+            exit 1
+          fi
+
+  decommission-development:
+    name: Decommission development household
+    if: inputs.environment == 'development' && github.ref == 'refs/heads/main'
+    needs: validate-development-request
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: development
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      # The script uses only Node built-ins, so no dependencies are installed
+      # in the job that holds the decommission token.
+      - name: Run decommission procedure
+        run: node scripts/household-decommission.ts
+        env:
+          DECOMMISSION_ENVIRONMENT: ${{ inputs.environment }}
+          DECOMMISSION_EXPECTED_HOUSEHOLD_ID: ${{ inputs.expected_household_id }}
+          DECOMMISSION_EXPECTED_D1_DATABASE_ID: ${{ inputs.expected_d1_database_id }}
+          DECOMMISSION_APPROVAL_REFERENCE: ${{ inputs.approval_reference }}
+          DECOMMISSION_CONFIRMATION: ${{ inputs.confirmation }}
+          DECOMMISSION_ACCESS_APP_ID: ${{ vars.DECOMMISSION_ACCESS_APP_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_DECOMMISSION_API_TOKEN: ${{ secrets.CLOUDFLARE_DECOMMISSION_API_TOKEN }}

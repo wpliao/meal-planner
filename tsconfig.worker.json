@@ -8,12 +8,17 @@
     "strict": true,
     "skipLibCheck": true,
     "isolatedModules": true,
+    // The Workers-runtime tests run the Node operator procedure against the
+    // real D1 schema; its imports carry explicit .ts extensions.
+    "allowImportingTsExtensions": true,
     "noEmit": true,
     "types": ["@cloudflare/workers-types", "@cloudflare/vitest-plugin/types"]
   },
   "include": [
     "src/worker",
     "src/shared",
+    "src/operations/household-decommission",
+    "test/operations/fake-cloudflare.ts",
     "test/worker",
     "worker-configuration.d.ts"
   ]
