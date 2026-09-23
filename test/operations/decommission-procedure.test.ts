@@ -526,8 +526,30 @@ describe('household decommission procedure', () => {
       ]);
       expect(failureRecord(records)).toMatchObject({
         stage: 'close-access',
-        message: expect.stringContaining('not a deny policy') as unknown,
+        message: expect.stringContaining(
+          'not a deny policy (actions: deny, deny, allow)',
+        ) as unknown,
       });
+    });
+
+    it('names each policy action without printing owner-written text', async () => {
+      const policies = [
+        {
+          ...denyEveryonePolicy(),
+          name: 'Deny for owner@example.test',
+        },
+        {
+          decision: 'non_identity',
+          name: 'Service token for ci@example.test',
+          include: [{ email: { email: 'member@example.test' } }],
+        },
+        { decision: 'Allow owner@example.test', include: [] },
+      ];
+      const { exitCode, records } = await run(withState({ policies }));
+      expect(exitCode).toBe(1);
+      const message = failureRecord(records)?.message ?? '';
+      expect(message).toContain('(actions: deny, non_identity, other)');
+      expect(message).not.toMatch(/@example\.test|Service token|Deny for/u);
     });
 
     it('accepts deny-only policies spread across pages', async () => {
