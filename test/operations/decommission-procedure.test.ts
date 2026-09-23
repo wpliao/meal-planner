@@ -29,6 +29,7 @@ import {
   TABLES,
   validInputs,
   WORKER_HOST,
+  zeroCounts,
   type FakeState,
 } from './fake-cloudflare';
 
@@ -238,9 +239,9 @@ describe('household decommission procedure', () => {
         { migrations: [...MIGRATIONS].reverse() },
       ],
       [
-        'an unaccounted table such as recipes',
+        'an unaccounted table such as meal_plans',
         {
-          tables: [...TABLES, 'recipes'].sort((a, b) =>
+          tables: [...TABLES, 'meal_plans'].sort((a, b) =>
             a.localeCompare(b, 'en'),
           ),
         },
@@ -282,6 +283,18 @@ describe('household decommission procedure', () => {
       [
         'pantry rows outside the target household',
         { counts: installedCounts({ pantry_rows: 6 }) },
+      ],
+      [
+        'recipes outside the target household',
+        { counts: installedCounts({ recipe_rows: 3 }) },
+      ],
+      [
+        'recipe ingredients outside the target household',
+        { counts: installedCounts({ recipe_ingredient_rows: 8 }) },
+      ],
+      [
+        'recipe steps outside the target household',
+        { counts: installedCounts({ recipe_step_rows: 5 }) },
       ],
     ])('stops on %s with D1 untouched', async (_, state) => {
       const fake = withState(state);
@@ -523,7 +536,8 @@ describe('household decommission procedure', () => {
   describe('deletion batch', () => {
     it.each([
       ['only the household row', [1, 1]],
-      ['the household and its cascaded rows', [1, 9]],
+      // 1 household + 3 members + 5 pantry + 2 recipes + 7 ingredients + 4 steps
+      ['the household and its cascaded rows', [1, 22]],
     ])('accepts a batch that reports %s', async (_, changes) => {
       const { exitCode, records } = await run(
         withState({ batchChanges: changes }),
@@ -538,8 +552,9 @@ describe('household decommission procedure', () => {
 
     it.each([
       ['a partial cascade count', [1, 2]],
-      ['an extra row', [1, 10]],
-      ['two pointer rows', [2, 9]],
+      ['a cascade count without the recipe rows', [1, 9]],
+      ['an extra row', [1, 23]],
+      ['two pointer rows', [2, 22]],
     ])('rejects a batch that reports %s', async (_, changes) => {
       const { exitCode, records } = await run(
         withState({ batchChanges: changes }),
@@ -633,21 +648,18 @@ describe('household decommission procedure', () => {
       ],
       ['remaining members', { member_rows: 1, target_member_rows: 1 }],
       ['remaining pantry rows', { pantry_rows: 2, target_pantry_rows: 2 }],
+      ['remaining recipes', { recipe_rows: 1, target_recipe_rows: 1 }],
+      [
+        'remaining recipe ingredients',
+        { recipe_ingredient_rows: 3, target_recipe_ingredient_rows: 3 },
+      ],
+      [
+        'remaining recipe steps',
+        { recipe_step_rows: 2, target_recipe_step_rows: 2 },
+      ],
     ])('fails when verification finds %s', async (_, remaining) => {
       const fake = withState({
-        countsAfterDelete: {
-          ...installedCounts({
-            installation_rows: 0,
-            target_installation_rows: 0,
-            household_rows: 0,
-            target_household_rows: 0,
-            member_rows: 0,
-            target_member_rows: 0,
-            pantry_rows: 0,
-            target_pantry_rows: 0,
-          }),
-          ...remaining,
-        },
+        countsAfterDelete: { ...zeroCounts(), ...remaining },
       });
       const { exitCode, records } = await run(fake);
       expect(exitCode).toBe(1);

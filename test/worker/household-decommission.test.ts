@@ -27,6 +27,7 @@ import {
   mutationInit,
   seedOtherHousehold,
   seedPantryItem,
+  seedRecipe,
   testEnv,
 } from './helpers';
 
@@ -48,7 +49,10 @@ const countsFor = async (householdId: string): Promise<HouseholdCounts> => {
   return row;
 };
 
-/** Bootstraps the installed household through the real API, with pantry rows. */
+/**
+ * Bootstraps the installed household through the real API, with pantry rows
+ * and a recipe that has lines.
+ */
 const installHousehold = async (): Promise<string> => {
   const response = await bootstrapOwner();
   expect(response.status).toBe(201);
@@ -56,6 +60,10 @@ const installHousehold = async (): Promise<string> => {
   const householdId = body.household.id;
   await seedPantryItem(householdId, 'rice');
   await seedPantryItem(householdId, 'beans', 'low');
+  await seedRecipe(householdId, 'Fried rice', {
+    ingredients: ['1 cup rice', '2 eggs'],
+    steps: ['Fry everything together.'],
+  });
   await fetchWorker(
     new Request(
       'https://example.test/api/household/members',
@@ -72,7 +80,10 @@ const allCounts = () =>
          (SELECT COUNT(*) FROM app_installation) AS installations,
          (SELECT COUNT(*) FROM households) AS households,
          (SELECT COUNT(*) FROM household_members) AS members,
-         (SELECT COUNT(*) FROM pantry_items) AS pantry`,
+         (SELECT COUNT(*) FROM pantry_items) AS pantry,
+         (SELECT COUNT(*) FROM recipes) AS recipes,
+         (SELECT COUNT(*) FROM recipe_ingredients) AS ingredients,
+         (SELECT COUNT(*) FROM recipe_steps) AS steps`,
     )
     .first<Record<string, number>>();
 
@@ -106,12 +117,21 @@ describe('household decommission statements', () => {
       target_member_rows: 2,
       pantry_rows: 2,
       target_pantry_rows: 2,
+      recipe_rows: 1,
+      target_recipe_rows: 1,
+      recipe_ingredient_rows: 2,
+      target_recipe_ingredient_rows: 2,
+      recipe_step_rows: 1,
+      target_recipe_step_rows: 1,
     });
     expect(await countsFor(other.householdId)).toMatchObject({
       target_installation_rows: 0,
       target_household_rows: 1,
       target_member_rows: 1,
       target_pantry_rows: 0,
+      target_recipe_rows: 0,
+      target_recipe_ingredient_rows: 0,
+      target_recipe_step_rows: 0,
     });
   });
 
@@ -134,17 +154,19 @@ describe('household decommission statements', () => {
     expect(await allCounts()).toEqual(before);
   });
 
-  it('removes the pointer and household and cascades members and pantry rows', async () => {
+  it('removes the pointer and household and cascades members, pantry, and recipe rows', async () => {
     const householdId = await installHousehold();
     const other = await seedOtherHousehold();
     await seedPantryItem(other.householdId, 'rice');
+    await seedRecipe(other.householdId, 'Other Family Soup');
 
     const preflight = await countsFor(householdId);
     const results = await runBatch(householdId);
 
-    // The Workers-runtime engine includes the cascaded member and pantry rows.
+    // The Workers-runtime engine includes every cascaded row: 1 household,
+    // 2 members, 2 pantry items, 1 recipe, 2 ingredients, and 1 step.
     const [cascadeInclusive] = acceptableDeletionChanges(preflight);
-    expect(cascadeInclusive).toEqual([1, 5]);
+    expect(cascadeInclusive).toEqual([1, 9]);
     expect(results.map(({ meta }) => meta.changes)).toEqual(cascadeInclusive);
     expect(await countsFor(householdId)).toEqual({
       installation_rows: 0,
@@ -155,11 +177,20 @@ describe('household decommission statements', () => {
       target_member_rows: 0,
       pantry_rows: 1,
       target_pantry_rows: 0,
+      recipe_rows: 1,
+      target_recipe_rows: 0,
+      recipe_ingredient_rows: 1,
+      target_recipe_ingredient_rows: 0,
+      recipe_step_rows: 1,
+      target_recipe_step_rows: 0,
     });
     expect(await countsFor(other.householdId)).toMatchObject({
       target_household_rows: 1,
       target_member_rows: 1,
       target_pantry_rows: 1,
+      target_recipe_rows: 1,
+      target_recipe_ingredient_rows: 1,
+      target_recipe_step_rows: 1,
     });
   });
 
@@ -259,6 +290,9 @@ describe('household decommission statements', () => {
       households: 0,
       members: 0,
       pantry: 0,
+      recipes: 0,
+      ingredients: 0,
+      steps: 0,
     });
 
     // The Worker itself would offer setup again to the configured bootstrap
@@ -324,12 +358,21 @@ describe('household decommission procedure against the real schema', () => {
     const { result, lines } = run(householdId);
 
     await expect(result).resolves.toMatchObject({
-      preflightCounts: { target_member_rows: 2, target_pantry_rows: 2 },
+      preflightCounts: {
+        target_member_rows: 2,
+        target_pantry_rows: 2,
+        target_recipe_rows: 1,
+        target_recipe_ingredient_rows: 2,
+        target_recipe_step_rows: 1,
+      },
       finalCounts: {
         installation_rows: 0,
         household_rows: 0,
         member_rows: 0,
         pantry_rows: 0,
+        recipe_rows: 0,
+        recipe_ingredient_rows: 0,
+        recipe_step_rows: 0,
       },
     });
     expect(await allCounts()).toEqual({
@@ -337,8 +380,13 @@ describe('household decommission procedure against the real schema', () => {
       households: 0,
       members: 0,
       pantry: 0,
+      recipes: 0,
+      ingredients: 0,
+      steps: 0,
     });
-    expect(lines.join('\n')).not.toMatch(/@example\.test|Liao Family|rice/u);
+    expect(lines.join('\n')).not.toMatch(
+      /@example\.test|Liao Family|rice|eggs|Fry/u,
+    );
   });
 
   it('refuses a household that is not the installed one without deleting anything', async () => {

@@ -259,7 +259,12 @@ export const runDecommission = async (
       preflightCounts.target_household_rows === 1;
     const noForeignRows =
       preflightCounts.member_rows === preflightCounts.target_member_rows &&
-      preflightCounts.pantry_rows === preflightCounts.target_pantry_rows;
+      preflightCounts.pantry_rows === preflightCounts.target_pantry_rows &&
+      preflightCounts.recipe_rows === preflightCounts.target_recipe_rows &&
+      preflightCounts.recipe_ingredient_rows ===
+        preflightCounts.target_recipe_ingredient_rows &&
+      preflightCounts.recipe_step_rows ===
+        preflightCounts.target_recipe_step_rows;
     if (!installedAsReviewed || !noForeignRows) {
       fail(
         'The database does not hold exactly one installed household matching the reviewed household ID.',

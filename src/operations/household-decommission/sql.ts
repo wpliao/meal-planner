@@ -25,8 +25,8 @@ export const DELETE_INSTALLATION_POINTER_SQL = `DELETE FROM app_installation
    AND household_id = ?1`;
 
 /**
- * Removes the reviewed household, which cascades to its members and pantry
- * rows. It only matches while no installation pointer remains, so it deletes
+ * Removes the reviewed household, which cascades to its members, pantry
+ * rows, and recipes, and from each recipe to its ingredient and step lines. It only matches while no installation pointer remains, so it deletes
  * nothing when the first statement matched no row because the pointer names a
  * different household. On its own, the `ON DELETE RESTRICT` foreign key also
  * blocks deleting a household that the pointer still references.
@@ -57,7 +57,15 @@ export const HOUSEHOLD_COUNTS_SQL = `SELECT
   (SELECT COUNT(*) FROM household_members) AS member_rows,
   (SELECT COUNT(*) FROM household_members WHERE household_id = ?1) AS target_member_rows,
   (SELECT COUNT(*) FROM pantry_items) AS pantry_rows,
-  (SELECT COUNT(*) FROM pantry_items WHERE household_id = ?1) AS target_pantry_rows`;
+  (SELECT COUNT(*) FROM pantry_items WHERE household_id = ?1) AS target_pantry_rows,
+  (SELECT COUNT(*) FROM recipes) AS recipe_rows,
+  (SELECT COUNT(*) FROM recipes WHERE household_id = ?1) AS target_recipe_rows,
+  (SELECT COUNT(*) FROM recipe_ingredients) AS recipe_ingredient_rows,
+  (SELECT COUNT(*) FROM recipe_ingredients
+    WHERE recipe_id IN (SELECT id FROM recipes WHERE household_id = ?1)) AS target_recipe_ingredient_rows,
+  (SELECT COUNT(*) FROM recipe_steps) AS recipe_step_rows,
+  (SELECT COUNT(*) FROM recipe_steps
+    WHERE recipe_id IN (SELECT id FROM recipes WHERE household_id = ?1)) AS target_recipe_step_rows`;
 
 export const householdCountsStatement = (
   householdId: string,
@@ -72,6 +80,12 @@ export const COUNT_FIELDS = [
   'target_member_rows',
   'pantry_rows',
   'target_pantry_rows',
+  'recipe_rows',
+  'target_recipe_rows',
+  'recipe_ingredient_rows',
+  'target_recipe_ingredient_rows',
+  'recipe_step_rows',
+  'target_recipe_step_rows',
 ] as const;
 
 export type CountField = (typeof COUNT_FIELDS)[number];
@@ -90,7 +104,15 @@ export type HouseholdCounts = Record<CountField, number>;
 export const acceptableDeletionChanges = (
   counts: HouseholdCounts,
 ): readonly (readonly number[])[] => [
-  [1, 1 + counts.target_member_rows + counts.target_pantry_rows],
+  [
+    1,
+    1 +
+      counts.target_member_rows +
+      counts.target_pantry_rows +
+      counts.target_recipe_rows +
+      counts.target_recipe_ingredient_rows +
+      counts.target_recipe_step_rows,
+  ],
   [1, 1],
 ];
 
@@ -110,8 +132,8 @@ export const TABLE_INVENTORY_SQL = `SELECT name FROM sqlite_master
 
 /**
  * The only tables the procedure knows how to account for. A migration that
- * adds a table (for example, recipes) makes the preflight refuse until this
- * list and the counts above are extended to cover it. The Workers-runtime
+ * adds a table makes the preflight refuse until this list and the counts
+ * above are extended to cover it. The Workers-runtime
  * tests compare this list with the real migrated schema.
  */
 export const EXPECTED_TABLES: readonly string[] = [
@@ -120,4 +142,7 @@ export const EXPECTED_TABLES: readonly string[] = [
   'household_members',
   'households',
   'pantry_items',
+  'recipe_ingredients',
+  'recipe_steps',
+  'recipes',
 ];

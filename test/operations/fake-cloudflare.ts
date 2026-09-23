@@ -19,6 +19,7 @@ export const WORKER_HOST = `${WORKER_NAME}.${ACCOUNT_SUBDOMAIN}.workers.dev`;
 export const MIGRATIONS = [
   '0001_create_household_identity.sql',
   '0002_create_pantry_items.sql',
+  '0003_create_recipes.sql',
 ];
 export const TABLES = [
   'app_installation',
@@ -26,6 +27,9 @@ export const TABLES = [
   'household_members',
   'households',
   'pantry_items',
+  'recipe_ingredients',
+  'recipe_steps',
+  'recipes',
 ];
 
 export const installedCounts = (
@@ -39,6 +43,12 @@ export const installedCounts = (
   target_member_rows: 3,
   pantry_rows: 5,
   target_pantry_rows: 5,
+  recipe_rows: 2,
+  target_recipe_rows: 2,
+  recipe_ingredient_rows: 7,
+  target_recipe_ingredient_rows: 7,
+  recipe_step_rows: 4,
+  target_recipe_step_rows: 4,
   ...overrides,
 });
 
@@ -51,6 +61,12 @@ export const zeroCounts = (): HouseholdCounts => ({
   target_member_rows: 0,
   pantry_rows: 0,
   target_pantry_rows: 0,
+  recipe_rows: 0,
+  target_recipe_rows: 0,
+  recipe_ingredient_rows: 0,
+  target_recipe_ingredient_rows: 0,
+  recipe_step_rows: 0,
+  target_recipe_step_rows: 0,
 });
 
 export interface RecordedCall {
