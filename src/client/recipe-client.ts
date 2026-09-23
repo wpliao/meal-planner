@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, ApiRequestError, type Notice } from './api';
 import {
   cleanRecipeLine,
+  parseRecipeSourceUrl,
   recipeTextLength,
   RECIPE_INGREDIENT_MAX_LENGTH,
   RECIPE_STEP_MAX_LENGTH,
@@ -15,8 +16,12 @@ import {
   type RecipeResponse,
   type RecipeSource,
   type RecipeSourceInput,
+  type RecipeImportFailure,
+  type RecipeImportFailureResponse,
+  type RecipeImportPreviewResponse,
   type RecipeSourceLabel,
   type RecipeTruncationNotice,
+  type RecipeUrlProblem,
 } from '../shared/recipes';
 
 /**
@@ -178,6 +183,90 @@ export const truncationMessage = (notice: RecipeTruncationNotice): string => {
       return `${plural(notice.count, 'step was', 'steps were')} shortened to ${RECIPE_STEP_MAX_LENGTH} characters.`;
   }
 };
+
+// ---------------------------------------------------------------------------
+// Website import
+
+/** What the form says about a link it can refuse without asking the server. */
+export const RECIPE_URL_PROBLEMS: Readonly<Record<RecipeUrlProblem, string>> = {
+  malformed:
+    'That does not look like a web address. Paste the whole link, starting with https://.',
+  too_long: 'That link is too long to import.',
+  not_allowed:
+    'Import works only with https links to a page on one of the supported sites below.',
+};
+
+/**
+ * Checks the link with the same rules the Worker uses, so an address it can
+ * never fetch is refused in the form instead of by a request that tells the
+ * member nothing new. The server still enforces the policy.
+ */
+export const checkImportUrl = (
+  value: string,
+): { ok: true; url: URL } | { ok: false; message: string } => {
+  const parsed = parseRecipeSourceUrl(value.trim());
+  return parsed.ok
+    ? { ok: true, url: parsed.url }
+    : { ok: false, message: RECIPE_URL_PROBLEMS[parsed.problem] };
+};
+
+/**
+ * One message per failure class, each saying something the member can act on.
+ * None of them repeats the link or anything the page contained.
+ */
+export const IMPORT_FAILURE_MESSAGES: Readonly<
+  Record<RecipeImportFailure, string>
+> = {
+  unsafe_destination:
+    'That link cannot be imported. Import works only with https links to a page on one of the supported sites below.',
+  source_unavailable:
+    'That site did not answer. It may be down, or it may be refusing this request. Try again later, or enter the recipe yourself.',
+  unsupported_source:
+    'That page does not publish recipe details this app can read. Enter the recipe yourself — you can copy the text across from the page.',
+  too_large:
+    'That page is too large to read. Enter the recipe yourself instead.',
+  timeout:
+    'That site took too long to answer. Try again, or enter the recipe yourself.',
+};
+
+const IMPORT_FALLBACK =
+  'The recipe could not be imported. Check your connection and try again, or enter the recipe yourself.';
+
+/** The message for a failed import preview, chosen by its failure class. */
+export const importFailureMessage = (error: unknown): string => {
+  if (!(error instanceof ApiRequestError)) return IMPORT_FALLBACK;
+  const body = error.body as Partial<RecipeImportFailureResponse> | undefined;
+  const reason = body?.reason;
+  return reason && Object.hasOwn(IMPORT_FAILURE_MESSAGES, reason)
+    ? IMPORT_FAILURE_MESSAGES[reason]
+    : error.message;
+};
+
+/** The extracted draft, ready for the form. Import never fills notes. */
+export const draftFromPreview = (
+  preview: RecipeImportPreviewResponse,
+): RecipeEditorDraft => ({
+  title: preview.draft.title,
+  ingredients: preview.draft.ingredients,
+  steps: preview.draft.steps,
+  notes: '',
+});
+
+/**
+ * The provenance the form shows and the create request carries. The host and
+ * the import time are the server's to decide, so neither is sent.
+ */
+export const importContextFrom = (
+  preview: RecipeImportPreviewResponse,
+): RecipeImportContext => ({
+  source: {
+    kind: 'website',
+    submittedUrl: preview.source.submittedUrl,
+    resolvedUrl: preview.source.resolvedUrl,
+    pageTitle: preview.source.pageTitle,
+  },
+  notices: preview.notices,
+});
 
 // ---------------------------------------------------------------------------
 // Failures
