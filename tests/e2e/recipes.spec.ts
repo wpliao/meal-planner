@@ -437,3 +437,158 @@ test('a non-member sees no recipes at all', async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Recipes' })).toHaveCount(0);
 });
+
+/**
+ * Website import. The preview route is mocked at the network boundary in
+ * every one of these, so a browser test never causes a request to a real
+ * recipe site — the Worker's own limits are proved in
+ * `test/worker/recipe-import.test.ts`.
+ */
+const IMPORT_URL = 'https://www.justonecookbook.com/oyakodon/';
+
+const importPreview = (title: string) => ({
+  draft: {
+    title,
+    ingredients: ['2 servings cooked rice', '½ onion', '4 large eggs'],
+    steps: ['Slice the onion thinly.', 'Simmer, then cover and serve.'],
+  },
+  source: {
+    submittedUrl: IMPORT_URL,
+    resolvedUrl: null,
+    host: 'www.justonecookbook.com',
+    pageTitle: 'Oyakodon - Just One Cookbook',
+  },
+  notices: [{ field: 'ingredients', count: 2 }],
+});
+
+const stubPreview = (page: Page, body: unknown, status = 200) =>
+  page.route('**/api/recipes/import-preview', (route) =>
+    route.fulfill({
+      status,
+      contentType: 'application/json',
+      body: JSON.stringify(body),
+    }),
+  );
+
+test('a member imports a page, reviews the copy, and saves it with its source', async ({
+  page,
+}) => {
+  await openRecipes(page);
+  const title = unique('Oyakodon');
+  await stubPreview(page, importPreview(title));
+
+  await page.getByRole('link', { name: 'Import from a website' }).click();
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Import a recipe' }),
+  ).toBeVisible();
+  // The screen says plainly that a site will be contacted.
+  await expect(panel(page)).toContainText('will contact that website');
+
+  await fill(page, 'Recipe page link', IMPORT_URL);
+  await page.getByRole('button', { name: 'Get the recipe' }).click();
+
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Review imported recipe' }),
+  ).toBeVisible();
+  const review = page.getByTestId('import-review');
+  await expect(review).toContainText(
+    'The text below was copied from www.justonecookbook.com.',
+  );
+  await expect(review).toContainText('2 ingredient lines were left out');
+  await expect(
+    review.getByRole('link', { name: /Open the original recipe/u }),
+  ).toHaveAttribute('href', IMPORT_URL);
+
+  // The draft is editable before it is saved.
+  await expect(field(page, 'Title')).toHaveValue(title);
+  await fill(page, 'Ingredient 2', '1 small onion');
+  await page.getByRole('button', { name: 'Save recipe' }).click();
+
+  await expect(status(page)).toContainText(
+    `“${title}” was saved to the family recipes.`,
+  );
+  await expect(
+    page.getByTestId('recipe-ingredients').getByRole('listitem'),
+  ).toHaveText(['2 servings cooked rice', '1 small onion', '4 large eggs']);
+  await expect(
+    page.getByRole('link', {
+      name: /Open the original recipe on www\.justonecookbook\.com/u,
+    }),
+  ).toHaveAttribute('href', IMPORT_URL);
+
+  // The library shows where the copy came from.
+  await page.getByRole('link', { name: /All recipes/u }).click();
+  await expect(
+    page.getByTestId('recipe-item').filter({ hasText: title }),
+  ).toContainText('www.justonecookbook.com');
+});
+
+test('a failed import explains itself and leaves manual entry open', async ({
+  page,
+}) => {
+  await openRecipes(page);
+  await stubPreview(
+    page,
+    {
+      error: {
+        code: 'import_failed',
+        message: 'That page does not publish recipe details this app can read.',
+      },
+      reason: 'unsupported_source',
+    },
+    422,
+  );
+
+  await page.goto('/recipes/import');
+  await fill(page, 'Recipe page link', IMPORT_URL);
+  await page.getByRole('button', { name: 'Get the recipe' }).click();
+
+  await expect(page.getByTestId('import-failed')).toContainText(
+    'does not publish recipe details this app can read',
+  );
+  // Nothing was created, and the link is still there to correct.
+  await expect(field(page, 'Recipe page link')).toHaveValue(IMPORT_URL);
+
+  await page.getByRole('link', { name: 'Enter it by hand' }).click();
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'New recipe' }),
+  ).toBeVisible();
+
+  // A link the form itself refuses never reaches the Worker at all.
+  await page.goBack();
+  await fill(page, 'Recipe page link', 'https://example.com/recipe');
+  await page.getByRole('button', { name: 'Get the recipe' }).click();
+  await expect(field(page, 'Recipe page link')).toHaveAttribute(
+    'aria-invalid',
+    'true',
+  );
+  await expect(page.getByTestId('import-failed')).toHaveCount(0);
+});
+
+test('the import screen fits a phone with touch-sized controls', async ({
+  page,
+}) => {
+  await openRecipes(page);
+  await page.goto('/recipes/import');
+  await fill(page, 'Recipe page link', `${IMPORT_URL}a-very-long-recipe-slug/`);
+
+  const scrollWidth = await page.evaluate(
+    () => document.documentElement.scrollWidth,
+  );
+  const viewport = page.viewportSize();
+  expect(scrollWidth).toBeLessThanOrEqual(viewport!.width);
+
+  for (const name of ['Get the recipe', 'Enter it by hand']) {
+    const control = page
+      .getByRole('button', { name })
+      .or(page.getByRole('link', { name }));
+    const box = await control.boundingBox();
+    expect(box, name).not.toBeNull();
+    expect(box!.height, name).toBeGreaterThanOrEqual(44);
+    expect(box!.width, name).toBeGreaterThanOrEqual(44);
+  }
+
+  // The link field stays wide enough to check a pasted address.
+  const input = await field(page, 'Recipe page link').boundingBox();
+  expect(input!.width).toBeGreaterThan(200);
+});

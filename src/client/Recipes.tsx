@@ -47,9 +47,14 @@ export function Recipes() {
           The family’s shared recipes. Everyone in the family can add and change
           them.
         </Text>
-        <Button component={Link} state={{ from: 'list' }} to="/recipes/new">
-          Add recipe
-        </Button>
+        <Group gap="sm">
+          <Button component={Link} state={{ from: 'list' }} to="/recipes/new">
+            Add recipe
+          </Button>
+          <Button component={Link} to="/recipes/import" variant="default">
+            Import from a website
+          </Button>
+        </Group>
       </Group>
 
       {state.kind === 'loading' && (

@@ -67,6 +67,8 @@ export type ApiErrorCode =
   | 'duplicate_name'
   | 'stale_version'
   | 'limit_reached'
+  /** A website import produced no draft; the body carries the failure class. */
+  | 'import_failed'
   | 'service_unavailable';
 
 export interface ApiErrorResponse {

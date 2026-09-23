@@ -347,6 +347,28 @@ const stubRecipes = async (page: Page, path: string, heading: string) => {
 
 const recipePanel = (page: Page) => page.getByTestId('recipe-panel');
 
+const IMPORT_URL = 'https://www.justonecookbook.com/oyakodon/';
+
+/**
+ * The import preview always fails here, and it is answered at the network
+ * boundary: a styling check must never depend on a real recipe site, and must
+ * never cause a request to one.
+ */
+const stubImportFailure = (page: Page) =>
+  page.route('**/api/recipes/import-preview', (route) =>
+    route.fulfill({
+      status: 422,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: {
+          code: 'import_failed',
+          message: 'That page does not publish recipe details.',
+        },
+        reason: 'unsupported_source',
+      }),
+    }),
+  );
+
 test('recipe library', async ({ page }) => {
   await stubRecipes(page, '/recipes', 'Recipes');
   await expect(page.getByTestId('recipe-item')).toHaveCount(2);
@@ -386,6 +408,18 @@ test('recipe screens meet WCAG AA contrast, including field errors', async ({
   await page.getByRole('button', { name: 'Save recipe' }).click();
   await expect(page.getByTestId('form-errors')).toBeVisible();
   await assertTextContrast(page);
+
+  // The import screen, including the failure alert, whose clay colouring is
+  // the same one the field errors needed darkening for.
+  await stubImportFailure(page);
+  await page.goto('/recipes/import');
+  await page
+    .getByRole('textbox', { name: 'Recipe page link' })
+    .fill(IMPORT_URL);
+  await assertTextContrast(page);
+  await page.getByRole('button', { name: 'Get the recipe' }).click();
+  await expect(page.getByTestId('import-failed')).toBeVisible();
+  await assertTextContrast(page);
 });
 
 test('every Mantine component on the recipe screens has its stylesheet', async ({
@@ -406,5 +440,16 @@ test('every Mantine component on the recipe screens has its stylesheet', async (
   await page.goto('/recipes/new');
   await page.getByRole('button', { name: 'Save recipe' }).click();
   await expect(page.getByTestId('form-errors')).toBeVisible();
+  await assertEveryMantineClassIsStyled(page);
+
+  await stubImportFailure(page);
+  await page.goto('/recipes/import');
+  await expect(page.getByTestId('import-sites')).toBeVisible();
+  await assertEveryMantineClassIsStyled(page);
+  await page
+    .getByRole('textbox', { name: 'Recipe page link' })
+    .fill(IMPORT_URL);
+  await page.getByRole('button', { name: 'Get the recipe' }).click();
+  await expect(page.getByTestId('import-failed')).toBeVisible();
   await assertEveryMantineClassIsStyled(page);
 });

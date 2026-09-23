@@ -704,3 +704,57 @@ export const truncateRecipeDraft = (
     notices,
   };
 };
+
+// ---------------------------------------------------------------------------
+// Import preview contract
+
+/**
+ * Bounds on one import, from the accepted #31 design. They are shared so the
+ * screen can tell the member how long a fetch may take with the same number
+ * the Worker enforces.
+ */
+export const RECIPE_IMPORT_MAX_BYTES = 2 * 1024 * 1024;
+export const RECIPE_IMPORT_TIMEOUT_MS = 10_000;
+export const RECIPE_IMPORT_MAX_REDIRECTS = 3;
+
+/**
+ * Why an import produced no draft. Each class gets its own message; none of
+ * them echoes the page, the URL, or anything about the family.
+ */
+export type RecipeImportFailure =
+  | 'unsafe_destination'
+  | 'source_unavailable'
+  | 'unsupported_source'
+  | 'too_large'
+  | 'timeout';
+
+export interface RecipeImportPreviewRequest {
+  url: string;
+}
+
+/** Where the preview's text was read from. No page markup is ever returned. */
+export interface RecipeImportPreviewSource {
+  /** The submitted URL after normalization, without its fragment. */
+  submittedUrl: string;
+  /** The final URL after redirects, or null when it equals the submitted one. */
+  resolvedUrl: string | null;
+  /** Host of the page the text was read from. */
+  host: string;
+  pageTitle: string | null;
+}
+
+export interface RecipeImportPreviewResponse {
+  draft: RecipeDraft;
+  source: RecipeImportPreviewSource;
+  notices: RecipeTruncationNotice[];
+}
+
+/** The body of a failed import: an ordinary API error plus its class. */
+export interface RecipeImportFailureResponse {
+  error: { code: 'import_failed'; message: string };
+  reason: RecipeImportFailure;
+}
+
+/** The supported sites, once each, for the screen that lists them. */
+export const recipeImportSites = (): string[] =>
+  RECIPE_IMPORT_HOSTS.filter((host) => !host.startsWith('www.'));

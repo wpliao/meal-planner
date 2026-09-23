@@ -7,6 +7,7 @@ import { FamilySpace } from './FamilySpace';
 import { Pantry } from './Pantry';
 import { RecipeDetail } from './RecipeDetail';
 import { RecipeCreate, RecipeEdit } from './RecipeEditPages';
+import { RecipeImport } from './RecipeImport';
 import { Recipes } from './Recipes';
 
 /**
@@ -35,6 +36,7 @@ export function App() {
             <Route path="recipes">
               <Route element={<Recipes />} index />
               <Route element={<RecipeCreate />} path="new" />
+              <Route element={<RecipeImport />} path="import" />
               <Route element={<RecipeDetail />} path=":id" />
               <Route element={<RecipeEdit />} path=":id/edit" />
             </Route>

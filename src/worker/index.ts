@@ -21,6 +21,8 @@ import {
   validateCreateRecipe,
   validateRecipeVersion,
   validateUpdateRecipe,
+  type RecipeImportFailure,
+  type RecipeImportPreviewRequest,
   type RecipeResponse,
   type RecipesResponse,
   type RecipeValidation,
@@ -59,6 +61,7 @@ import {
   updateRecipe,
 } from './data/recipe-repository';
 import { ApiError, invalidRequest } from './errors';
+import { importRecipePreview, type ImportFetch } from './import/recipe-import';
 import {
   errorResponse,
   json,
@@ -84,9 +87,42 @@ const PANTRY_ITEM_PATH =
 const RECIPE_PATH =
   /^\/api\/recipes\/([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/iu;
 
+const RECIPE_IMPORT_PATH = '/api/recipes/import-preview';
+
 // A recipe at every bound is about 134,000 code points; at up to four UTF-8
 // bytes each plus JSON framing it stays under 1 MiB. Other routes keep 8 KiB.
 const RECIPE_MAX_JSON_BYTES = 1024 * 1024;
+
+/**
+ * What the member is told about a failed import. Each class says something
+ * different and useful, and none of them repeats the URL, names the site's
+ * response, or quotes the page.
+ */
+const IMPORT_FAILURE_MESSAGES: Readonly<Record<RecipeImportFailure, string>> = {
+  unsafe_destination:
+    'That link cannot be imported. Import works only with https links to a page on one of the supported recipe sites.',
+  source_unavailable:
+    'The recipe site did not answer. It may be unavailable right now; try again later or enter the recipe yourself.',
+  unsupported_source:
+    'That page does not publish recipe details this app can read. Enter the recipe yourself instead.',
+  too_large:
+    'That page is too large to read. Enter the recipe yourself instead.',
+  timeout:
+    'The recipe site took too long to answer. Try again, or enter the recipe yourself.',
+};
+
+/**
+ * A refused destination is the member's request to fix; an unreadable page is
+ * this application's limitation; the rest happened at the far end, which is
+ * what `502` and `504` are for.
+ */
+const IMPORT_FAILURE_STATUS: Readonly<Record<RecipeImportFailure, number>> = {
+  unsafe_destination: 400,
+  unsupported_source: 422,
+  source_unavailable: 502,
+  too_large: 502,
+  timeout: 504,
+};
 
 const toReadySession = (member: MemberContext): SessionResponse => ({
   status: 'ready',
@@ -477,6 +513,47 @@ const handleRecipesCollection = async (
   throw new ApiError(404, 'not_found', 'Not found.');
 };
 
+/**
+ * `POST /api/recipes/import-preview`. It has the same identity, membership,
+ * same-origin, and JSON boundary as every other recipe mutation, but it
+ * writes nothing: the member reviews the draft and saves it through the
+ * ordinary create route, or discards it by leaving.
+ */
+const handleRecipeImportPreview = async (
+  request: Request,
+  env: AppEnv,
+  identityProvider: IdentityProvider,
+  importFetch: ImportFetch,
+): Promise<Response> => {
+  if (request.method !== 'POST') {
+    throw new ApiError(404, 'not_found', 'Not found.');
+  }
+  requireMutationHeaders(request);
+  // Authorize first: an identity that is not an active member never causes an
+  // outbound request to anyone.
+  await requireMemberForRequest(request, env, identityProvider);
+
+  const input = await readJsonObject(request);
+  requireExactFields(input, ['url']);
+  if (typeof input.url !== 'string') {
+    throw invalidRequest('Send the recipe page link as text.');
+  }
+  const requestBody: RecipeImportPreviewRequest = { url: input.url };
+
+  const result = await importRecipePreview(requestBody.url, {
+    fetcher: importFetch,
+  });
+  if (!result.ok) {
+    throw new ApiError(
+      IMPORT_FAILURE_STATUS[result.reason],
+      'import_failed',
+      IMPORT_FAILURE_MESSAGES[result.reason],
+      { reason: result.reason },
+    );
+  }
+  return json(result.preview);
+};
+
 const handleRecipe = async (
   request: Request,
   env: AppEnv,
@@ -537,6 +614,7 @@ const route = async (
   request: Request,
   env: AppEnv,
   identityProvider: IdentityProvider,
+  importFetch: ImportFetch,
 ): Promise<Response> => {
   const url = new URL(request.url);
 
@@ -579,6 +657,15 @@ const route = async (
     return handleRecipesCollection(request, env, identityProvider);
   }
 
+  if (url.pathname === RECIPE_IMPORT_PATH) {
+    return handleRecipeImportPreview(
+      request,
+      env,
+      identityProvider,
+      importFetch,
+    );
+  }
+
   const recipeMatch = RECIPE_PATH.exec(url.pathname);
   if (recipeMatch) {
     return handleRecipe(request, env, recipeMatch[1], identityProvider);
@@ -607,13 +694,19 @@ const route = async (
   );
 };
 
+/**
+ * The page fetcher is injected for the same reason the identity provider is:
+ * a test must be able to answer an import without any real site being
+ * contacted. The deployed Worker uses the runtime's own `fetch`.
+ */
 export const createWorker = (
   identityProvider: IdentityProvider = getVerifiedIdentity,
+  importFetch: ImportFetch = (url, init) => fetch(url, init),
 ) =>
   ({
     async fetch(request: Request, env: AppEnv): Promise<Response> {
       try {
-        return await route(request, env, identityProvider);
+        return await route(request, env, identityProvider, importFetch);
       } catch (error) {
         if (error instanceof ApiError) return errorResponse(error);
         return errorResponse(
