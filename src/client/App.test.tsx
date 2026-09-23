@@ -98,6 +98,35 @@ describe('App', () => {
     expect(screen.queryByText('Liao family')).not.toBeInTheDocument();
   });
 
+  it('lists Recipes in the navigation and opens the library at /recipes', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) =>
+        Promise.resolve(
+          input === '/api/session'
+            ? json(memberSession)
+            : json({ recipes: [] }),
+        ),
+      ),
+    );
+    renderAt('/recipes');
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Recipes' }),
+    ).toBeInTheDocument();
+    const nav = screen.getByRole('navigation', { name: 'Sections' });
+    expect(
+      within(nav)
+        .getAllByRole('link')
+        .map((link) => link.textContent),
+    ).toEqual(['Pantry', 'Recipes', 'Family']);
+    expect(within(nav).getByRole('link', { name: 'Recipes' })).toHaveAttribute(
+      'href',
+      '/recipes',
+    );
+    expect(await screen.findByTestId('recipes-empty')).toBeInTheDocument();
+  });
+
   it('shows the shared pantry to a regular member', async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL) =>
       Promise.resolve(

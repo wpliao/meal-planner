@@ -83,6 +83,7 @@ export const theme = createTheme({
     Button: { defaultProps: { size: 'md' } },
     TextInput: { defaultProps: { size: 'md' } },
     Radio: { defaultProps: { size: 'md' } },
+    Textarea: { defaultProps: { size: 'md' } },
   },
 });
 
@@ -98,10 +99,24 @@ export const theme = createTheme({
  */
 const DIMMED = '#6f6454';
 
+/**
+ * Field error text. Mantine's light-scheme default is `red-6` (`#fa5252`),
+ * about 3.3:1 on a card — an error message the family cannot read is no
+ * error message. The recipe form is the first screen that shows several at
+ * once; `clay.8` measures about 7:1 and is already the palette's warning
+ * colour.
+ */
+const ERROR = clay[8];
+
+const OVERRIDES = {
+  '--mantine-color-dimmed': DIMMED,
+  '--mantine-color-error': ERROR,
+};
+
 export const cssVariablesResolver: CSSVariablesResolver = () => ({
-  variables: { '--mantine-color-dimmed': DIMMED },
+  variables: OVERRIDES,
   // Also in the light block: Mantine's own light value is written under a
   // colour-scheme selector, which outranks the scheme-independent one.
-  light: { '--mantine-color-dimmed': DIMMED },
+  light: OVERRIDES,
   dark: {},
 });

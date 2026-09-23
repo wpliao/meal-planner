@@ -33,6 +33,7 @@ const headingFor = (state: SessionState) => {
 
 const SECTIONS = [
   { label: 'Pantry', to: '/pantry' },
+  { label: 'Recipes', to: '/recipes' },
   { label: 'Family', to: '/family' },
 ] as const;
 

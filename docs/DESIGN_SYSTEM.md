@@ -29,6 +29,7 @@ that way.
 | `white`  | `#fffdf9` — card and control surfaces, not pure white.  |
 | `black`  | `#2b2924` — body text.                                  |
 | `dimmed` | `#6f6454` — secondary text. Overridden; see below.      |
+| `error`  | `clay.8` — field error text. Overridden; see below.     |
 
 `primaryColor` is `sage` at `primaryShade: 9`, so a `Button` with no `color`
 prop is the primary action.
@@ -38,6 +39,12 @@ prop is the primary action.
 override lives in `cssVariablesResolver` in `theme.ts` and has to be set in
 both the scheme-independent and the `light` blocks, because Mantine writes its
 own value under a colour-scheme selector that outranks the general one.
+
+**`error` is overridden for the same reason.** Mantine's light-scheme value is
+`red-6` (`#fa5252`), about 3.3:1 on a card, so a field's own error message was
+the least readable text on the screen. It is `clay.8`, the palette's warning
+colour, at about 7:1. Both overrides live in the same `OVERRIDES` object in
+`theme.ts`.
 
 ## Type
 
@@ -56,6 +63,38 @@ Interactive controls default to `size="md"`, and `--mp-touch-target`
 [`styles.css`](../src/client/styles.css). Mantine's `md` sizes land just under
 44px, and Phase 2 QA found controls that were comfortable with a mouse and too
 small on a phone.
+
+## Ordered lists the member edits
+
+Recipe ingredients and steps are ordered lines the member can add, remove and
+reorder. `RecipeEditor.tsx`'s `LineList` is the pattern; reuse it rather than
+inventing a second one.
+
+- **Reorder with Move up and Move down buttons**, not drag and drop. Dragging
+  has no keyboard or screen-reader equivalent, and these are real buttons with
+  names such as "Move ingredient 2 up".
+- **Focus follows the line that moved**, onto the same control unless that
+  control is the one that just became unavailable at the top or bottom; then
+  the opposite one takes it. Removing a line focuses its neighbour. Adding one
+  focuses the new field. Without this the member is thrown back to the top of
+  the document on every press.
+- **A control that cannot act is hidden, not greyed out** — `visibility:
+hidden` keeps its space so the remaining controls stay in their columns, and
+  it leaves both the tab order and the accessibility tree. A greyed glyph is
+  also low-contrast text the visual suite would have to be told to ignore.
+- **Each change is announced** in a visually hidden `aria-live="polite"`
+  region: "Moved ingredient to position 2 of 5."
+- **The label spans the row and the controls wrap under the field** when there
+  is no room for both. That is intrinsic flex wrapping (`flex: 1 1 14rem`),
+  not a media query, so it follows the container as rule 5 requires.
+
+## Results that outlive a route change
+
+A result raised as the member leaves a screen — saved, deleted, discarded —
+is handed to the next screen through `setRecipeFlash` in `recipe-client.ts`
+rather than through router state, which the browser would replay when the
+member navigates back. The receiving screen shows it in its own `Alert`
+(`RecipeNotice`), which takes focus exactly once.
 
 ## Rules for building a screen
 
