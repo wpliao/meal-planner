@@ -60,18 +60,15 @@ as `mt`, `gap` and `radius`. `defaultRadius` is `md`.
 
 Interactive controls default to `size="md"`, and `--mp-touch-target`
 (`2.75rem`) is a floor applied in [`styles.css`](../src/client/styles.css) to
-every `button`, every date, email, search, text, or URL input, every `select`,
-and every element carrying Mantine's button class. Mantine's `md` sizes land
-just under 44px, and Phase 2 QA found controls that were comfortable with a
-mouse and too small on a phone.
+every `button`, every date, email, search, text, or URL input, every input
+with no `type` attribute, every `select`, and every element carrying Mantine's
+button class. Mantine's `md` sizes land just under 44px, and Phase 2 QA found
+controls that were comfortable with a mouse and too small on a phone.
 
-The input rules match the `type` attribute, and **Mantine's `TextInput`
-renders no `type` unless it is given one**. #49's phone test found the plan's
-text fields at 42px until they were given `type="text"`. Give a new text field
-an explicit `type`. The pantry and recipe text fields have none yet, so they
-sit at 42px; that is recorded as follow-up work on
-[#49](features/0049-meal-planning.md#release-record) rather than changed as a
-side effect of the plan.
+Mantine's `TextInput` and `Select` render an input with **no `type`
+attribute**, which HTML treats as a text input. The floor lists
+`input:not([type])` for that reason: before [#57](https://github.com/wpliao/meal-planner/issues/57),
+every such field measured 42px, and #49's phone test was what found it.
 
 The button class is in that list because a `Button` given `component={Link}`
 renders an `<a>`, which an element-only rule misses; two such buttons measured

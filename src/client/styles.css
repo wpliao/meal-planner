@@ -34,9 +34,14 @@ body {
  * (`component={Link}`) is an `<a>` and was missing it: the recipe library's
  * "Add recipe" and the import screen's "Enter it by hand" both measured 42px
  * on a phone, under the 44px the design system promises.
+ *
+ * `input:not([type])` is there for the same reason: Mantine's TextInput and
+ * Select render an input with no type attribute, which HTML treats as a text
+ * input, and every such field measured 42px until it was listed (#57).
  */
 button,
 .mantine-Button-root,
+input:not([type]),
 input[type='date'],
 input[type='email'],
 input[type='search'],

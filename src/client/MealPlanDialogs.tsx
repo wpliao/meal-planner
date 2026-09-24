@@ -135,9 +135,6 @@ function NoteField({
       label="Note"
       maxLength={MEAL_PLAN_NOTE_MAX_LENGTH}
       onChange={(event) => onChange(event.currentTarget.value)}
-      // An explicit type puts the field under the touch-target floor in
-      // styles.css; Mantine renders a text input with no type attribute.
-      type="text"
       value={value}
     />
   );
@@ -320,8 +317,6 @@ function RecipePicker({
       description={`Type to search ${list.recipes.length} ${list.recipes.length === 1 ? 'recipe' : 'recipes'}.`}
       error={error}
       filter={filterOptions}
-      // Puts the field under the touch-target floor; see NoteField.
-      type="text"
       label="Recipe"
       maxDropdownHeight={240}
       nothingFoundMessage="No recipe matches that search."
@@ -444,7 +439,6 @@ export function AddEntryDialog({
               label="Meal"
               maxLength={MEAL_PLAN_TITLE_MAX_LENGTH}
               onChange={(event) => setTitle(event.currentTarget.value)}
-              type="text"
               value={title}
             />
           )}
@@ -661,7 +655,6 @@ export function EditEntryDialog({
               label="Meal"
               maxLength={MEAL_PLAN_TITLE_MAX_LENGTH}
               onChange={(event) => setTitle(event.currentTarget.value)}
-              type="text"
               value={title}
             />
           ) : (
