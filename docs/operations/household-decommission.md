@@ -17,8 +17,11 @@
 > the [batch atomicity probe](#d1-batch-atomicity-probe-gate-2)
 > ([run 35844042767](https://github.com/wpliao/meal-planner/actions/runs/35844042767)), which showed a failed D1 REST batch rolling back completely, so a
 > failed run cannot leave the installation pointer deleted and the household
-> present. Production is still refused until that reviewed change and the
-> owner's separate approval exist.
+> present. On 2026-09-24 the owner closed the feature with production
+> deletion **deliberately left disabled**. Enabling it starts with a new issue;
+> the feature design's
+> [Rollout and rollback](../features/0032-household-lifecycle.md#rollout-and-rollback)
+> lists the steps.
 
 ## What the owner is agreeing to
 
