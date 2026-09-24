@@ -298,6 +298,10 @@ describe('household decommission procedure', () => {
         'recipe steps outside the target household',
         { counts: installedCounts({ recipe_step_rows: 5 }) },
       ],
+      [
+        'meal-plan entries outside the target household',
+        { counts: installedCounts({ meal_plan_rows: 10 }) },
+      ],
     ])('stops on %s with D1 untouched', async (_, state) => {
       const fake = withState(state);
       const { exitCode, records } = await run(fake);
@@ -608,8 +612,9 @@ describe('household decommission procedure', () => {
   describe('deletion batch', () => {
     it.each([
       ['only the household row', [1, 1]],
-      // 1 household + 3 members + 5 pantry + 2 recipes + 7 ingredients + 4 steps
-      ['the household and its cascaded rows', [1, 22]],
+      // 1 household + 3 members + 5 pantry + 2 recipes + 7 ingredients +
+      // 4 steps + 9 meal-plan entries
+      ['the household and its cascaded rows', [1, 31]],
     ])('accepts a batch that reports %s', async (_, changes) => {
       const { exitCode, records } = await run(
         withState({ batchChanges: changes }),
@@ -624,9 +629,10 @@ describe('household decommission procedure', () => {
 
     it.each([
       ['a partial cascade count', [1, 2]],
-      ['a cascade count without the recipe rows', [1, 9]],
-      ['an extra row', [1, 23]],
-      ['two pointer rows', [2, 22]],
+      ['a cascade count without the recipe rows', [1, 18]],
+      ['a cascade count without the meal-plan rows', [1, 22]],
+      ['an extra row', [1, 32]],
+      ['two pointer rows', [2, 31]],
     ])('rejects a batch that reports %s', async (_, changes) => {
       const { exitCode, records } = await run(
         withState({ batchChanges: changes }),
@@ -728,6 +734,10 @@ describe('household decommission procedure', () => {
       [
         'remaining recipe steps',
         { recipe_step_rows: 2, target_recipe_step_rows: 2 },
+      ],
+      [
+        'remaining meal-plan entries',
+        { meal_plan_rows: 3, target_meal_plan_rows: 3 },
       ],
     ])('fails when verification finds %s', async (_, remaining) => {
       const fake = withState({

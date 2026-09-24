@@ -18,6 +18,16 @@ import {
   type PantryStatus,
 } from '../shared/pantry';
 import {
+  isWithinPlanWindow,
+  serverPlanWriteWindow,
+  validateCreateMealPlanEntry,
+  validateMealPlanRange,
+  validateMealPlanVersion,
+  validateUpdateMealPlanEntry,
+  type MealPlanEntryResponse,
+  type MealPlanResponse,
+} from '../shared/meal-plan';
+import {
   validateCreateRecipe,
   validateRecipeVersion,
   validateUpdateRecipe,
@@ -25,7 +35,6 @@ import {
   type RecipeImportPreviewRequest,
   type RecipeResponse,
   type RecipesResponse,
-  type RecipeValidation,
 } from '../shared/recipes';
 import { getVerifiedIdentity } from './auth/access-identity';
 import {
@@ -46,6 +55,12 @@ import {
   resolveMemberContext,
   type MemberContext,
 } from './data/household-repository';
+import {
+  createMealPlanEntry,
+  deleteMealPlanEntry,
+  listMealPlanEntries,
+  updateMealPlanEntry,
+} from './data/meal-plan-repository';
 import {
   createPantryItem,
   deletePantryItem,
@@ -78,6 +93,7 @@ type IdentityProvider = (
   request: Request,
   env: AppEnv,
 ) => Promise<VerifiedIdentity>;
+type Clock = () => Date;
 
 const LOCAL_BOOTSTRAP_EMAIL = 'owner@example.test';
 const MEMBER_PATH =
@@ -88,6 +104,10 @@ const RECIPE_PATH =
   /^\/api\/recipes\/([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/iu;
 
 const RECIPE_IMPORT_PATH = '/api/recipes/import-preview';
+const MEAL_PLAN_PATH = '/api/meal-plan';
+const MEAL_PLAN_ENTRIES_PATH = '/api/meal-plan/entries';
+const MEAL_PLAN_ENTRY_PATH =
+  /^\/api\/meal-plan\/entries\/([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/iu;
 
 // A recipe at every bound is about 134,000 code points; at up to four UTF-8
 // bytes each plus JSON framing it stays under 1 MiB. Other routes keep 8 KiB.
@@ -468,7 +488,11 @@ const noContent = (): Response =>
   });
 
 /** Turns shared validation errors into one 400 without echoing input. */
-const requireValid = <T>(result: RecipeValidation<T>): T => {
+const requireValid = <T>(
+  result:
+    | { ok: true; value: T }
+    | { ok: false; errors: readonly { message: string }[] },
+): T => {
   if (!result.ok) {
     throw invalidRequest(result.errors.map((error) => error.message).join(' '));
   }
@@ -610,11 +634,99 @@ const handleRecipe = async (
   throw new ApiError(404, 'not_found', 'Not found.');
 };
 
+// Every active member shares the plan; owner role is not required. Household
+// scope always comes from the verified member, never from the request.
+const handleMealPlan = async (
+  request: Request,
+  env: AppEnv,
+  identityProvider: IdentityProvider,
+): Promise<Response> => {
+  if (request.method !== 'GET') {
+    throw new ApiError(404, 'not_found', 'Not found.');
+  }
+  const member = await requireMemberForRequest(request, env, identityProvider);
+  const range = requireValid(
+    validateMealPlanRange(new URL(request.url).searchParams),
+  );
+  const body: MealPlanResponse = {
+    ...range,
+    entries: await listMealPlanEntries(
+      env.DB,
+      member.householdId,
+      range.from,
+      range.to,
+    ),
+  };
+  return json(body);
+};
+
+const handleMealPlanEntries = async (
+  request: Request,
+  env: AppEnv,
+  identityProvider: IdentityProvider,
+  clock: Clock,
+): Promise<Response> => {
+  if (request.method !== 'POST') {
+    throw new ApiError(404, 'not_found', 'Not found.');
+  }
+  requireMutationHeaders(request);
+  const member = await requireMemberForRequest(request, env, identityProvider);
+  const input = await readJsonObject(request);
+  const now = clock();
+  const entry = await createMealPlanEntry(
+    env.DB,
+    member.householdId,
+    requireValid(
+      validateCreateMealPlanEntry(input, serverPlanWriteWindow(now)),
+    ),
+    now,
+  );
+  const body: MealPlanEntryResponse = { entry };
+  return json(body, { status: 201 });
+};
+
+const handleMealPlanEntry = async (
+  request: Request,
+  env: AppEnv,
+  entryId: string,
+  identityProvider: IdentityProvider,
+  clock: Clock,
+): Promise<Response> => {
+  if (request.method !== 'PATCH' && request.method !== 'DELETE') {
+    throw new ApiError(404, 'not_found', 'Not found.');
+  }
+  requireMutationHeaders(request);
+  const member = await requireMemberForRequest(request, env, identityProvider);
+  const input = await readJsonObject(request);
+
+  if (request.method === 'PATCH') {
+    const now = clock();
+    const window = serverPlanWriteWindow(now);
+    const entry = await updateMealPlanEntry(
+      env.DB,
+      member.householdId,
+      entryId,
+      requireValid(validateUpdateMealPlanEntry(input)),
+      (date) => isWithinPlanWindow(date, window),
+      now,
+    );
+    const body: MealPlanEntryResponse = { entry };
+    return json(body);
+  }
+
+  requireExactFields(input, ['version']);
+  const version = validateMealPlanVersion(input.version);
+  if (!version.ok) throw invalidRequest(version.message);
+  await deleteMealPlanEntry(env.DB, member.householdId, entryId, version.value);
+  return noContent();
+};
+
 const route = async (
   request: Request,
   env: AppEnv,
   identityProvider: IdentityProvider,
   importFetch: ImportFetch,
+  clock: Clock,
 ): Promise<Response> => {
   const url = new URL(request.url);
 
@@ -671,6 +783,25 @@ const route = async (
     return handleRecipe(request, env, recipeMatch[1], identityProvider);
   }
 
+  if (url.pathname === MEAL_PLAN_PATH) {
+    return handleMealPlan(request, env, identityProvider);
+  }
+
+  if (url.pathname === MEAL_PLAN_ENTRIES_PATH) {
+    return handleMealPlanEntries(request, env, identityProvider, clock);
+  }
+
+  const entryMatch = MEAL_PLAN_ENTRY_PATH.exec(url.pathname);
+  if (entryMatch) {
+    return handleMealPlanEntry(
+      request,
+      env,
+      entryMatch[1],
+      identityProvider,
+      clock,
+    );
+  }
+
   // The API boundary is unchanged: an unknown API path is still a JSON 404,
   // and never falls through to the shell.
   if (url.pathname === '/api' || url.pathname.startsWith('/api/')) {
@@ -697,16 +828,18 @@ const route = async (
 /**
  * The page fetcher is injected for the same reason the identity provider is:
  * a test must be able to answer an import without any real site being
- * contacted. The deployed Worker uses the runtime's own `fetch`.
+ * contacted. The deployed Worker uses the runtime's own `fetch`. The clock is
+ * injected so a test can place the plan's write window deterministically.
  */
 export const createWorker = (
   identityProvider: IdentityProvider = getVerifiedIdentity,
   importFetch: ImportFetch = (url, init) => fetch(url, init),
+  clock: Clock = () => new Date(),
 ) =>
   ({
     async fetch(request: Request, env: AppEnv): Promise<Response> {
       try {
-        return await route(request, env, identityProvider, importFetch);
+        return await route(request, env, identityProvider, importFetch, clock);
       } catch (error) {
         if (error instanceof ApiError) return errorResponse(error);
         return errorResponse(

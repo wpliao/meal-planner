@@ -1,11 +1,11 @@
 # Feature: Meal planning
 
-- Status: Accepted
+- Status: Implementing
 - Phase: 4 — meal planning
 - Issue: [#49](https://github.com/wpliao/meal-planner/issues/49)
 - Product owner: Repository owner
 - Last updated: 2026-09-24
-- Pull requests: [#50 — design proposal](https://github.com/wpliao/meal-planner/pull/50)
+- Pull requests: [#50 — design proposal](https://github.com/wpliao/meal-planner/pull/50); [#PR1 — migration and API](https://github.com/wpliao/meal-planner/pull/PR1)
 
 ## Problem and outcome
 
@@ -133,7 +133,7 @@ recipe patterns: a loading state, and a failure message with **Try again**.
   and links to Add recipe.
 - **Type a meal**: a text field, 1–120 characters, such as "Leftovers".
 
-Either choice allows an optional note of up to 200 characters. Saving closes
+Either choice allows an optional one-line note of up to 200 characters. Saving closes
 the dialog, shows the entry in its slot, announces the result, and returns
 focus to that slot's Add button.
 
@@ -190,6 +190,10 @@ API:
   note (or `null` to clear it), and, for text entries only, `title`.
 - `DELETE /api/meal-plan/entries/:id` takes `version`.
 
+A `PATCH` that changes the date or meal is a move: the entry goes last in its
+new meal. The read accepts exactly `from` and `to`, once each, and rejects
+any other query parameter.
+
 Mutations keep the existing same-origin and JSON content-type checks and the
 default body limit. A stale `PATCH` or `DELETE` returns `409 stale_version`
 with the current entry. A missing entry, or one from another household,
@@ -215,7 +219,9 @@ repeat a day.
 Write window: an entry can be placed on any date from **8 weeks ago** to **52
 weeks ahead**. The window applies to the date an entry is created on or moved
 to. Editing the text or note of an older entry that stays on its date is
-allowed. Reads may cover any date. The window only guards against mistyped
+allowed, and so is moving it to another meal on that same date (owner answer
+during implementation, 2026-09-24): the date does not change, so it cannot be
+a mistyped date. Reads may cover any date. The window only guards against mistyped
 dates, such as a wrong year. It is not a retention rule, and it is a
 reversible default for owner review, because
 [decision 6](#resolved-design-decisions) chose to keep entries without
@@ -223,8 +229,9 @@ time-based deletion.
 
 ### Data and migrations
 
-The forward migration `0004_create_meal_plan_entries.sql` is **not yet
-created or applied**. It is additive and alters no existing table.
+The forward migration `0004_create_meal_plan_entries.sql` is created in
+[#PR1](https://github.com/wpliao/meal-planner/pull/PR1) and **not yet applied**
+to any remote environment. It is additive and alters no existing table.
 
 ```text
 households (1) ──< meal_plan_entries (*) >── (0..1) recipes
@@ -238,20 +245,28 @@ Proposed columns:
 | -------------- | ---------------------------------------------------------------------------------------------- |
 | `id`           | Opaque text primary key                                                                        |
 | `household_id` | Not null; references `households(id)` `ON DELETE CASCADE`                                      |
-| `plan_date`    | Not null; `YYYY-MM-DD`, `CHECK (date(plan_date) = plan_date)` rejects impossible dates         |
+| `plan_date`    | Not null; `YYYY-MM-DD`, `CHECK (date(plan_date) IS plan_date)` rejects impossible dates        |
 | `meal_slot`    | Not null; `CHECK (meal_slot IN ('breakfast', 'lunch', 'dinner'))`                              |
 | `kind`         | Not null; `recipe` or `text`                                                                   |
 | `recipe_id`    | Nullable; references `recipes(id)` `ON DELETE SET NULL`; must be null for `text`               |
 | `title`        | Not null, 1–120 characters: the text, or the recipe's title when placed or when it was deleted |
-| `note`         | Nullable, 1–200 characters                                                                     |
+| `note`         | Nullable, 1–200 characters, one line                                                           |
 | `placed_at`    | Not null; set on create and on every move; orders entries within a slot                        |
 | `version`      | Not null, positive; increments on every change                                                 |
 | `created_at`   | Not null                                                                                       |
 | `updated_at`   | Not null                                                                                       |
 
-An index on `(household_id, plan_date)` serves the week read and the limits. The table is `STRICT`, like the others. The migration test must
-prove that D1 accepts a `CHECK` using `date()`. If it does not, the Worker's
-shared validation is the only date check, and the design is updated.
+An index on `(household_id, plan_date)` serves the week read and the limits,
+and an index on `recipe_id` serves `ON DELETE SET NULL`, which would otherwise
+scan the table on every recipe delete. The table is `STRICT`, like the others.
+
+The migration test proves that D1 accepts a `CHECK` using `date()`, and it
+found that the originally proposed `date(plan_date) = plan_date` is not
+enough. `date()` rolls an impossible date such as `2026-02-30` forward, so
+that comparison fails as intended, but it returns `NULL` for malformed text
+such as `2026-2-3`, and a `CHECK` whose result is `NULL` passes. The
+migration therefore uses `IS`, which treats `NULL` as a mismatch and rejects
+both.
 
 **Recipe references and household scope.** A foreign key cannot require that
 a recipe belongs to the same household. The Worker therefore inserts or
@@ -267,7 +282,9 @@ delete becomes a batch. The first statement refreshes `title` on that
 recipe's entries, guarded by the same household, ID, and version as the
 delete. The second is the existing version-guarded `DELETE`. A stale delete
 therefore changes nothing. `kind` stays `recipe`, and a recipe entry whose
-`recipe_id` is null is reported as `recipeRemoved`. Renaming a recipe needs no
+`recipe_id` is null is reported as `recipeRemoved`. The refresh does not
+change an entry's version, because its content is unchanged; a member's open
+edit of that entry still saves. Renaming a recipe needs no
 change, because reads use the live title.
 
 **Limits**: at most **6 entries per slot per day**, and at most
@@ -303,7 +320,11 @@ name meal plans. One point needs a Workers-runtime test: deleting a household
 cascades to both its recipes, which sets entries' `recipe_id` to null, and
 its entries, which deletes them. The affected-row count that D1 reports for
 that combination must be measured before `acceptableDeletionChanges` accepts
-it. Production deletion stays refused, as #32 closed it.
+it. Measured in the Workers runtime: each entry is counted once, as a deleted
+row. The cascade deletes the entries before the recipes, so `SET NULL` finds
+no entry to update, and the accepted cascade-inclusive count adds only the
+target household's entry count. A recipe deleted on its own does count each
+entry it sets to null. Production deletion stays refused, as #32 closed it.
 
 `docs/DATA_MODEL.md` gains a Phase 4 section in the implementation pull
 request.
@@ -382,27 +403,29 @@ bounds the table, so cost stays small and predictable.
 
 ## Traceability
 
-Planned. Exact files, symbols, and passing test names replace these entries
-as each pull request lands. The proposed implementation is two pull requests:
-first the migration, shared contracts, API, recipe-delete change, and
-decommission inventory; then the week view, dialogs, and Add to plan.
+The implementation is two pull requests: first the migration, shared
+contracts, API, recipe-delete change, and decommission inventory
+([#PR1](https://github.com/wpliao/meal-planner/pull/PR1)); then the week view,
+dialogs, and Add to plan. Entries marked _Planned_ belong to the second pull
+request. No criterion is complete until its browser journey and release
+evidence exist.
 
-| Criterion | Planned implementation                                                                                                                 | Planned evidence                                                                            | Release evidence |
-| --------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ---------------- |
-| `AC-01`   | Plan routes in `src/worker/index.ts`; `src/worker/data/meal-plan-repository.ts`                                                        | Workers-runtime authorization and isolation tests; Playwright non-member journey            | Pending          |
-| `AC-02`   | `src/client/MealPlan.tsx`; `/plan` routes in `src/client/App.tsx`; `SECTIONS` in `src/client/AppLayout.tsx`; `src/shared/meal-plan.ts` | Shared week-arithmetic tests; client week-view tests; Playwright navigation and phone tests | Pending          |
-| `AC-03`   | Add dialog; Add to plan on `src/client/RecipeDetail.tsx`; create path in the repository                                                | Workers-runtime create tests; client dialog tests; Playwright plan journeys                 | Pending          |
-| `AC-04`   | Move, edit, and remove dialogs; version-guarded update and delete                                                                      | Workers-runtime conflict tests; client conflict tests; Playwright stale-change journey      | Pending          |
-| `AC-05`   | `ON DELETE SET NULL`; recipe-delete title refresh in `src/worker/data/recipe-repository.ts`; household-scoped recipe checks            | Workers-runtime deletion and cross-household tests; Playwright deleted-recipe journey       | Pending          |
-| `AC-06`   | `migrations/0004_create_meal_plan_entries.sql`; limits; `src/operations/household-decommission/`                                       | Migration, limit, logging, and decommission tests                                           | Pending          |
-| `AC-07`   | Test suites above; feature release record                                                                                              | `./scripts/verify.sh`; PR CI and Sonar; `V-DEV-P1`; `V-PROD-P1`                             | Pending          |
+| Criterion | Implementation                                                                                                                                                                                                                                                                                                                                                                                                        | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Release evidence |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `AC-01`   | `handleMealPlan`, `handleMealPlanEntries`, `handleMealPlanEntry` in `src/worker/index.ts` (verified member on every request; household from `MemberContext`); `src/worker/data/meal-plan-repository.ts` (every statement scoped by household). _Planned:_ plan UI behind the authenticated layout                                                                                                                     | `test/worker/meal-plan.test.ts` — `never lets one household read or change another household's entries`; `denies a revoked member every plan route`; `denies an identity that belongs to no household`; `denies a request without a valid Access assertion`; `lets a regular member manage the shared plan`; `requires same-origin JSON for every plan mutation`. _Planned:_ Playwright non-member journey                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Pending          |
+| `AC-02`   | `src/shared/meal-plan.ts` — `planWeekStart`, `planWeekDates`, `addPlanDays`, `localPlanDate`; `GET /api/meal-plan` with `validateMealPlanRange` (≤ 42 days). _Planned:_ `src/client/MealPlan.tsx`; `/plan` routes in `src/client/App.tsx`; `SECTIONS` in `src/client/AppLayout.tsx`                                                                                                                                   | `src/shared/meal-plan.test.ts` — `plan dates` (`starts the week of %s on Monday %s`; `lists seven consecutive dates from %s to %s through clock changes`; `reads the local and UTC calendar dates separately`), `read ranges`; `test/worker/meal-plan.test.ts` — `orders entries by date, then meal, then placement`; `rejects a read with %s`; `reads a range of exactly 42 days`. _Planned:_ client week-view tests; Playwright navigation, phone, and `timezoneId` tests                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Pending          |
+| `AC-03`   | `createMealPlanEntry` (guarded `INSERT … SELECT` from the household's recipes); `validateCreateMealPlanEntry`. _Planned:_ Add dialog; Add to plan on `src/client/RecipeDetail.tsx`                                                                                                                                                                                                                                    | `test/worker/meal-plan.test.ts` — `adds a recipe entry and a free-text entry and reads them back`; `normalizes text and keeps a note on one line, storing a blank note as none`; `shows a renamed recipe under its current title`; `rejects a create with %s`; `src/shared/meal-plan.test.ts` — `create requests`. _Planned:_ client dialog tests; Playwright plan journeys                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Pending          |
+| `AC-04`   | `updateMealPlanEntry` (version-guarded; a move resets `placed_at` and needs room in its new meal); `deleteMealPlanEntry`; `409 stale_version` with `current`. _Planned:_ move, edit, and remove dialogs                                                                                                                                                                                                               | `test/worker/meal-plan.test.ts` — `moves an entry to another date and meal and places it last there`; `keeps an entry in place when only its note or text changes`; `refuses to change a recipe entry's title`; `removes an entry with its current version`; `conflicts` (`rejects a stale update with the current entry and changes nothing`; `rejects a stale remove and keeps the entry`; `reports an entry already removed by someone else as not found`; `lets exactly one of two concurrent changes from the same version win`; `lets only one of two concurrent moves take the last place in a meal`). _Planned:_ client conflict tests; Playwright stale-change journey                                                                                                                                                                                                                                                                                                                                                                                                  | Pending          |
+| `AC-05`   | `ON DELETE SET NULL` in `0004`; `deleteRecipe` batch in `src/worker/data/recipe-repository.ts` (last-title refresh guarded by household, ID, and version); `ENTRY_SELECT` joins recipes on ID and household                                                                                                                                                                                                           | `test/worker/meal-plan.test.ts` — `recipes` (`refuses another household's recipe exactly like a missing one`; `never returns another household's recipe through the read join`; `keeps entries under the recipe's last title after the recipe is deleted`; `changes no entry when a recipe delete is stale`; `never refreshes another household's entries when a recipe is deleted`); `test/worker/migration.test.ts` — `keeps an entry when its recipe is deleted and cascades on household delete`. _Planned:_ Playwright deleted-recipe journey                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Pending          |
+| `AC-06`   | `migrations/0004_create_meal_plan_entries.sql`; `MEAL_PLAN_SLOT_LIMIT`, `MEAL_PLAN_HOUSEHOLD_LIMIT`, `serverPlanWriteWindow` in `src/shared/meal-plan.ts`; `src/operations/household-decommission/sql.ts` (`HOUSEHOLD_COUNTS_SQL`, `COUNT_FIELDS`, `acceptableDeletionChanges`, `EXPECTED_TABLES`) and `procedure.ts` (preflight foreign-row check); [runbook](../operations/household-decommission.md) owner summary | `test/worker/migration.test.ts` — `meal plan migration` (`applies 0004 on top of the existing schema without altering it`; `accepts only real YYYY-MM-DD dates through the date() CHECK`; `enforces slot, kind, recipe link, text bounds, and version`); `test/worker/meal-plan.test.ts` — `write window` and `limits and privacy` (`caps each meal and keeps the message free of plan text`; `refuses to move an entry into a full meal`; `caps the household and still allows moves, edits, and removal at the cap`; `writes no plan text, note, date, or recipe title to the console`); `test/worker/household-decommission.test.ts` — `counts plan entries that name a recipe once when the household delete cascades to both`; `counts an entry set to null when a recipe is deleted on its own`; `removes the pointer and household and cascades members, pantry, recipe, and plan rows`; `test/operations/decommission-procedure.test.ts` — meal-plan cases of `stops on %s with D1 untouched`, `rejects a batch that reports %s`, and `fails when verification finds %s` | Pending          |
+| `AC-07`   | Test suites above; feature release record                                                                                                                                                                                                                                                                                                                                                                             | `./scripts/verify.sh` in the Dev Container; PR CI and Sonar for each pull request. _Planned:_ `V-DEV-P1`; `V-PROD-P1`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Pending          |
 
 ## Rollout and rollback
 
 1. Record the owner's decisions and acceptance in the issue, and set this
    document to `Accepted` on `main`, before any feature code or migration is
-   written. The decisions and acceptance were recorded on 2026-09-24; the
-   `Accepted` status reaches `main` when PR #50 merges.
+   written. The decisions and acceptance were recorded on 2026-09-24, and
+   the `Accepted` status reached `main` when PR #50 merged.
 2. Implement on focused `codex/` branches, with the migration, decommission
    inventory, and tests together. Run the full Dev Container gate, and
    require CI, Sonar, and a security review.
@@ -451,11 +474,12 @@ chose the recommended option except decision 6.
 
 ## Decision and change log
 
-| Date       | Change                                                                                                                                                                               | Reason                                                                                                                                                                                                | Evidence                                                                             |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| 2026-09-24 | Initial design proposal; status `Designing`                                                                                                                                          | Start Phase 4 with reviewable scope and explicit open decisions after the Phase 3 release                                                                                                             | [Issue #49](https://github.com/wpliao/meal-planner/issues/49)                        |
-| 2026-09-24 | Resolve the eight open decisions; retention becomes keep-until-removed, bounded by the 4,000-entry household limit, with no time-based deletion; `AC-06` and `AC-07` wording follows | The owner's answers in the design session: the recommended option for decisions 1–5, 7, and 8, and "keep until deleted" for decision 6. The count limit is the retention bound on stored plan history | [PR #50](https://github.com/wpliao/meal-planner/pull/50)                             |
-| 2026-09-24 | Accept design; status `Accepted`; `AC-01`–`AC-07` stable                                                                                                                             | Product owner: "I accept the design"                                                                                                                                                                  | [Approval](https://github.com/wpliao/meal-planner/issues/49#issuecomment-5806668289) |
+| Date       | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Reason                                                                                                                                                                                                | Evidence                                                                             |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| 2026-09-24 | Initial design proposal; status `Designing`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Start Phase 4 with reviewable scope and explicit open decisions after the Phase 3 release                                                                                                             | [Issue #49](https://github.com/wpliao/meal-planner/issues/49)                        |
+| 2026-09-24 | Resolve the eight open decisions; retention becomes keep-until-removed, bounded by the 4,000-entry household limit, with no time-based deletion; `AC-06` and `AC-07` wording follows                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | The owner's answers in the design session: the recommended option for decisions 1–5, 7, and 8, and "keep until deleted" for decision 6. The count limit is the retention bound on stored plan history | [PR #50](https://github.com/wpliao/meal-planner/pull/50)                             |
+| 2026-09-24 | Accept design; status `Accepted`; `AC-01`–`AC-07` stable                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Product owner: "I accept the design"                                                                                                                                                                  | [Approval](https://github.com/wpliao/meal-planner/issues/49#issuecomment-5806668289) |
+| 2026-09-24 | Begin implementation (status `Implementing`): migration `0004`, shared contracts, the `/api/meal-plan` routes, the recipe-delete batch, and the decommission inventory. Corrections found by tests: the date `CHECK` uses `IS`, because `date()` returns `NULL` for malformed text and a `NULL` `CHECK` passes; a `recipe_id` index is added for `ON DELETE SET NULL`; the combined household cascade counts each entry once (measured). Owner answers to details the design left open: a same-day move of an entry outside the write window is allowed; notes are one line. Reversible defaults awaiting owner review: the write window of 8 weeks back to 52 weeks ahead (as designed); the recipe-delete title refresh leaves entry versions unchanged; the read rejects unknown query parameters; `limit_reached` is `409`, as designed, unlike the recipe cap's `400` | Implementation PR 1 of 2; the migration test was required to prove the `date()` check, and the decommission count had to be measured before it was accepted                                           | [#PR1](https://github.com/wpliao/meal-planner/pull/PR1)                              |
 
 ## Release record
 

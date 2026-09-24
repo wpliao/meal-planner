@@ -17,6 +17,13 @@ unused tables in place; reversing the migration would delete family recipes
 and needs a separately approved forward migration, not an edit to `0003`.
 See `docs/DATA_MODEL.md`.
 
+Migration `0004_create_meal_plan_entries.sql` adds the shared household meal
+plan for [feature #49](../docs/features/0049-meal-planning.md):
+`meal_plan_entries`, cascading from the household, with `recipe_id` set to
+`NULL` when its recipe is deleted. It is additive and alters no existing
+table. The household decommission procedure counts the table; a later table
+must be added there in the same pull request as its migration.
+
 Migrations are immutable and ordered. Test each migration against a fresh local
 D1 database, apply it to the development D1 database before any production
 rollout, and obtain explicit production approval before applying it to

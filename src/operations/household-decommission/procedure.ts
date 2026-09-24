@@ -283,7 +283,8 @@ export const runDecommission = async (
       preflightCounts.recipe_ingredient_rows ===
         preflightCounts.target_recipe_ingredient_rows &&
       preflightCounts.recipe_step_rows ===
-        preflightCounts.target_recipe_step_rows;
+        preflightCounts.target_recipe_step_rows &&
+      preflightCounts.meal_plan_rows === preflightCounts.target_meal_plan_rows;
     if (!installedAsReviewed || !noForeignRows) {
       fail(
         'The database does not hold exactly one installed household matching the reviewed household ID.',
