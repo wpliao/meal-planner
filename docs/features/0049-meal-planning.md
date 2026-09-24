@@ -20,10 +20,11 @@ household recipes and simple free-text meals onto the days and meals of a
 week, change them as plans change, and see the current week at a glance on a
 phone.
 
-This is a **proposal**. The choices marked "proposed" below follow the
-recommended answer to each [open decision](#open-decisions-before-acceptance),
-and they change if the owner chooses differently. Acceptance authorizes
-implementation only. It does not authorize applying migration `0004`
+The product owner resolved all eight open design decisions on 2026-09-24; see
+[Resolved design decisions](#resolved-design-decisions). The design stays
+`Designing` until the owner records acceptance on
+[issue #49](https://github.com/wpliao/meal-planner/issues/49). Acceptance
+authorizes implementation only. It does not authorize applying migration `0004`
 remotely, deploying, or changing production, which keep their existing
 approval gates.
 
@@ -86,11 +87,11 @@ stable when the design is accepted.
       recipe's last title, marked as no longer in the library. A plan entry
       can never refer to another household's recipe.
 - [ ] `AC-06`: Plan data is household scoped in D1 and bounded by date
-      window, per-meal, and per-household limits. It follows the accepted
-      retention rule, is counted and removed by the household decommission
+      window, per-meal, and per-household limits. It is kept until a
+      member removes it or the household is deleted, is counted and removed by the household decommission
       procedure, and is never written to logs.
 - [ ] `AC-07`: Deterministic tests cover the migration, authorization and
-      isolation, conflicts, recipe-deletion effects, retention, the
+      isolation, conflicts, recipe-deletion effects, limits, the
       decommission inventory, local-date handling, and the primary browser
       journeys on Chromium and WebKit. Development and production validation
       evidence is recorded before release.
@@ -99,12 +100,11 @@ stable when the design is accepted.
 
 A **Plan** section joins the navigation from
 [ADR 0007](../DECISIONS/0007-navigation-and-information-architecture.md).
-Proposed ([decision 8](#open-decisions-before-acceptance)): it becomes the
+By [decision 8](#resolved-design-decisions) it becomes the
 landing page, and the navigation order is Plan, Pantry, Recipes, Family.
 
 **Week view.** `/plan` shows the current week. `/plan/2026-09-21` shows the
-week starting on that date. The week starts on Monday (proposed,
-[decision 1](#open-decisions-before-acceptance)). The header names the week
+week starting on that date. The week starts on Monday ([decision 1](#resolved-design-decisions)). The header names the week
 ("21–27 September 2026") and offers **Previous week**, **This week**, and
 **Next week**, and each is a real navigation, so back returns to the week
 before. A date in the URL that is not a week's first day is replaced with its
@@ -112,7 +112,7 @@ week's first day. An invalid date is replaced with the current week.
 
 Each day is a card headed by its weekday and date, with today marked "Today".
 Inside each card are the three meal slots, **Breakfast**, **Lunch**, and
-**Dinner** (proposed, [decision 2](#open-decisions-before-acceptance)). Each
+**Dinner** ([decision 2](#resolved-design-decisions)). Each
 slot lists its entries in the order they were placed, followed by an **Add**
 button. A recipe entry shows the recipe's current title as a link to the
 recipe. A free-text entry shows its text. Either may show a short note, such
@@ -212,11 +212,14 @@ in any time zone can always plan its own today. Week arithmetic is done on
 calendar dates, not timestamps, so daylight-saving changes cannot skip or
 repeat a day.
 
-Proposed write window ([decision 6](#open-decisions-before-acceptance)): an
-entry can be placed on any date from **8 weeks ago** to **52 weeks ahead**.
-The window applies to the date an entry is created on or moved to. Editing the
-text or note of an older entry that stays on its date is allowed. Reads may
-cover any retained date.
+Write window: an entry can be placed on any date from **8 weeks ago** to **52
+weeks ahead**. The window applies to the date an entry is created on or moved
+to. Editing the text or note of an older entry that stays on its date is
+allowed. Reads may cover any date. The window only guards against mistyped
+dates, such as a wrong year. It is not a retention rule, and it is a
+reversible default for owner review, because
+[decision 6](#resolved-design-decisions) chose to keep entries without
+time-based deletion.
 
 ### Data and migrations
 
@@ -246,8 +249,7 @@ Proposed columns:
 | `created_at`   | Not null                                                                                       |
 | `updated_at`   | Not null                                                                                       |
 
-An index on `(household_id, plan_date)` serves the week read, the limits, and
-retention. The table is `STRICT`, like the others. The migration test must
+An index on `(household_id, plan_date)` serves the week read and the limits. The table is `STRICT`, like the others. The migration test must
 prove that D1 accepts a `CHECK` using `date()`. If it does not, the Worker's
 shared validation is the only date check, and the design is updated.
 
@@ -258,7 +260,7 @@ EXISTS` statements that require `recipes.household_id` to equal the caller's
 household. Reads join recipes on both ID and household. A Workers-runtime test
 proves that another household's recipe ID is refused and never disclosed.
 
-**Recipe deletion** (proposed, [decision 4](#open-decisions-before-acceptance)).
+**Recipe deletion** ([decision 4](#resolved-design-decisions)).
 `ON DELETE SET NULL` keeps the entry and drops the link. So that the entry
 shows the recipe's _last_ title rather than its title when placed, the recipe
 delete becomes a batch. The first statement refreshes `title` on that
@@ -268,24 +270,24 @@ therefore changes nothing. `kind` stays `recipe`, and a recipe entry whose
 `recipe_id` is null is reported as `recipeRemoved`. Renaming a recipe needs no
 change, because reads use the live title.
 
-**Limits** (proposed): at most **6 entries per slot per day**, and at most
+**Limits**: at most **6 entries per slot per day**, and at most
 **4,000 entries per household**. Both are enforced by guarded
 `INSERT … SELECT` and `UPDATE` statements, so concurrent writes cannot exceed
 them. Bounds live in `src/shared/meal-plan.ts`, and the migration's `CHECK`
 constraints mirror the storage bounds.
 
-**Retention** (proposed, [decision 6](#open-decisions-before-acceptance)).
-Entries dated more than **12 months** before the current UTC date are deleted.
-Deletion happens inside the batch of the next plan write in that household
-(`DELETE … WHERE household_id = ? AND plan_date < ?`), so no scheduled job or
-new binding is needed. If nobody writes to the plan, old entries remain until
-the next write. That bound is acceptable for a private family application,
-and the design states it rather than hiding it. Reads also exclude entries
-past the cutoff, so the visible behavior does not depend on when the last
-write happened. Removing an entry deletes its row; there is no tombstone or
-edit history. As with the pantry and recipes, deletion from the live table
-does not erase D1 Time Travel history, which lasts 7 days on the current
-Workers Free plan.
+**Retention** ([decision 6](#resolved-design-decisions)). Entries are kept
+until a member removes them or the household is deleted. There is no
+time-based deletion, and the 4,000-entry household limit is the bound on
+stored history. At about three entries a day, a household reaches the limit
+after roughly three and a half years. From then on, adding an entry fails with
+`limit_reached`, and the message says to remove old entries first; moving and
+editing still work. Removing thousands of entries one at a time would be
+slow, so a bulk "clear a past week" action is recorded as
+[follow-up work](#release-record) rather than built now. Removing an entry
+deletes its row; there is no tombstone or edit history. As with the pantry and
+recipes, deletion from the live table does not erase D1 Time Travel history,
+which lasts 7 days on the current Workers Free plan.
 
 **Household deletion.** `meal_plan_entries.household_id` cascades from
 `households`, so the accepted operator batch in
@@ -319,8 +321,8 @@ through `innerHTML`, which matters under the current Content Security Policy
 (see [ADR 0006](../DECISIONS/0006-component-library.md) and
 [SECURITY.md](../SECURITY.md)). The feature makes no external request and
 sends nothing to a third party. Who may edit follows
-[decision 5](#open-decisions-before-acceptance); the proposal is every active
-member, as for the pantry and recipes.
+[decision 5](#resolved-design-decisions): every active member, as for the
+pantry and recipes.
 
 ### Accessibility
 
@@ -356,7 +358,8 @@ bounds the table, so cost stays small and predictable.
     unauthenticated requests
   - cross-household entry and recipe IDs
   - stale updates and deletes, and concurrent moves into a nearly full slot
-  - household and slot limits, the write window, and retention on write
+  - household and slot limits, the message at the household limit, and
+    the write window
   - the recipe-deletion title refresh, including a stale recipe delete
   - the decommission counts, including the combined cascade's affected rows
   - no plan content in logs
@@ -391,7 +394,7 @@ decommission inventory; then the week view, dialogs, and Add to plan.
 | `AC-03`   | Add dialog; Add to plan on `src/client/RecipeDetail.tsx`; create path in the repository                                                | Workers-runtime create tests; client dialog tests; Playwright plan journeys                 | Pending          |
 | `AC-04`   | Move, edit, and remove dialogs; version-guarded update and delete                                                                      | Workers-runtime conflict tests; client conflict tests; Playwright stale-change journey      | Pending          |
 | `AC-05`   | `ON DELETE SET NULL`; recipe-delete title refresh in `src/worker/data/recipe-repository.ts`; household-scoped recipe checks            | Workers-runtime deletion and cross-household tests; Playwright deleted-recipe journey       | Pending          |
-| `AC-06`   | `migrations/0004_create_meal_plan_entries.sql`; limits and retention; `src/operations/household-decommission/`                         | Migration, limit, retention, logging, and decommission tests                                | Pending          |
+| `AC-06`   | `migrations/0004_create_meal_plan_entries.sql`; limits; `src/operations/household-decommission/`                                       | Migration, limit, logging, and decommission tests                                           | Pending          |
 | `AC-07`   | Test suites above; feature release record                                                                                              | `./scripts/verify.sh`; PR CI and Sonar; `V-DEV-P1`; `V-PROD-P1`                             | Pending          |
 
 ## Rollout and rollback
@@ -417,75 +420,45 @@ so an operator rehearsal after a rollback needs the current code. Recovery
 from a bad write is a forward fix, or an explicitly approved Time Travel
 restore after examining its scope.
 
-## Open decisions before acceptance
+## Resolved design decisions
 
-Each decision lists the recommended option first. The proposal above assumes
-every recommendation.
+The product owner answered these on 2026-09-24 in the design session. Each
+chose the recommended option except decision 6.
 
-1. **Time model and week start.**
-   - _(Recommended)_ Local calendar dates shown by week, with weeks starting on
-     **Monday**. Monday keeps Saturday and Sunday together, which suits
-     weekend cooking; otherwise this is a preference, not a technical choice.
-   - Local calendar dates by week, starting on **Sunday**.
-   - A rolling seven days starting today, with no fixed week. It is simpler
-     to read, but links to a week and "last week" become vaguer.
-2. **Meal slots.**
-   - _(Recommended)_ **Breakfast, Lunch, Dinner**, fixed.
-   - Breakfast, Lunch, Dinner, and **Snack**. This adds a fourth row to every
-     day on a phone.
-   - No slots: an ordered list per day. This is the most flexible option, but
-     "what's for dinner" becomes harder to see, and later suggestions lose a
-     signal.
-3. **Entry contents.**
-   - _(Recommended)_ A household recipe **or** free text, each with an
-     optional 200-character note, up to **6 per slot**, so a dinner can have a
-     main and sides.
-   - One entry per slot. This is simpler, but sides or "half the family eats
-     out" do not fit.
-   - Recipes only, with no free text. The cost: "Leftovers" or "Eat out"
-     would need a fake recipe.
-4. **When a planned recipe is deleted.**
-   - _(Recommended)_ Keep the entry under the recipe's last title, marked as
-     no longer in the library.
-   - Refuse to delete a recipe while any entry uses it. The cost: past plans
-     would block deletion until retention removes them.
-   - Remove its entries as well. The cost: the plan and its history change
-     without the member seeing it happen.
-5. **Who may edit the plan.**
-   - _(Recommended)_ Every active member, as for the pantry and recipes.
-   - Owners only, with members able to view. This adds a role check and
-     differs from the rest of the application.
-6. **History and planning window.**
-   - _(Recommended)_ Plan from 8 weeks ago to 52 weeks ahead. Keep entries
-     for 12 months, then delete them on the next plan write. Phase 5
-     suggestions can use a year of history.
-   - Keep entries until someone deletes them, bounded only by the
-     4,000-entry limit. Once full, the family must clear old weeks by hand
-     before planning.
-   - Keep 8 weeks of history. This is the least data, but it leaves little
-     history for Phase 5 suggestions.
-7. **Pantry and shopping.**
-   - _(Recommended)_ No interaction in Phase 4. Recipe ingredients are
-     unstructured text, so any automatic match to pantry items would be a
-     guess. Phase 5 is the place to design that matching explicitly.
-   - A manual "add to shopping" button on each ingredient line of a planned
-     recipe. The cost: the whole line, such as "2 tbsp soy sauce", would
-     become a pantry item name, which clutters the pantry. It also needs a
-     pantry design change.
-8. **Landing page.**
-   - _(Recommended)_ This week's plan becomes the home page (`/` opens
-     `/plan`), and the navigation order is Plan, Pantry, Recipes, Family.
-   - The pantry stays the home page, and Plan is added to the navigation.
+1. **Time model and week start:** local calendar dates shown by week, with
+   weeks starting on **Monday**. Rejected: weeks starting on Sunday, and a
+   rolling seven days from today.
+2. **Meal slots:** **Breakfast, Lunch, Dinner**, fixed. Rejected: adding a
+   Snack slot, and no slots.
+3. **Entry contents:** a household recipe **or** free text, each with an
+   optional 200-character note, up to **6 per slot**. Rejected: one entry per
+   slot, and recipes only.
+4. **When a planned recipe is deleted:** keep the entry under the recipe's
+   last title, marked as no longer in the library. Rejected: refusing to
+   delete a planned recipe, and removing its entries.
+5. **Who may edit the plan:** every active member. Rejected: owners only.
+6. **History:** **keep entries until someone removes them**, bounded by the
+   4,000-entry household limit. The owner chose this over the recommended
+   12-month retention with deletion on the next write. Also rejected: keeping
+   8 weeks. The write window of 8 weeks back to 52 weeks ahead stays as a
+   separate, reversible guard against mistyped dates.
+7. **Pantry and shopping:** no interaction in Phase 4. Rejected: a manual
+   "add to shopping" button on ingredient lines.
+8. **Landing page:** this week's plan becomes the home page, and the
+   navigation order is Plan, Pantry, Recipes, Family. Rejected: keeping the
+   pantry as the home page.
 
 ## Decision and change log
 
-| Date       | Change                                      | Reason                                                                                    | Evidence                                                      |
-| ---------- | ------------------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| 2026-09-24 | Initial design proposal; status `Designing` | Start Phase 4 with reviewable scope and explicit open decisions after the Phase 3 release | [Issue #49](https://github.com/wpliao/meal-planner/issues/49) |
+| Date       | Change                                                                                                                                                                               | Reason                                                                                                                                                                                                | Evidence                                                      |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| 2026-09-24 | Initial design proposal; status `Designing`                                                                                                                                          | Start Phase 4 with reviewable scope and explicit open decisions after the Phase 3 release                                                                                                             | [Issue #49](https://github.com/wpliao/meal-planner/issues/49) |
+| 2026-09-24 | Resolve the eight open decisions; retention becomes keep-until-removed, bounded by the 4,000-entry household limit, with no time-based deletion; `AC-06` and `AC-07` wording follows | The owner's answers in the design session: the recommended option for decisions 1–5, 7, and 8, and "keep until deleted" for decision 6. The count limit is the retention bound on stored plan history | [PR #50](https://github.com/wpliao/meal-planner/pull/50)      |
 
 ## Release record
 
 - Development validation: Pending
 - Production release: Pending
-- Known follow-up work: None yet. Phase 5 suggestions are expected to read
-  recent plan history, and the retention decision sets how much exists.
+- Known follow-up work: a bulk way to clear past weeks, before any household
+  nears the 4,000-entry limit (about three and a half years at three entries a
+  day). Phase 5 suggestions are expected to read plan history.
