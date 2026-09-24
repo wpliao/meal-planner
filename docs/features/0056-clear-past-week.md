@@ -1,6 +1,6 @@
 # Feature: Clear a past week from the meal plan
 
-- Status: Designing
+- Status: Accepted
 - Phase: 4 — meal planning (follow-up to [#49](https://github.com/wpliao/meal-planner/issues/49))
 - Issue: [#56](https://github.com/wpliao/meal-planner/issues/56)
 - Product owner: Repository owner
@@ -24,8 +24,8 @@ limit without tedious work.
 
 The product owner resolved all three open design decisions on 2026-09-24,
 each with the recommended option; see
-[Resolved design decisions](#resolved-design-decisions). Implementation waits
-for the owner's acceptance of the design and the `Accepted` status on `main`. Acceptance authorizes implementation only. It does not authorize
+[Resolved design decisions](#resolved-design-decisions). The owner [accepted this
+design](https://github.com/wpliao/meal-planner/pull/63#issuecomment-5816812603) on 2026-09-24. Acceptance authorizes implementation only. It does not authorize
 deploying or changing production, which keep their existing approval gates.
 
 ## User scenarios
@@ -379,9 +379,10 @@ migration. The table is completed as the code and tests exist.
 ## Rollout and rollback
 
 1. The owner answered the three open decisions on 2026-09-24, and `AC-03` was
-   reworded to the chosen rule. The owner's acceptance is recorded on issue
-   #56, and the status becomes `Accepted` on `main`, before any feature code
-   is written.
+   reworded to the chosen rule. The owner
+   [accepted the design](https://github.com/wpliao/meal-planner/pull/63#issuecomment-5816812603) on 2026-09-24,
+   and the `Accepted` status reaches `main` when #63 merges, before any
+   feature code is written.
 2. Implement on a focused `claude/` branch. Run the full Dev Container gate,
    and require CI, Sonar, and a security review. There is no migration.
 3. Merge to `main`, then deploy development. Validate on a phone (`V-DEV-P1`):
@@ -444,6 +445,7 @@ reopen any of them at acceptance.
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | 2026-09-24 | Initial design proposal; status `Designing`; three open decisions and six resolved from the issue. Authored by Claude Code                                                                                                                                                                                                                                                                                                          | Follow-up to the #49 release: the 4,000-entry household limit is the only bound on plan history, and removal is one entry at a time | [Issue #56](https://github.com/wpliao/meal-planner/issues/56); [#63](https://github.com/wpliao/meal-planner/pull/63) |
 | 2026-09-24 | Resolve the three open decisions with the recommended options: refuse and re-confirm on a changed week; show the hint from 3,600 entries; link the hint to the oldest planned week. `AC-03` reworded from its issue text, "Entries added or changed after the member loaded the week are not removed silently. The design decides between refusing on a conflict and removing only the entries the member saw.", to the chosen rule | The owner's answers in the design session                                                                                           | [#63](https://github.com/wpliao/meal-planner/pull/63)                                                                |
+| 2026-09-24 | Accept design; status `Accepted`; `AC-01`–`AC-05` stable                                                                                                                                                                                                                                                                                                                                                                            | Product owner: "I accept the design"                                                                                                | [Approval](https://github.com/wpliao/meal-planner/pull/63#issuecomment-5816812603)                                   |
 
 ## Release record
 
