@@ -103,6 +103,18 @@ hidden` keeps its space so the remaining controls stay in their columns, and
   is no room for both. That is intrinsic flex wrapping (`flex: 1 1 14rem`),
   not a media query, so it follows the container as rule 5 requires.
 
+## Choosing from family data that grows
+
+When the member picks one item from a list that grows with the family's data,
+such as a recipe from the library, use a searchable Mantine `Select`, not a
+radio group or a list of every item. Its dropdown shows only what matches the
+typing, scrolls within a fixed height, and keeps the dialog short however
+large the library becomes. The plan's recipe picker (`RecipePicker` in
+`MealPlanDialogs.tsx`) is the pattern. Its options open in a portal, so tests
+find them on the page rather than inside the dialog. Mantine also ignores a
+change to an unfocused `Select` input, treating it as autofill, so unit tests
+focus the field before typing.
+
 ## Results that outlive a route change
 
 A result raised as the member leaves a screen — saved, deleted, discarded —

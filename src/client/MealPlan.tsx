@@ -339,40 +339,54 @@ function Day({
           const entries = slots[slot];
           return (
             <div data-testid={`slot-${slot}`} key={slot}>
-              <Text c="dimmed" fw={700} fz="sm" id={labelId}>
+              {/* The meal is the label; its dishes and Add sit in an
+                  indented block under it, in smaller type, so the order
+                  reads day, then meal, then dish (owner review, V-DEV-P1). */}
+              <Text fw={700} fz="md" id={labelId}>
                 {slotLabel(slot)}
               </Text>
-              {entries.length > 0 && (
-                <Stack
-                  aria-labelledby={labelId}
-                  component="ul"
-                  gap={4}
-                  my={4}
-                  p={0}
-                  style={{ listStyle: 'none' }}
-                >
-                  {entries.map((entry) => (
-                    <Entry
-                      entry={entry}
-                      key={entry.id}
-                      menuButtons={menuButtons}
-                      onAction={onAction}
-                    />
-                  ))}
-                </Stack>
-              )}
-              <Button
-                aria-label={`Add to ${slotLabel(slot).toLowerCase()}, ${dayLabel(date)}`}
-                onClick={() => onAction({ kind: 'add', date, slot })}
-                ref={(element) => {
-                  if (element) addButtons.set(slotKey(date, slot), element);
-                  else addButtons.delete(slotKey(date, slot));
+              <Box
+                data-testid="slot-body"
+                ml={4}
+                mt={4}
+                pl="sm"
+                style={{
+                  borderLeft: '2px solid var(--mantine-color-paper-3)',
                 }}
-                size="xs"
-                variant="subtle"
               >
-                + Add
-              </Button>
+                {entries.length > 0 && (
+                  <Stack
+                    aria-labelledby={labelId}
+                    component="ul"
+                    gap={0}
+                    m={0}
+                    p={0}
+                    style={{ listStyle: 'none' }}
+                  >
+                    {entries.map((entry) => (
+                      <Entry
+                        entry={entry}
+                        key={entry.id}
+                        menuButtons={menuButtons}
+                        onAction={onAction}
+                      />
+                    ))}
+                  </Stack>
+                )}
+                <Button
+                  aria-label={`Add to ${slotLabel(slot).toLowerCase()}, ${dayLabel(date)}`}
+                  onClick={() => onAction({ kind: 'add', date, slot })}
+                  ref={(element) => {
+                    if (element) addButtons.set(slotKey(date, slot), element);
+                    else addButtons.delete(slotKey(date, slot));
+                  }}
+                  px={0}
+                  size="xs"
+                  variant="subtle"
+                >
+                  + Add
+                </Button>
+              </Box>
             </div>
           );
         })}
@@ -406,26 +420,24 @@ function Entry({
           <Anchor
             component={Link}
             fw={600}
+            fz="sm"
             style={{ ...touchLink, ...wrap }}
             to={`/recipes/${entry.recipeId}`}
           >
             {entry.title}
           </Anchor>
         ) : (
-          <Text
-            fw={600}
-            style={{ ...wrap, lineHeight: 'var(--mp-touch-target)' }}
-          >
+          <Text fw={500} fz="sm" style={{ ...touchLink, ...wrap }}>
             {entry.title}
           </Text>
         )}
         {removed && (
-          <Text c="dimmed" fz="sm">
+          <Text c="dimmed" fz="xs">
             No longer in the recipe library
           </Text>
         )}
         {entry.note && (
-          <Text c="dimmed" fz="sm" style={wrap}>
+          <Text c="dimmed" fz="xs" style={wrap}>
             {entry.note}
           </Text>
         )}
