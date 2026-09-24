@@ -5,7 +5,7 @@
 - Issue: [#49](https://github.com/wpliao/meal-planner/issues/49)
 - Product owner: Repository owner
 - Last updated: 2026-09-24
-- Pull requests: [#50 — design proposal](https://github.com/wpliao/meal-planner/pull/50); [#51 — migration and API](https://github.com/wpliao/meal-planner/pull/51); [#52 — week view, dialogs, and Add to plan](https://github.com/wpliao/meal-planner/pull/52); [#53 — UI refinements from V-DEV-P1](https://github.com/wpliao/meal-planner/pull/53); [#54 — development validation record](https://github.com/wpliao/meal-planner/pull/54); [#PR5 — production release record](https://github.com/wpliao/meal-planner/pull/PR5)
+- Pull requests: [#50 — design proposal](https://github.com/wpliao/meal-planner/pull/50); [#51 — migration and API](https://github.com/wpliao/meal-planner/pull/51); [#52 — week view, dialogs, and Add to plan](https://github.com/wpliao/meal-planner/pull/52); [#53 — UI refinements from V-DEV-P1](https://github.com/wpliao/meal-planner/pull/53); [#54 — development validation record](https://github.com/wpliao/meal-planner/pull/54); [#55 — production release record](https://github.com/wpliao/meal-planner/pull/55)
 
 ## Problem and outcome
 
