@@ -47,7 +47,8 @@ inside the feature use stable identifiers such as `AC-01` and `AC-02`.
 
 ### 3. Implement
 
-- Work on a focused `codex/` branch and keep changes within the accepted scope.
+- Work on a focused `codex/` or `claude/` branch, named for the authoring tool,
+  and keep changes within the accepted scope.
 - Add the lowest-cost test for each behavior, plus Worker integration or
   Playwright coverage at important boundaries.
 - Update the traceability table as code and tests take shape. Link file paths and

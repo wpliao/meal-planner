@@ -13,7 +13,8 @@
 - [FEATURE_LIFECYCLE.md](./FEATURE_LIFECYCLE.md): feature discovery, design,
   implementation, verification, release, and change workflow.
 - [AGENT_ORCHESTRATION.md](./AGENT_ORCHESTRATION.md): approved staged model and
-  subagent allocation, coordination, and verification responsibilities.
+  subagent allocation for Codex and Claude Code, coordination, and verification
+  responsibilities.
 - [features/](./features/): living feature designs and acceptance traceability.
 - [DECISIONS/](./DECISIONS/): durable architecture decisions and their rationale.
 

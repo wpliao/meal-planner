@@ -103,7 +103,8 @@ security issue.
 ## Git workflow
 
 - Start from an up-to-date branch and keep changes focused on one issue.
-- Use branches prefixed `codex/` unless the product owner specifies otherwise.
+- Use branches prefixed `codex/` for Codex work and `claude/` for Claude Code
+  work unless the product owner specifies otherwise.
 - Do not rewrite or discard user work. Preserve reasonable existing approaches;
   preference alone is not a reason to rewrite another agent's implementation.
 - Use clear commits that explain intent. Reference the issue in the PR.
