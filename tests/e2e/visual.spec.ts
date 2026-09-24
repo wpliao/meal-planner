@@ -453,3 +453,160 @@ test('every Mantine component on the recipe screens has its stylesheet', async (
   await expect(page.getByTestId('import-failed')).toBeVisible();
   await assertEveryMantineClassIsStyled(page);
 });
+
+// ---------------------------------------------------------------------------
+// Meal plan
+
+/** The device clock for plan snapshots: Thursday 24 September 2026, noon. */
+const PLAN_NOW = Date.parse('2026-09-24T12:00:00Z');
+
+const planEntry = (over: Record<string, unknown>) => ({
+  id: '88888888-8888-4888-8888-888888888888',
+  date: '2026-09-24',
+  slot: 'dinner',
+  kind: 'text',
+  title: 'Leftovers',
+  note: null,
+  version: 1,
+  updatedAt: '2026-01-15T00:00:00.000Z',
+  ...over,
+});
+
+const PLAN = {
+  from: '2026-09-21',
+  to: '2026-09-27',
+  entries: [
+    planEntry({
+      id: '88888888-8888-4888-8888-000000000001',
+      date: '2026-09-21',
+      kind: 'recipe',
+      title: RECIPE.title,
+      recipeId: RECIPE_ID,
+      recipeRemoved: false,
+      note: 'double batch',
+    }),
+    planEntry({
+      id: '88888888-8888-4888-8888-000000000002',
+      date: '2026-09-23',
+      slot: 'lunch',
+      kind: 'recipe',
+      title: 'Grandma’s old stew',
+      recipeId: null,
+      recipeRemoved: true,
+    }),
+    planEntry({ id: '88888888-8888-4888-8888-000000000003' }),
+    planEntry({
+      id: '88888888-8888-4888-8888-000000000004',
+      date: '2026-09-26',
+      slot: 'breakfast',
+      title: 'Pancakes',
+    }),
+  ],
+};
+
+const stubPlan = async (page: Page, path = '/plan/2026-09-21') => {
+  await page.clock.setFixedTime(PLAN_NOW);
+  await page.route('**/api/meal-plan?*', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify(PLAN),
+    }),
+  );
+  await stubRecipes(page, path, 'Plan');
+  await expect(page.getByTestId('plan-entry')).toHaveCount(4);
+};
+
+const planPanel = (page: Page) => page.getByTestId('plan-panel');
+
+test('meal plan week', async ({ page }) => {
+  await stubPlan(page);
+  // Catches a day card squeezing its meals, the Today marking, and the
+  // removed-recipe line on a phone and in WebKit.
+  await expect(planPanel(page)).toHaveScreenshot('plan-week.png', {
+    fullPage: true,
+  });
+});
+
+test('meal plan add dialog', async ({ page }) => {
+  await stubPlan(page);
+  await page
+    .getByRole('button', { name: 'Add to dinner, Thursday 24 September' })
+    .click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('radio', { name: RECIPE.title })).toBeVisible();
+  await expect(dialog).toHaveScreenshot('plan-add-dialog.png');
+});
+
+test('meal plan screens meet WCAG AA contrast, including errors and conflicts', async ({
+  page,
+}) => {
+  await stubPlan(page);
+  await assertTextContrast(page);
+
+  await page
+    .getByRole('button', { name: 'Add to dinner, Thursday 24 September' })
+    .click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('radio', { name: 'Type a meal' }).check();
+  await dialog.getByRole('button', { name: 'Add to plan' }).click();
+  await expect(dialog.getByText(/between 1 and 120/u)).toBeVisible();
+  await assertTextContrast(page);
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toBeHidden();
+
+  // A stale edit shows the conflict panel.
+  await page.route('**/api/meal-plan/entries/*', (route) =>
+    route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: { code: 'stale_version', message: 'Someone else changed it.' },
+        current: { ...PLAN.entries[2], note: 'reheat', version: 2 },
+      }),
+    }),
+  );
+  await page.getByRole('button', { name: /Actions for Leftovers/u }).click();
+  await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
+  const note = page.getByRole('dialog').getByRole('textbox', { name: /Note/u });
+  await note.fill('cold');
+  await expect(note).toHaveValue('cold');
+  await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByTestId('entry-conflict')).toBeVisible();
+  await assertTextContrast(page);
+});
+
+test('every Mantine component on the plan screens has its stylesheet', async ({
+  page,
+}) => {
+  await stubPlan(page);
+  await page.getByRole('button', { name: /Actions for Pancakes/u }).click();
+  await expect(page.getByRole('menu')).toBeVisible();
+  await assertEveryMantineClassIsStyled(page);
+  await page.getByRole('menuitem', { name: 'Move', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await assertEveryMantineClassIsStyled(page);
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Cancel' })
+    .click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+
+  await page
+    .getByRole('button', { name: 'Add to lunch, Monday 21 September' })
+    .click();
+  await expect(
+    page.getByRole('dialog').getByRole('radio', { name: RECIPE.title }),
+  ).toBeVisible();
+  await assertEveryMantineClassIsStyled(page);
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Cancel' })
+    .click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+
+  await page.goto(`/recipes/${RECIPE_ID}`);
+  await page.getByRole('button', { name: 'Add to plan' }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await assertEveryMantineClassIsStyled(page);
+  await assertTextContrast(page);
+});

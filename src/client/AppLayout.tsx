@@ -31,7 +31,9 @@ const headingFor = (state: SessionState) => {
   return 'Our family kitchen';
 };
 
+// The plan is home (#49 decision 8), so it comes first.
 const SECTIONS = [
+  { label: 'Plan', to: '/plan' },
   { label: 'Pantry', to: '/pantry' },
   { label: 'Recipes', to: '/recipes' },
   { label: 'Family', to: '/family' },

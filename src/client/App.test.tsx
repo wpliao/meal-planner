@@ -119,7 +119,7 @@ describe('App', () => {
       within(nav)
         .getAllByRole('link')
         .map((link) => link.textContent),
-    ).toEqual(['Pantry', 'Recipes', 'Family']);
+    ).toEqual(['Plan', 'Pantry', 'Recipes', 'Family']);
     expect(within(nav).getByRole('link', { name: 'Recipes' })).toHaveAttribute(
       'href',
       '/recipes',
