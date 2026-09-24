@@ -618,3 +618,66 @@ test('every Mantine component on the plan screens has its stylesheet', async ({
   await assertEveryMantineClassIsStyled(page);
   await assertTextContrast(page);
 });
+
+// ---------------------------------------------------------------------------
+// Touch targets for text fields (#57)
+
+/**
+ * Every visible text-like field is at least 44px tall. Mantine renders its
+ * text inputs with no `type` attribute, and a floor that matched only
+ * `input[type='text']` left every one of them at 42px without any test
+ * noticing, so this checks the fields themselves rather than the selector.
+ */
+const assertTextFieldsMeetTouchFloor = async (page: Page) => {
+  const short = await page.evaluate(() =>
+    Array.from(
+      document.querySelectorAll<HTMLElement>(
+        'input:not([type="radio"]):not([type="checkbox"]):not([type="hidden"]), select',
+      ),
+    )
+      .filter((field) => field.getBoundingClientRect().width > 0)
+      .filter((field) => field.getBoundingClientRect().height < 44)
+      .map(
+        (field) =>
+          `${field.getAttribute('aria-label') ?? field.id} (${Math.round(field.getBoundingClientRect().height)}px)`,
+      ),
+  );
+  expect(short, `text fields under 44px: ${short.join(', ')}`).toEqual([]);
+};
+
+test('every text field on every screen is at least 44px tall', async ({
+  page,
+}) => {
+  await stub(page);
+  await page.getByRole('button', { name: 'Actions for rice' }).click();
+  await page.getByRole('menuitem', { name: 'Rename' }).click();
+  await assertTextFieldsMeetTouchFloor(page);
+
+  await stub(page, '/family', 'Family');
+  await assertTextFieldsMeetTouchFloor(page);
+
+  await stubRecipes(
+    page,
+    `/recipes/${RECIPE_ID}/edit`,
+    `Edit “${RECIPE.title}”`,
+  );
+  await assertTextFieldsMeetTouchFloor(page);
+
+  await page.goto('/recipes/import');
+  await expect(page.getByTestId('import-sites')).toBeVisible();
+  await assertTextFieldsMeetTouchFloor(page);
+
+  await stubPlan(page);
+  await page
+    .getByRole('button', { name: 'Add to dinner, Thursday 24 September' })
+    .click();
+  await expect(
+    page.getByRole('dialog').getByRole('combobox', { name: 'Recipe' }),
+  ).toBeVisible();
+  await assertTextFieldsMeetTouchFloor(page);
+  await page
+    .getByRole('dialog')
+    .getByRole('radio', { name: 'Type a meal' })
+    .check();
+  await assertTextFieldsMeetTouchFloor(page);
+});
