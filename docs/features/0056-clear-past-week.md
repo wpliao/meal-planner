@@ -22,10 +22,10 @@ The outcome: a member can clear a whole past week in one confirmed action, and
 the plan warns the family before it is full, so a household can stay under the
 limit without tedious work.
 
-This proposal resolves what the issue settles and leaves three decisions open
-for the product owner; see [Open design decisions](#open-design-decisions).
-Implementation waits for the owner's acceptance and the `Accepted` status on
-`main`. Acceptance authorizes implementation only. It does not authorize
+The product owner resolved all three open design decisions on 2026-09-24,
+each with the recommended option; see
+[Resolved design decisions](#resolved-design-decisions). Implementation waits
+for the owner's acceptance of the design and the `Accepted` status on `main`. Acceptance authorizes implementation only. It does not authorize
 deploying or changing production, which keep their existing approval gates.
 
 ## User scenarios
@@ -64,18 +64,19 @@ deploying or changing production, which keep their existing approval gates.
 ## Acceptance criteria
 
 These stable identifiers mirror
-[issue #56](https://github.com/wpliao/meal-planner/issues/56). `AC-03` names a
-choice that [open decision 1](#open-design-decisions) makes; its wording will
-be updated to the chosen rule before acceptance and recorded in the decision
-log.
+[issue #56](https://github.com/wpliao/meal-planner/issues/56). `AC-03` was
+reworded before acceptance to state the rule that
+[decision 1](#resolved-design-decisions) chose; its original wording is kept
+in the decision log.
 
 - [ ] `AC-01`: An active member can remove every entry of one past week in one
       confirmed action. Non-members and revoked members cannot.
 - [ ] `AC-02`: The confirmation states the week and the number of entries. The
       removal is one D1 batch, scoped to the member's household.
 - [ ] `AC-03`: Entries added or changed after the member loaded the week are
-      not removed silently. The design decides between refusing on a conflict
-      and removing only the entries the member saw.
+      never removed silently. If the week no longer holds exactly the entries,
+      at exactly the versions, that the member confirmed, nothing is removed,
+      and the member sees the new count and can confirm again.
 - [ ] `AC-04`: The plan tells the member how close the household is to the
       4,000-entry limit before adding fails.
 - [ ] `AC-05`: Worker-runtime, client, and Playwright tests cover
@@ -117,9 +118,8 @@ state, and the live result region announces "Cleared 14 planned meals from
 21–27 September 2026." The Clear button no longer exists, so focus moves to
 the week heading, which takes focus programmatically (`tabIndex={-1}`).
 
-**When the week changed.** The behavior depends on
-[open decision 1](#open-design-decisions). With the recommended rule, nothing
-is removed; the dialog stays open and says "This week changed after you opened
+**When the week changed.** By
+[decision 1](#resolved-design-decisions), nothing is removed; the dialog stays open and says "This week changed after you opened
 it, so nothing was removed. It now has 15 planned meals." It offers **Clear
 all 15** and **Keep them**, following the #49 conflict panel. The week behind
 the dialog reloads. **Keep them** closes the dialog and returns focus to
@@ -128,16 +128,14 @@ result region says "This week had already been cleared."
 
 **Near-limit hint.** Every week view reads the household's usage. When the
 household holds at least the hint threshold of entries
-([open decision 2](#open-design-decisions); recommended 3,600, 90% of the
-limit), an alert sits above the days on every week:
+(3,600, 90% of the limit, by [decision 2](#resolved-design-decisions)), an alert sits above the days on every week:
 
 - Below the limit: "The plan holds 3,650 of 4,000 planned meals. Clear old
   weeks to make room for new plans."
 - At the limit: "The plan is full: 4,000 of 4,000 planned meals. Clear old
   weeks before adding more."
 
-With the recommended answer to [open decision 3](#open-design-decisions), the
-alert ends with a link, **Go to the oldest planned week**, to the week that
+By [decision 3](#resolved-design-decisions), the alert ends with a link, **Go to the oldest planned week**, to the week that
 holds the household's earliest entry. Clearing from the oldest week forward is
 then one tap to reach each week and **Next week** to the following one.
 
@@ -182,8 +180,8 @@ Changed read, additive and backward compatible:
 - `GET /api/meal-plan` adds
   `usage: { entries: number; limit: number; oldestDate: string | null }`. The
   count and oldest date are for the whole household, not the requested range.
-  `oldestDate` is included only if [open decision 3](#open-design-decisions)
-  chooses the link. An older client ignores the field.
+  `oldestDate` serves the oldest-week link
+  ([decision 3](#resolved-design-decisions)). An older client ignores the field.
 
 Shared contracts in `src/shared/meal-plan.ts`:
 
@@ -225,7 +223,7 @@ The request names every entry the member saw, with its version. The Worker
 removes the week's entries in **one** `DELETE` statement, which D1 runs as one
 transaction, so no other write can land in the middle of it.
 
-**Recommended rule (refuse and re-confirm).** The statement deletes the week's
+**The rule ([decision 1](#resolved-design-decisions): refuse and re-confirm).** The statement deletes the week's
 entries only if the week holds exactly the named entries at exactly the named
 versions:
 
@@ -243,7 +241,7 @@ confirms again with the new count. A retried request after a lost response
 finds the week empty and returns `409` with no entries, which the client
 reports as already cleared.
 
-**Alternative (remove only what was seen).** The statement deletes the
+**Rejected alternative (remove only what was seen).** The statement deletes the
 household's entries in that week whose ID and version match a named pair, and
 the Worker returns how many it removed. Changed and new entries stay, and the
 client reloads and reports "Cleared 12 planned meals. 2 that someone else
@@ -380,10 +378,10 @@ migration. The table is completed as the code and tests exist.
 
 ## Rollout and rollback
 
-1. The owner answers the open decisions and accepts the design on issue #56.
-   The answers and acceptance are recorded here, `AC-03` is reworded to the
-   chosen rule, and the status becomes `Accepted` on `main` before any feature
-   code is written.
+1. The owner answered the three open decisions on 2026-09-24, and `AC-03` was
+   reworded to the chosen rule. The owner's acceptance is recorded on issue
+   #56, and the status becomes `Accepted` on `main`, before any feature code
+   is written.
 2. Implement on a focused `claude/` branch. Run the full Dev Container gate,
    and require CI, Sonar, and a security review. There is no migration.
 3. Merge to `main`, then deploy development. Validate on a phone (`V-DEV-P1`):
@@ -399,35 +397,24 @@ Rollback redeploys the Worker version that was live before the release. With
 no migration, rollback needs no data step. Rollback does not restore cleared
 entries; that needs an explicitly approved Time Travel restore within 7 days.
 
-## Open design decisions
-
-The product owner is asked to choose. The recommended option is listed first
-in each.
-
-1. **What happens when the week changed after the member opened it
-   (`AC-03`)?**
-   - **Recommended: refuse and re-confirm.** Nothing is removed; the dialog
-     shows the new count and offers to clear the latest version. What the
-     member confirmed is exactly what is removed, and a cleared week is always
-     empty.
-   - Remove only the entries the member saw, keeping anything changed or new,
-     and report how many were kept.
-2. **When does the near-limit hint appear (`AC-04`)?**
-   - **Recommended: from 3,600 entries (90%).** At about three entries a day,
-     that is roughly four months' warning, and the hint stays out of sight for
-     the first three years.
-   - From 3,000 entries (75%), roughly a year's warning.
-   - Always show the count, for example "1,204 of 4,000 planned meals", on
-     every week.
-3. **How does a member reach old weeks to clear them?**
-   - **Recommended: the hint links to the oldest planned week.** It is one tap,
-     and **Next week** then walks forward. The read adds `oldestDate`.
-   - No link: **Previous week** only. Reaching a week three years back takes
-     about 150 taps.
-   - A "Go to week" date field on every week, which is useful beyond clearing
-     but adds a control to every week view.
-
 ## Resolved design decisions
+
+The product owner answered these on 2026-09-24 in the design session, each
+with the recommended option.
+
+1. **When the week changed after the member opened it (`AC-03`):** **refuse
+   and re-confirm.** Nothing is removed; the dialog shows the new count and
+   offers to clear the latest version, so what the member confirmed is exactly
+   what is removed and a cleared week is always empty. Rejected: removing only
+   the entries the member saw and keeping anything changed or new.
+2. **When the near-limit hint appears (`AC-04`):** **from 3,600 entries
+   (90%)**, about four months' warning at three entries a day, and out of
+   sight for the first three years. Rejected: from 3,000 (75%); always showing
+   the count on every week.
+3. **Reaching old weeks:** **the hint links to the oldest planned week**, and
+   **Next week** walks forward from it; the read adds `oldestDate`. Rejected:
+   no link (three years back is about 150 taps of **Previous week**); a "Go to
+   week" date field on every week view.
 
 These follow from issue #56 or from #49's accepted decisions. The owner may
 reopen any of them at acceptance.
@@ -453,9 +440,10 @@ reopen any of them at acceptance.
 
 ## Decision and change log
 
-| Date       | Change                                                                                                   | Reason                                                                                                                              | Evidence                                                                                                             |
-| ---------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| 2026-09-24 | Initial design proposal; status `Designing`; three open decisions, six resolved. Authored by Claude Code | Follow-up to the #49 release: the 4,000-entry household limit is the only bound on plan history, and removal is one entry at a time | [Issue #56](https://github.com/wpliao/meal-planner/issues/56); [#63](https://github.com/wpliao/meal-planner/pull/63) |
+| Date       | Change                                                                                                                                                                                                                                                                                                                                                                                                                              | Reason                                                                                                                              | Evidence                                                                                                             |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-24 | Initial design proposal; status `Designing`; three open decisions and six resolved from the issue. Authored by Claude Code                                                                                                                                                                                                                                                                                                          | Follow-up to the #49 release: the 4,000-entry household limit is the only bound on plan history, and removal is one entry at a time | [Issue #56](https://github.com/wpliao/meal-planner/issues/56); [#63](https://github.com/wpliao/meal-planner/pull/63) |
+| 2026-09-24 | Resolve the three open decisions with the recommended options: refuse and re-confirm on a changed week; show the hint from 3,600 entries; link the hint to the oldest planned week. `AC-03` reworded from its issue text, "Entries added or changed after the member loaded the week are not removed silently. The design decides between refusing on a conflict and removing only the entries the member saw.", to the chosen rule | The owner's answers in the design session                                                                                           | [#63](https://github.com/wpliao/meal-planner/pull/63)                                                                |
 
 ## Release record
 
