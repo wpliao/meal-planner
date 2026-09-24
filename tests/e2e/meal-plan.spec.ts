@@ -1,0 +1,582 @@
+import {
+  expect,
+  test,
+  type APIRequestContext,
+  type Page,
+  type TestInfo,
+} from '@playwright/test';
+
+/**
+ * Each Playwright project has its own local D1, shared by the specs inside it
+ * and run in parallel, so every test here plans into its own week and uses
+ * unique titles. Weeks are counted from the real current week, because the
+ * Worker's write window follows the real date.
+ */
+
+const unique = (prefix: string) =>
+  `${prefix} ${Math.random().toString(36).slice(2, 8)}`;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const WEEKDAYS = [
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Sunday',
+];
+const MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+const isoDate = (time: number) => new Date(time).toISOString().slice(0, 10);
+const addDays = (date: string, days: number) =>
+  isoDate(Date.parse(`${date}T00:00:00Z`) + days * DAY_MS);
+const mondayOf = (date: string) => {
+  const weekday = (new Date(`${date}T00:00:00Z`).getUTCDay() + 6) % 7;
+  return addDays(date, -weekday);
+};
+/** "Thursday 24 September", as the day headings read. */
+const dayName = (date: string) => {
+  const value = new Date(`${date}T00:00:00Z`);
+  return `${WEEKDAYS[(value.getUTCDay() + 6) % 7]} ${value.getUTCDate()} ${MONTHS[value.getUTCMonth()]}`;
+};
+
+/** The Monday `offset` weeks after the current UTC week. */
+const futureWeek = (offset: number) =>
+  addDays(mondayOf(isoDate(Date.now())), 7 * offset);
+
+const openPlan = async (page: Page, path: string) => {
+  await page.goto(path);
+  // Wait until the session has answered: either the plan or first-run setup.
+  const setup = page.getByRole('heading', { name: 'Set up your family space' });
+  const plan = page.getByRole('heading', { level: 1, name: 'Plan' });
+  await expect(setup.or(plan)).toBeVisible();
+  if (await setup.isVisible()) {
+    await page.getByLabel('Family space name').fill('E2E Family');
+    await page.getByRole('button', { name: 'Create family space' }).click();
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Create family space' })
+      .click();
+    await page.goto(path);
+  }
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Plan' }),
+  ).toBeVisible();
+  await expect(page.getByTestId('plan-days')).toBeVisible();
+};
+
+const day = (page: Page, date: string) =>
+  page.getByRole('region', { name: dayName(date) });
+const slot = (page: Page, date: string, meal: string) =>
+  day(page, date).getByTestId(`slot-${meal}`);
+const result = (page: Page) => page.getByTestId('plan-result');
+
+/** A same-origin JSON request, as the Worker requires of mutations. */
+const call = async <T>(
+  request: APIRequestContext,
+  testInfo: TestInfo,
+  method: 'POST' | 'PATCH' | 'DELETE',
+  path: string,
+  data: unknown,
+): Promise<T> => {
+  const response = await request.fetch(path, {
+    method,
+    data,
+    headers: {
+      origin: String(testInfo.project.use.baseURL),
+      'content-type': 'application/json',
+    },
+  });
+  expect(response.ok(), await response.text()).toBe(true);
+  return (response.status() === 204 ? undefined : await response.json()) as T;
+};
+
+interface Saved {
+  id: string;
+  version: number;
+  title: string;
+}
+
+const createRecipe = async (
+  page: Page,
+  testInfo: TestInfo,
+  title: string,
+): Promise<Saved> =>
+  (
+    await call<{ recipe: Saved }>(
+      page.request,
+      testInfo,
+      'POST',
+      '/api/recipes',
+      {
+        title,
+        ingredients: ['rice'],
+        steps: ['Cook it.'],
+      },
+    )
+  ).recipe;
+
+const createEntry = async (
+  page: Page,
+  testInfo: TestInfo,
+  body: Record<string, unknown>,
+): Promise<Saved> =>
+  (
+    await call<{ entry: Saved }>(
+      page.request,
+      testInfo,
+      'POST',
+      '/api/meal-plan/entries',
+      body,
+    )
+  ).entry;
+
+test('home is the plan, first in the navigation', async ({ page }) => {
+  await openPlan(page, '/');
+  await expect(page).toHaveURL(/\/plan$/u);
+  await expect(
+    page.getByRole('navigation', { name: 'Sections' }).getByRole('link'),
+  ).toHaveText(['Plan', 'Pantry', 'Recipes', 'Family']);
+});
+
+test('a member plans a recipe and a typed meal, moves one, edits a note, and removes one', async ({
+  page,
+}, testInfo) => {
+  const monday = futureWeek(2);
+  const tuesday = addDays(monday, 1);
+  const wednesday = addDays(monday, 2);
+  await openPlan(page, '/plan');
+  const recipeTitle = unique('Soy chicken');
+  const recipe = await createRecipe(page, testInfo, recipeTitle);
+  await openPlan(page, `/plan/${monday}`);
+
+  // A recipe, found by searching the library.
+  await slot(page, monday, 'dinner')
+    .getByRole('button', { name: `Add to dinner, ${dayName(monday)}` })
+    .click();
+  let dialog = page.getByRole('dialog');
+  await dialog
+    .getByRole('searchbox', { name: 'Search recipes' })
+    .fill(recipeTitle);
+  await dialog.getByRole('radio', { name: recipeTitle }).check();
+  await dialog.getByRole('textbox', { name: /Note/u }).fill('double batch');
+  await dialog.getByRole('button', { name: 'Add to plan' }).click();
+  await expect(result(page)).toContainText(
+    `Added “${recipeTitle}” to dinner on ${dayName(monday)}.`,
+  );
+  const dinner = slot(page, monday, 'dinner');
+  await expect(dinner.getByRole('link', { name: recipeTitle })).toHaveAttribute(
+    'href',
+    `/recipes/${recipe.id}`,
+  );
+  await expect(dinner).toContainText('double batch');
+  await expect(
+    dinner.getByRole('button', { name: `Add to dinner, ${dayName(monday)}` }),
+  ).toBeFocused();
+
+  // A typed meal.
+  const typed = unique('Leftovers');
+  await slot(page, tuesday, 'lunch')
+    .getByRole('button', { name: /^Add to lunch/u })
+    .click();
+  dialog = page.getByRole('dialog');
+  await dialog.getByRole('radio', { name: 'Type a meal' }).check();
+  await dialog.getByRole('textbox', { name: 'Meal' }).fill(typed);
+  await dialog.getByRole('button', { name: 'Add to plan' }).click();
+  await expect(slot(page, tuesday, 'lunch')).toContainText(typed);
+
+  // Move it to Wednesday's dinner.
+  await page
+    .getByRole('button', { name: new RegExp(`Actions for ${typed}`, 'u') })
+    .click();
+  await page.getByRole('menuitem', { name: 'Move', exact: true }).click();
+  dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Date').fill(wednesday);
+  await dialog.getByRole('combobox', { name: 'Meal' }).selectOption('dinner');
+  await dialog.getByRole('button', { name: 'Move' }).click();
+  await expect(result(page)).toContainText(
+    `Moved “${typed}” to dinner on ${dayName(wednesday)}.`,
+  );
+  await expect(slot(page, tuesday, 'lunch')).not.toContainText(typed);
+  await expect(slot(page, wednesday, 'dinner')).toContainText(typed);
+
+  // Edit the recipe entry's note.
+  await page
+    .getByRole('button', {
+      name: new RegExp(`Actions for ${recipeTitle}`, 'u'),
+    })
+    .click();
+  await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
+  dialog = page.getByRole('dialog');
+  await dialog.getByRole('textbox', { name: /Note/u }).fill('with greens');
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  await expect(dinner).toContainText('with greens');
+
+  // Remove the typed meal.
+  await page
+    .getByRole('button', { name: new RegExp(`Actions for ${typed}`, 'u') })
+    .click();
+  await page.getByRole('menuitem', { name: 'Remove', exact: true }).click();
+  dialog = page.getByRole('dialog');
+  await expect(dialog).toContainText(`Remove “${typed}”?`);
+  await dialog.getByRole('button', { name: 'Remove' }).click();
+  await expect(result(page)).toContainText(`Removed “${typed}”`);
+  await expect(page.getByTestId('plan-days')).not.toContainText(typed);
+
+  // The plan opens the recipe.
+  await dinner.getByRole('link', { name: recipeTitle }).click();
+  await expect(
+    page.getByRole('heading', { level: 1, name: recipeTitle }),
+  ).toBeVisible();
+});
+
+test('a recipe page adds it to the plan and links to that week', async ({
+  page,
+}, testInfo) => {
+  const monday = futureWeek(3);
+  const thursday = addDays(monday, 3);
+  await openPlan(page, '/plan');
+  const title = unique('Miso soup');
+  const recipe = await createRecipe(page, testInfo, title);
+
+  await page.goto(`/recipes/${recipe.id}`);
+  await page.getByRole('button', { name: 'Add to plan' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Date').fill(thursday);
+  await dialog.getByRole('combobox', { name: 'Meal' }).selectOption('lunch');
+  await dialog.getByRole('button', { name: 'Add to plan' }).click();
+  await expect(dialog.getByTestId('plan-added')).toHaveText(
+    `Planned for lunch on ${dayName(thursday)}.`,
+  );
+  await dialog
+    .getByRole('link', { name: `Open the week of ${dayName(monday)}` })
+    .click();
+
+  await expect(page).toHaveURL(new RegExp(`/plan/${monday}$`, 'u'));
+  await expect(
+    slot(page, thursday, 'lunch').getByRole('link', { name: title }),
+  ).toBeVisible();
+});
+
+test('a stale change shows the other member’s version and can be applied to it', async ({
+  page,
+}, testInfo) => {
+  const monday = futureWeek(4);
+  await openPlan(page, '/plan');
+  const title = unique('Curry');
+  const entry = await createEntry(page, testInfo, {
+    date: monday,
+    slot: 'dinner',
+    title,
+  });
+  await openPlan(page, `/plan/${monday}`);
+
+  // Another member moves it to lunch after this page loaded.
+  await call(
+    page.request,
+    testInfo,
+    'PATCH',
+    `/api/meal-plan/entries/${entry.id}`,
+    {
+      version: entry.version,
+      slot: 'lunch',
+      note: 'mild',
+    },
+  );
+
+  await page
+    .getByRole('button', { name: new RegExp(`Actions for ${title}`, 'u') })
+    .click();
+  await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('textbox', { name: /Note/u }).fill('extra hot');
+  await dialog.getByRole('button', { name: 'Save' }).click();
+
+  const conflict = dialog.getByTestId('entry-conflict');
+  await expect(conflict).toContainText('Your change was not saved.');
+  await expect(conflict).toContainText(
+    `It is now “${title}” (mild), lunch on ${dayName(monday)}.`,
+  );
+  await expect(dialog.getByRole('textbox', { name: /Note/u })).toHaveValue(
+    'extra hot',
+  );
+
+  await conflict
+    .getByRole('button', { name: 'Apply my change to the latest version' })
+    .click();
+  await expect(result(page)).toContainText(
+    'Your changes to the meal were saved.',
+  );
+  // The other member's move stands; only the note changed.
+  await expect(slot(page, monday, 'lunch')).toContainText('extra hot');
+  await expect(slot(page, monday, 'dinner')).not.toContainText(title);
+});
+
+test('a deleted recipe stays on the plan under its last title', async ({
+  page,
+}, testInfo) => {
+  const monday = futureWeek(5);
+  await openPlan(page, '/plan');
+  const title = unique('Old stew');
+  const recipe = await createRecipe(page, testInfo, title);
+  await createEntry(page, testInfo, {
+    date: monday,
+    slot: 'dinner',
+    recipeId: recipe.id,
+  });
+  await call(page.request, testInfo, 'DELETE', `/api/recipes/${recipe.id}`, {
+    version: recipe.version,
+  });
+
+  await openPlan(page, `/plan/${monday}`);
+  const dinner = slot(page, monday, 'dinner');
+  await expect(dinner).toContainText(title);
+  await expect(dinner).toContainText('No longer in the recipe library');
+  await expect(dinner.getByRole('link', { name: title })).toHaveCount(0);
+});
+
+test('week links are real URLs and back returns through them', async ({
+  page,
+}) => {
+  const monday = futureWeek(6);
+  const next = addDays(monday, 7);
+
+  // A date that is not a Monday opens its week, replacing the URL.
+  await openPlan(page, `/plan/${addDays(monday, 2)}`);
+  await expect(page).toHaveURL(new RegExp(`/plan/${monday}$`, 'u'));
+
+  await page.getByRole('link', { name: 'Next week' }).click();
+  await expect(page).toHaveURL(new RegExp(`/plan/${next}$`, 'u'));
+  await expect(day(page, next)).toBeVisible();
+
+  await page.goBack();
+  await expect(page).toHaveURL(new RegExp(`/plan/${monday}$`, 'u'));
+  await expect(day(page, monday)).toBeVisible();
+
+  await page.getByRole('link', { name: 'Previous week' }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/plan/${addDays(monday, -7)}$`, 'u'),
+  );
+
+  await page.getByRole('link', { name: 'This week' }).click();
+  await expect(page.getByText('Today', { exact: true })).toBeVisible();
+
+  // An invalid date opens the current week.
+  await page.goto('/plan/not-a-date');
+  await expect(page).toHaveURL(/\/plan\/\d{4}-\d{2}-\d{2}$/u);
+  await expect(page.getByText('Today', { exact: true })).toBeVisible();
+});
+
+test('the week fits a phone with touch-sized controls', async ({
+  page,
+}, testInfo) => {
+  const monday = futureWeek(7);
+  await openPlan(page, `/plan/${monday}`);
+
+  const scrollWidth = await page.evaluate(
+    () => document.documentElement.scrollWidth,
+  );
+  expect(scrollWidth).toBeLessThanOrEqual(page.viewportSize()!.width);
+
+  for (const name of [
+    'Previous week',
+    'This week',
+    'Next week',
+    `Add to breakfast, ${dayName(monday)}`,
+  ]) {
+    const box = await page
+      .getByRole(name.startsWith('Add') ? 'button' : 'link', { name })
+      .boundingBox();
+    expect(box, name).not.toBeNull();
+    expect(box!.height, name).toBeGreaterThanOrEqual(44);
+  }
+
+  // On a phone the days form one column; on a desktop they share rows.
+  const boxes = await page
+    .getByTestId('plan-day')
+    .evaluateAll((cards) =>
+      cards.map((card) => card.getBoundingClientRect().left),
+    );
+  const columns = new Set(boxes.map(Math.round)).size;
+  if (testInfo.project.name.endsWith('mobile')) {
+    expect(columns).toBe(1);
+  } else {
+    expect(columns).toBeGreaterThan(1);
+  }
+
+  await page
+    .getByRole('button', { name: `Add to breakfast, ${dayName(monday)}` })
+    .click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('radio', { name: 'Type a meal' }).check();
+  for (const control of [
+    dialog.getByRole('textbox', { name: 'Meal' }),
+    dialog.getByRole('button', { name: 'Add to plan' }),
+  ]) {
+    const box = await control.boundingBox();
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+  }
+});
+
+test('a keyboard alone plans a meal and lands back on Add', async ({
+  page,
+}) => {
+  const monday = futureWeek(8);
+  await openPlan(page, `/plan/${monday}`);
+  const title = unique('Pancakes');
+  const add = page.getByRole('button', {
+    name: `Add to breakfast, ${dayName(monday)}`,
+  });
+
+  await add.focus();
+  await page.keyboard.press('Enter');
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  const typeMeal = dialog.getByRole('radio', { name: 'Type a meal' });
+  await dialog.getByRole('radio', { name: 'Pick a recipe' }).focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(typeMeal).toBeChecked();
+  await dialog.getByRole('textbox', { name: 'Meal' }).focus();
+  await page.keyboard.type(title);
+  await page.keyboard.press('Enter');
+
+  await expect(result(page)).toContainText(`Added “${title}”`);
+  await expect(add).toBeFocused();
+
+  // Escape closes a dialog and returns focus to the control that opened it.
+  const actions = page.getByRole('button', {
+    name: new RegExp(`Actions for ${title}`, 'u'),
+  });
+  await actions.focus();
+  await page.keyboard.press('Enter');
+  await page.getByRole('menuitem', { name: 'Remove', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(actions).toBeFocused();
+});
+
+test('a non-member sees no plan and the plan is never requested', async ({
+  page,
+}) => {
+  const planRequests: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().includes('/api/meal-plan'))
+      planRequests.push(request.url());
+  });
+  await page.route('**/api/session', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'not-a-member' }),
+    }),
+  );
+
+  await page.goto('/plan');
+  await expect(
+    page.getByRole('heading', { name: 'You are not a family member' }),
+  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Plan' })).toHaveCount(0);
+  expect(planRequests).toEqual([]);
+});
+
+/**
+ * "Today" and saved dates follow the device's own calendar day, whatever the
+ * UTC date is. The clock is pinned a few minutes from local midnight, on a day
+ * a little ahead of the real one so the Worker's write window accepts it.
+ */
+const localOffsetMinutes = (timeZone: string, at: number): number => {
+  const name = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    timeZoneName: 'longOffset',
+  })
+    .formatToParts(new Date(at))
+    .find((part) => part.type === 'timeZoneName')!.value;
+  const match = /GMT([+-])(\d{2}):(\d{2})/u.exec(name);
+  if (!match) return 0;
+  const minutes = Number(match[2]) * 60 + Number(match[3]);
+  return match[1] === '-' ? -minutes : minutes;
+};
+
+/** The instant that is `hh:mm` local time on `date` in `timeZone`. */
+const localInstant = (
+  timeZone: string,
+  date: string,
+  hours: number,
+  minutes: number,
+) => {
+  const guess =
+    Date.parse(`${date}T00:00:00Z`) + (hours * 60 + minutes) * 60_000;
+  return guess - localOffsetMinutes(timeZone, guess) * 60_000;
+};
+
+for (const { timeZone, hours, minutes, meal } of [
+  // Just after midnight in Auckland: UTC is still on the previous day.
+  { timeZone: 'Pacific/Auckland', hours: 0, minutes: 5, meal: 'breakfast' },
+  // Just before midnight in Los Angeles: UTC is already on the next day.
+  { timeZone: 'America/Los_Angeles', hours: 23, minutes: 55, meal: 'lunch' },
+]) {
+  test.describe(`on a device in ${timeZone}`, () => {
+    test.use({ timezoneId: timeZone });
+
+    test('today and a saved date follow the local calendar day', async ({
+      page,
+      browser,
+    }, testInfo) => {
+      const localToday = addDays(isoDate(Date.now()), 2);
+      const instant = localInstant(timeZone, localToday, hours, minutes);
+      // The UTC date really is a different day from the device's.
+      expect(isoDate(instant)).not.toBe(localToday);
+      await page.clock.setFixedTime(instant);
+
+      await openPlan(page, '/plan');
+      const todayCard = day(page, localToday);
+      await expect(todayCard).toHaveAttribute('data-today', 'true');
+      await expect(todayCard.getByText('Today', { exact: true })).toBeVisible();
+
+      const title = unique('Midnight snack');
+      await todayCard
+        .getByRole('button', { name: new RegExp(`^Add to ${meal}`, 'u') })
+        .click();
+      const dialog = page.getByRole('dialog');
+      await dialog.getByRole('radio', { name: 'Type a meal' }).check();
+      await dialog.getByRole('textbox', { name: 'Meal' }).fill(title);
+      const saved = page.waitForResponse(
+        (response) =>
+          response.url().endsWith('/api/meal-plan/entries') &&
+          response.request().method() === 'POST',
+      );
+      await dialog.getByRole('button', { name: 'Add to plan' }).click();
+      const body = (await (await saved).json()) as { entry: { date: string } };
+      expect(body.entry.date).toBe(localToday);
+      await expect(slot(page, localToday, meal)).toContainText(title);
+
+      // A member on the other side of the world sees it on the same day.
+      const elsewhere = await browser.newContext({
+        baseURL: String(testInfo.project.use.baseURL),
+        timezoneId:
+          timeZone === 'Pacific/Auckland'
+            ? 'America/Los_Angeles'
+            : 'Pacific/Auckland',
+      });
+      const other = await elsewhere.newPage();
+      await openPlan(other, `/plan/${mondayOf(localToday)}`);
+      await expect(slot(other, localToday, meal)).toContainText(title);
+      await elsewhere.close();
+    });
+  });
+}

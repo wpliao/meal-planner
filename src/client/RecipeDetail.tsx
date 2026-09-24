@@ -2,6 +2,7 @@ import { Button, Group, Modal, Stack, Text } from '@mantine/core';
 import { useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, jsonMutation } from './api';
+import { AddToPlanDialog } from './MealPlanDialogs';
 import {
   RecipeBody,
   RecipeNotice,
@@ -26,8 +27,10 @@ export function RecipeDetail() {
   const { state, setState, load } = useRecipe(id);
   const [notice, setNotice] = useRecipeFlash();
   const [confirming, setConfirming] = useState(false);
+  const [planning, setPlanning] = useState(false);
   const [pending, setPending] = useState(false);
   const deleteTrigger = useRef<HTMLButtonElement>(null);
+  const planTrigger = useRef<HTMLButtonElement>(null);
 
   if (state.kind !== 'ready') {
     return <RecipeUnavailable retry={() => void load()} state={state} />;
@@ -117,7 +120,15 @@ export function RecipeDetail() {
       <RecipeBody idPrefix="recipe" recipe={recipe} />
 
       <Group gap="sm" mt="xl">
-        <Button component={Link} state={{ from: 'detail' }} to="edit">
+        <Button onClick={() => setPlanning(true)} ref={planTrigger}>
+          Add to plan
+        </Button>
+        <Button
+          component={Link}
+          state={{ from: 'detail' }}
+          to="edit"
+          variant="default"
+        >
           Edit recipe
         </Button>
         <Button
@@ -149,7 +160,8 @@ export function RecipeDetail() {
         <Stack aria-busy={pending} gap="md">
           <Text>
             This deletes the recipe from the shared family library for everyone.
-            It cannot be undone.
+            It cannot be undone. Meals already planned with it stay on the plan
+            under its title.
           </Text>
           <Group justify="flex-end">
             <Button
@@ -165,6 +177,15 @@ export function RecipeDetail() {
           </Group>
         </Stack>
       </Modal>
+      {planning && (
+        <AddToPlanDialog
+          onClose={() => {
+            setPlanning(false);
+            planTrigger.current?.focus();
+          }}
+          recipe={recipe}
+        />
+      )}
     </RecipePage>
   );
 }

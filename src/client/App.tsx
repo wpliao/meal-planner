@@ -4,6 +4,7 @@ import './mantine';
 import { cssVariablesResolver, theme } from './theme';
 import { AppLayout } from './AppLayout';
 import { FamilySpace } from './FamilySpace';
+import { MealPlan } from './MealPlan';
 import { Pantry } from './Pantry';
 import { RecipeDetail } from './RecipeDetail';
 import { RecipeCreate, RecipeEdit } from './RecipeEditPages';
@@ -31,7 +32,11 @@ export function App() {
       <BrowserRouter>
         <Routes>
           <Route element={<AppLayout />} path="/">
-            <Route element={<Navigate replace to="/pantry" />} index />
+            <Route element={<Navigate replace to="/plan" />} index />
+            <Route path="plan">
+              <Route element={<MealPlan />} index />
+              <Route element={<MealPlan />} path=":weekStart" />
+            </Route>
             <Route element={<Pantry />} path="pantry" />
             <Route path="recipes">
               <Route element={<Recipes />} index />
@@ -41,7 +46,7 @@ export function App() {
               <Route element={<RecipeEdit />} path=":id/edit" />
             </Route>
             <Route element={<FamilySpace />} path="family" />
-            <Route element={<Navigate replace to="/pantry" />} path="*" />
+            <Route element={<Navigate replace to="/plan" />} path="*" />
           </Route>
         </Routes>
       </BrowserRouter>
