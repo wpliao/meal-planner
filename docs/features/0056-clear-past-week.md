@@ -5,7 +5,7 @@
 - Issue: [#56](https://github.com/wpliao/meal-planner/issues/56)
 - Product owner: Repository owner
 - Last updated: 2026-09-24
-- Pull requests: [#PRn — design proposal](https://github.com/wpliao/meal-planner/pull/PRn)
+- Pull requests: [#63 — design proposal](https://github.com/wpliao/meal-planner/pull/63)
 
 ## Problem and outcome
 
@@ -453,9 +453,9 @@ reopen any of them at acceptance.
 
 ## Decision and change log
 
-| Date       | Change                                                                                                   | Reason                                                                                                                              | Evidence                                                                                                               |
-| ---------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| 2026-09-24 | Initial design proposal; status `Designing`; three open decisions, six resolved. Authored by Claude Code | Follow-up to the #49 release: the 4,000-entry household limit is the only bound on plan history, and removal is one entry at a time | [Issue #56](https://github.com/wpliao/meal-planner/issues/56); [#PRn](https://github.com/wpliao/meal-planner/pull/PRn) |
+| Date       | Change                                                                                                   | Reason                                                                                                                              | Evidence                                                                                                             |
+| ---------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-24 | Initial design proposal; status `Designing`; three open decisions, six resolved. Authored by Claude Code | Follow-up to the #49 release: the 4,000-entry household limit is the only bound on plan history, and removal is one entry at a time | [Issue #56](https://github.com/wpliao/meal-planner/issues/56); [#63](https://github.com/wpliao/meal-planner/pull/63) |
 
 ## Release record
 
