@@ -304,8 +304,9 @@ stored history. At about three entries a day, a household reaches the limit
 after roughly three and a half years. From then on, adding an entry fails with
 `limit_reached`, and the message says to remove old entries first; moving and
 editing still work. Removing thousands of entries one at a time would be
-slow, so a bulk "clear a past week" action is recorded as
-[follow-up work](#release-record) rather than built now. Removing an entry
+slow, so a bulk "clear a past week" action was recorded as
+[follow-up work](#release-record) rather than built here; it is
+[#56](./0056-clear-past-week.md), which also warns from 3,600 entries. Removing an entry
 deletes its row; there is no tombstone or edit history. As with the pantry and
 recipes, deletion from the live table does not erase D1 Time Travel history,
 which lasts 7 days on the current Workers Free plan.
@@ -522,7 +523,7 @@ chose the recommended option except decision 6.
   ([issue #49 comment](https://github.com/wpliao/meal-planner/issues/49#issuecomment-5811957269)).
 - Known follow-up work: a bulk way to clear past weeks, before any household
   nears the 4,000-entry limit (about three and a half years at three entries a
-  day). Phase 5 suggestions are expected to read plan history. The pantry and
+  day); this is [#56](./0056-clear-past-week.md). Phase 5 suggestions are expected to read plan history. The pantry and
   recipe text fields render with no `type` attribute, so the touch-target
   floor in `styles.css` misses them and they measure 42px rather than 44px;
   #49's phone test found this, and the plan's own fields set `type="text"`

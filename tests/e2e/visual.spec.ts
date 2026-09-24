@@ -500,18 +500,45 @@ const PLAN = {
       title: 'Pancakes',
     }),
   ],
+  // Far below the near-limit hint, so the week looks as it always has.
+  usage: { entries: 4, limit: 4000, oldestDate: '2026-09-21' },
 };
 
-const stubPlan = async (page: Page, path = '/plan/2026-09-21') => {
+/** Last week, which can be cleared, in a plan near its limit. */
+const PAST_PLAN = {
+  from: '2026-09-14',
+  to: '2026-09-20',
+  entries: [
+    planEntry({
+      id: '88888888-8888-4888-8888-000000000011',
+      date: '2026-09-14',
+      title: 'Curry night',
+    }),
+    planEntry({
+      id: '88888888-8888-4888-8888-000000000012',
+      date: '2026-09-19',
+      slot: 'lunch',
+      title: 'Leftovers',
+      note: 'from Friday',
+    }),
+  ],
+  usage: { entries: 3650, limit: 4000, oldestDate: '2023-03-08' },
+};
+
+const stubPlan = async (
+  page: Page,
+  path = '/plan/2026-09-21',
+  plan: { entries: unknown[] } = PLAN,
+) => {
   await page.clock.setFixedTime(PLAN_NOW);
   await page.route('**/api/meal-plan?*', (route) =>
     route.fulfill({
       contentType: 'application/json',
-      body: JSON.stringify(PLAN),
+      body: JSON.stringify(plan),
     }),
   );
   await stubRecipes(page, path, 'Plan');
-  await expect(page.getByTestId('plan-entry')).toHaveCount(4);
+  await expect(page.getByTestId('plan-entry')).toHaveCount(plan.entries.length);
 };
 
 const planPanel = (page: Page) => page.getByTestId('plan-panel');
@@ -539,6 +566,43 @@ test('meal plan add dialog', async ({ page }) => {
   const options = page.getByRole('listbox');
   await expect(options.getByRole('option')).toHaveCount(1);
   await expect(options).toHaveScreenshot('plan-recipe-search.png');
+});
+
+test('meal plan clear week and near-limit hint', async ({ page }) => {
+  await stubPlan(page, '/plan/2026-09-14', PAST_PLAN);
+  await expect(page.getByTestId('plan-usage')).toHaveScreenshot(
+    'plan-usage-hint.png',
+  );
+  await page.getByRole('button', { name: /^Clear this week/u }).click();
+  const dialog = await openedDialog(page);
+  await expect(dialog).toHaveScreenshot('plan-clear-dialog.png');
+});
+
+test('clearing a week meets WCAG AA contrast and styles every Mantine component', async ({
+  page,
+}) => {
+  await stubPlan(page, '/plan/2026-09-14', PAST_PLAN);
+  // The hint and the Clear button.
+  await assertTextContrast(page);
+  await assertEveryMantineClassIsStyled(page);
+
+  await page.route('**/api/meal-plan/weeks/*', (route) =>
+    route.fulfill({
+      status: 409,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        error: { code: 'week_changed', message: 'This week changed.' },
+        current: PAST_PLAN.entries.slice(0, 1),
+      }),
+    }),
+  );
+  await page.getByRole('button', { name: /^Clear this week/u }).click();
+  const dialog = await openedDialog(page);
+  await assertEveryMantineClassIsStyled(page);
+  await dialog.getByRole('button', { name: 'Clear week' }).click();
+  await expect(dialog.getByTestId('week-conflict')).toBeVisible();
+  await assertTextContrast(page);
+  await assertEveryMantineClassIsStyled(page);
 });
 
 test('meal plan screens meet WCAG AA contrast, including errors and conflicts', async ({

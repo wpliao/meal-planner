@@ -35,6 +35,17 @@ export const MEAL_PLAN_SLOT_LIMIT = 6;
  */
 export const MEAL_PLAN_HOUSEHOLD_LIMIT = 4000;
 
+/** Entries one week can hold: seven days of every meal, each at its limit. */
+export const MEAL_PLAN_WEEK_ENTRY_MAX =
+  7 * MEAL_SLOTS.length * MEAL_PLAN_SLOT_LIMIT;
+
+/**
+ * From this many entries the plan warns that the household limit is near:
+ * 90% of it, about four months' warning at three entries a day (decision 2 of
+ * the #56 design).
+ */
+export const MEAL_PLAN_USAGE_HINT_AT = 3600;
+
 /** The longest inclusive date range one read may cover. */
 export const MEAL_PLAN_READ_MAX_DAYS = 42;
 
@@ -76,11 +87,20 @@ export type MealPlanEntry = MealPlanEntryBase &
       }
   );
 
+/** How much of the household limit the whole plan uses. */
+export interface MealPlanUsage {
+  entries: number;
+  limit: number;
+  /** The earliest planned date, or null when the plan is empty. */
+  oldestDate: string | null;
+}
+
 export interface MealPlanResponse {
   from: string;
   to: string;
   /** Ordered by date, meal, and placement. */
   entries: MealPlanEntry[];
+  usage: MealPlanUsage;
 }
 
 export interface MealPlanEntryResponse {
@@ -107,6 +127,23 @@ export interface UpdateMealPlanEntryRequest {
 
 export interface DeleteMealPlanEntryRequest {
   version: number;
+}
+
+/** An entry the member saw, at the version they saw it. */
+export interface SeenMealPlanEntry {
+  id: string;
+  version: number;
+}
+
+/** Clears a week: every entry the member saw there, and no other. */
+export interface ClearMealPlanWeekRequest {
+  entries: SeenMealPlanEntry[];
+}
+
+/** Body of a `409 week_changed` response: the week's latest entries. */
+export interface MealPlanWeekConflictResponse {
+  error: { code: 'week_changed'; message: string };
+  current: MealPlanEntry[];
 }
 
 /** Body of a `409 stale_version` response for an entry update or delete. */
@@ -201,6 +238,24 @@ export const planWriteWindow = (
 export const serverPlanWriteWindow = (now: Date): PlanDateWindow =>
   planWriteWindow(utcPlanDate(now), MEAL_PLAN_SERVER_SLACK_DAYS);
 
+/**
+ * Whether the week that starts on `weekStart` may be cleared: it is a real
+ * Monday, and its Sunday is before `today`. The Worker knows only the UTC
+ * date, so it passes one day of slack, which also accepts a week whose Sunday
+ * is the UTC today; a family ahead of UTC can then clear last week early on
+ * Monday.
+ */
+export const isClearableWeek = (
+  weekStart: string,
+  today: string,
+  slackDays = 0,
+): boolean => {
+  const start = planDayNumber(weekStart);
+  const now = planDayNumber(today);
+  if (start === null || now === null) return false;
+  return planWeekStart(weekStart) === weekStart && start + 6 < now + slackDays;
+};
+
 // Valid plan dates of equal width compare correctly as strings.
 export const isWithinPlanWindow = (
   value: string,
@@ -219,7 +274,9 @@ export type MealPlanField =
   | 'note'
   | 'version'
   | 'from'
-  | 'to';
+  | 'to'
+  | 'weekStart'
+  | 'entries';
 
 export interface MealPlanFieldError {
   field: MealPlanField;
@@ -241,6 +298,12 @@ export interface ValidUpdateMealPlanEntry {
   slot?: MealSlot;
   title?: string;
   note?: string | null;
+}
+
+export interface ValidClearMealPlanWeek {
+  weekStart: string;
+  /** Distinct entries, IDs in lower case. */
+  entries: SeenMealPlanEntry[];
 }
 
 export interface ValidMealPlanRange {
@@ -476,4 +539,84 @@ export const validateMealPlanRange = (
     );
   }
   return { ok: true, value: { from, to } };
+};
+
+const isSeenEntry = (
+  value: unknown,
+): value is { id: string; version: number } =>
+  isPlainObject(value) &&
+  unexpectedFields(value, ['id', 'version']).length === 0 &&
+  typeof value.id === 'string' &&
+  UUID_PATTERN.test(value.id) &&
+  validateMealPlanVersion(value.version).ok;
+
+/**
+ * Validates a request to clear the week starting on `weekStart`: a Monday
+ * whose week has ended (see {@link isClearableWeek}), and exactly `entries`,
+ * listing 1 to {@link MEAL_PLAN_WEEK_ENTRY_MAX} distinct entries by ID and
+ * version.
+ */
+export const validateClearMealPlanWeek = (
+  weekStart: unknown,
+  input: unknown,
+  today: string,
+  slackDays = 0,
+): MealPlanValidation<ValidClearMealPlanWeek> => {
+  if (
+    typeof weekStart !== 'string' ||
+    !isPlanDate(weekStart) ||
+    planWeekStart(weekStart) !== weekStart
+  ) {
+    return {
+      ok: false,
+      errors: [
+        {
+          field: 'weekStart',
+          message: 'Choose the Monday that starts a week.',
+        },
+      ],
+    };
+  }
+  if (!isClearableWeek(weekStart, today, slackDays)) {
+    return {
+      ok: false,
+      errors: [
+        {
+          field: 'weekStart',
+          message: 'Only a week that has ended can be cleared.',
+        },
+      ],
+    };
+  }
+  if (!isPlainObject(input)) return requestError('Send a week to clear.');
+  const unknown = unexpectedFields(input, ['entries']);
+  if (unknown.length > 0) {
+    return requestError(`Unexpected fields: ${unknown.join(', ')}.`);
+  }
+
+  const fieldError = (message: string): MealPlanValidation<never> => ({
+    ok: false,
+    errors: [{ field: 'entries', message }],
+  });
+  const { entries } = input;
+  if (
+    !Array.isArray(entries) ||
+    entries.length < 1 ||
+    entries.length > MEAL_PLAN_WEEK_ENTRY_MAX
+  ) {
+    return fieldError(
+      `List between 1 and ${MEAL_PLAN_WEEK_ENTRY_MAX} entries to clear.`,
+    );
+  }
+  if (!entries.every(isSeenEntry)) {
+    return fieldError('Give each entry only its id and a positive version.');
+  }
+  const seen = entries.map(({ id, version }) => ({
+    id: id.toLowerCase(),
+    version,
+  }));
+  if (new Set(seen.map(({ id }) => id)).size !== seen.length) {
+    return fieldError('List each entry once.');
+  }
+  return { ok: true, value: { weekStart, entries: seen } };
 };

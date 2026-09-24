@@ -14,6 +14,7 @@ import {
   validatePlanDateInWindow,
   type MealPlanConflictResponse,
   type MealPlanEntry,
+  type MealPlanWeekConflictResponse,
   type MealSlot,
   type PlanDateWindow,
 } from '../shared/meal-plan';
@@ -162,12 +163,25 @@ export const entryConflictFrom = (error: unknown): MealPlanEntry | null => {
     : null;
 };
 
+/** The week's latest entries from a `409 week_changed`, if this is one. */
+export const weekConflictFrom = (error: unknown): MealPlanEntry[] | null => {
+  if (!(error instanceof ApiRequestError) || error.status !== 409) return null;
+  const body = error.body as Partial<MealPlanWeekConflictResponse> | undefined;
+  return body?.error?.code === 'week_changed' && Array.isArray(body.current)
+    ? body.current
+    : null;
+};
+
 export const isEntryGone = (error: unknown): boolean =>
   error instanceof ApiRequestError && error.status === 404;
 
 /** The server's own message when there is one; otherwise the fallback. */
 export const planFailure = (error: unknown, fallback: string): string =>
   error instanceof ApiRequestError ? error.message : fallback;
+
+/** "1 planned meal", "14 planned meals", "3,650 planned meals". */
+export const mealCount = (count: number): string =>
+  `${count.toLocaleString('en')} planned ${count === 1 ? 'meal' : 'meals'}`;
 
 /** How an entry reads in a sentence: its title and, if any, its note. */
 export const describeEntry = (entry: MealPlanEntry): string =>

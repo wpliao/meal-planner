@@ -153,9 +153,15 @@ limits use guarded statements, so concurrent writes cannot exceed them. The
 `(household_id, plan_date)` index serves the week read and the limits; the
 `recipe_id` index serves `ON DELETE SET NULL`.
 
-Entries are kept until a member removes one or the household is deleted.
+Entries are kept until a member removes them or the household is deleted.
 There is no time-based deletion: the 4,000-entry limit bounds stored history.
 Removing an entry deletes its row, with no tombstone or edit history.
+[Feature #56](features/0056-clear-past-week.md) lets a member clear a week
+that has ended in one `DELETE` statement, which removes the week's entries
+only if the week still holds exactly the entries and versions the member
+confirmed; otherwise it removes nothing. It adds no table or column. The week
+read also reports the household's entry count and oldest planned date, from
+the same `(household_id, plan_date)` index.
 `meal_plan_entries.household_id` cascades from `households`, so the #32
 operator batch removes every entry with no further change, and the
 decommission procedure counts the table. As with the pantry and recipes,

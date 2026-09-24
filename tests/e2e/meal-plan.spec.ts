@@ -59,6 +59,12 @@ const dayName = (date: string) => {
 const futureWeek = (offset: number) =>
   addDays(mondayOf(isoDate(Date.now())), 7 * offset);
 
+/**
+ * The Monday `offset` weeks before the current UTC week: a week that has
+ * ended, still inside the write window so a test can plan into it.
+ */
+const pastWeek = (offset: number) => futureWeek(-offset);
+
 const openPlan = async (page: Page, path: string) => {
   await page.goto(path);
   // Wait until the session has answered: either the plan or first-run setup.
@@ -474,6 +480,120 @@ test('a keyboard alone plans a meal and lands back on Add', async ({
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toBeHidden();
   await expect(actions).toBeFocused();
+});
+
+test('a member clears a past week, and only a past week offers it', async ({
+  page,
+}, testInfo) => {
+  const monday = pastWeek(2);
+  const future = futureWeek(9);
+  for (const [date, slotName, title] of [
+    [monday, 'dinner', unique('Curry')],
+    [addDays(monday, 4), 'lunch', unique('Soup')],
+    [future, 'dinner', unique('Later')],
+  ]) {
+    await createEntry(page, testInfo, { date, slot: slotName, title });
+  }
+
+  // Neither the current week nor a future one can be cleared.
+  await openPlan(page, '/plan');
+  const clearButton = page.getByRole('button', { name: /^Clear this week/u });
+  await expect(clearButton).toHaveCount(0);
+  await openPlan(page, `/plan/${future}`);
+  await expect(page.getByTestId('plan-entry')).toHaveCount(1);
+  await expect(clearButton).toHaveCount(0);
+
+  await openPlan(page, `/plan/${monday}`);
+  const heading = (await page.getByTestId('plan-week').textContent()) ?? '';
+  await expect(page.getByTestId('plan-entry')).toHaveCount(2);
+  await expect(clearButton).toHaveAccessibleName(`Clear this week, ${heading}`);
+  expect((await clearButton.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+
+  await clearButton.click();
+  const dialog = await openedDialog(page);
+  await expect(dialog).toHaveAccessibleName(`Clear ${heading}?`);
+  await expect(dialog).toContainText(
+    'This removes all 2 planned meals in this week for everyone.',
+  );
+  await dialog.getByRole('button', { name: 'Clear week' }).click();
+
+  await expect(result(page)).toContainText(
+    `Cleared 2 planned meals from ${heading}.`,
+  );
+  await expect(page.getByTestId('plan-empty')).toBeVisible();
+  await expect(clearButton).toHaveCount(0);
+  await expect(page.getByTestId('plan-week')).toBeFocused();
+
+  // It stays cleared for everyone.
+  await page.reload();
+  await expect(page.getByTestId('plan-empty')).toBeVisible();
+});
+
+test('a clear after another member changed the week shows the new count and can clear it', async ({
+  page,
+}, testInfo) => {
+  const monday = pastWeek(3);
+  await createEntry(page, testInfo, {
+    date: monday,
+    slot: 'dinner',
+    title: unique('Curry'),
+  });
+  await createEntry(page, testInfo, {
+    date: addDays(monday, 2),
+    slot: 'breakfast',
+    title: unique('Toast'),
+  });
+  await openPlan(page, `/plan/${monday}`);
+  await expect(page.getByTestId('plan-entry')).toHaveCount(2);
+
+  // Another member plans one more meal after this page loaded the week.
+  const late = unique('Late supper');
+  await createEntry(page, testInfo, {
+    date: addDays(monday, 6),
+    slot: 'dinner',
+    title: late,
+  });
+
+  await page.getByRole('button', { name: /^Clear this week/u }).click();
+  const dialog = await openedDialog(page);
+  await dialog.getByRole('button', { name: 'Clear week' }).click();
+  const conflict = dialog.getByTestId('week-conflict');
+  await expect(conflict).toContainText(
+    'This week changed after you opened it, so nothing was removed. It now has 3 planned meals.',
+  );
+  // The week behind the dialog shows the other member's meal.
+  await expect(page.getByTestId('plan-days')).toContainText(late);
+
+  await conflict.getByRole('button', { name: 'Clear all 3' }).click();
+  await expect(result(page)).toContainText('Cleared 3 planned meals');
+  await expect(page.getByTestId('plan-empty')).toBeVisible();
+});
+
+test('a keyboard alone clears a past week', async ({ page }, testInfo) => {
+  const monday = pastWeek(4);
+  await createEntry(page, testInfo, {
+    date: addDays(monday, 1),
+    slot: 'lunch',
+    title: unique('Noodles'),
+  });
+  await openPlan(page, `/plan/${monday}`);
+  const clearButton = page.getByRole('button', { name: /^Clear this week/u });
+
+  // Escape closes the confirmation and returns focus to Clear.
+  await clearButton.focus();
+  await page.keyboard.press('Enter');
+  let dialog = await openedDialog(page);
+  await expect(dialog).toContainText('This removes the 1 planned meal');
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(clearButton).toBeFocused();
+
+  await page.keyboard.press('Enter');
+  dialog = await openedDialog(page);
+  await dialog.getByRole('button', { name: 'Clear week' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(result(page)).toContainText('Cleared 1 planned meal from');
+  await expect(page.getByTestId('plan-week')).toBeFocused();
 });
 
 test('a non-member sees no plan and the plan is never requested', async ({

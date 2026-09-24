@@ -66,6 +66,8 @@ export type ApiErrorCode =
   | 'state_conflict'
   | 'duplicate_name'
   | 'stale_version'
+  /** A meal-plan week no longer holds what the member saw; nothing was cleared. */
+  | 'week_changed'
   | 'limit_reached'
   /** A website import produced no draft; the body carries the failure class. */
   | 'import_failed'
