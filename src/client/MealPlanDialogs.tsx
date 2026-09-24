@@ -13,7 +13,7 @@ import {
   type ComboboxItem,
   type OptionsFilter,
 } from '@mantine/core';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type SubmitEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { api, jsonMutation } from './api';
 import {
@@ -351,7 +351,7 @@ export function AddEntryDialog({
 
   const where = placeLabel(target.date, target.slot);
 
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
+  const submit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     const noteResult = checkNote(note);
     const next: EntryFieldErrors = {
@@ -776,7 +776,7 @@ export function AddToPlanDialog({
   const [pending, setPending] = useState(false);
   const [saved, setSaved] = useState<MealPlanEntry | null>(null);
 
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
+  const submit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     const noteResult = checkNote(note);
     const next: EntryFieldErrors = {

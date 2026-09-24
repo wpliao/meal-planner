@@ -7,7 +7,7 @@ import {
   Text,
   TextInput,
 } from '@mantine/core';
-import { useRef, useState, type FormEvent } from 'react';
+import { useRef, useState, type SubmitEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { api, jsonMutation } from './api';
 import { RecipeCreate } from './RecipeEditPages';
@@ -96,7 +96,7 @@ export function RecipeImport() {
     }
   };
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const submit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (state.kind === 'contacting') return;
 

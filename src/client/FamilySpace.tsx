@@ -15,7 +15,7 @@ import {
   useCallback,
   useEffect,
   useState,
-  type FormEvent,
+  type SubmitEvent,
   type ReactNode,
 } from 'react';
 import type {
@@ -104,7 +104,7 @@ export function FamilySpace() {
     });
   }, [isOwner, loadMembers, notify]);
 
-  const addMember = async (event: FormEvent<HTMLFormElement>) => {
+  const addMember = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     const normalizedEmail = email.trim();
     if (!normalizedEmail) {
