@@ -6,9 +6,12 @@ import {
   Modal,
   NativeSelect,
   Radio,
+  Select,
   Stack,
   Text,
   TextInput,
+  type ComboboxItem,
+  type OptionsFilter,
 } from '@mantine/core';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
@@ -250,19 +253,34 @@ const useRecipeList = (active: boolean) => {
   return { list, load };
 };
 
+/**
+ * Mantine's option filter, narrowed to recipes whose title holds every word
+ * typed — the same rule as `filterRecipes`.
+ */
+const filterOptions: OptionsFilter = ({ options, search }) =>
+  filterRecipes(
+    (options as ComboboxItem[]).map((option) => ({
+      ...option,
+      title: option.label,
+    })),
+    search,
+  );
+
+/**
+ * One searchable field rather than a list of every recipe: the dropdown
+ * shows only what matches the typing and scrolls within a fixed height, so
+ * the dialog stays the same size however large the library grows (owner
+ * review, V-DEV-P1).
+ */
 function RecipePicker({
   list,
   retry,
-  query,
-  onQuery,
   selected,
   onSelect,
   error,
 }: Readonly<{
   list: RecipeList;
   retry: () => void;
-  query: string;
-  onQuery: (value: string) => void;
   selected: string;
   onSelect: (id: string) => void;
   error?: string;
@@ -293,44 +311,25 @@ function RecipePicker({
       </Text>
     );
   }
-  const matches = filterRecipes(list.recipes, query);
   return (
-    <Stack gap="xs">
-      <TextInput
-        label="Search recipes"
-        onChange={(event) => onQuery(event.currentTarget.value)}
-        type="search"
-        value={query}
-      />
-      <Radio.Group
-        error={error}
-        label="Recipe"
-        onChange={onSelect}
-        value={selected}
-      >
-        <Stack
-          data-testid="picker-list"
-          gap="xs"
-          mah="16rem"
-          mt="xs"
-          style={{ overflowY: 'auto' }}
-        >
-          {matches.map((recipe) => (
-            <Radio
-              key={recipe.id}
-              label={recipe.title}
-              style={wrap}
-              value={recipe.id}
-            />
-          ))}
-          {matches.length === 0 && (
-            <Text c="dimmed" fz="sm">
-              No recipe matches “{query.trim()}”.
-            </Text>
-          )}
-        </Stack>
-      </Radio.Group>
-    </Stack>
+    <Select
+      data={list.recipes.map((recipe) => ({
+        value: recipe.id,
+        label: recipe.title,
+      }))}
+      description={`Type to search ${list.recipes.length} ${list.recipes.length === 1 ? 'recipe' : 'recipes'}.`}
+      error={error}
+      filter={filterOptions}
+      // Puts the field under the touch-target floor; see NoteField.
+      type="text"
+      label="Recipe"
+      maxDropdownHeight={240}
+      nothingFoundMessage="No recipe matches that search."
+      onChange={(value) => onSelect(value ?? '')}
+      placeholder="Search the recipe library"
+      searchable
+      value={selected || null}
+    />
   );
 }
 
@@ -347,7 +346,6 @@ export function AddEntryDialog({
   onClose: (outcome: DialogOutcome) => void;
 }>) {
   const [mode, setMode] = useState<AddMode>('recipe');
-  const [query, setQuery] = useState('');
   const [recipeId, setRecipeId] = useState('');
   const [title, setTitle] = useState('');
   const [note, setNote] = useState('');
@@ -434,9 +432,7 @@ export function AddEntryDialog({
             <RecipePicker
               error={errors.recipe}
               list={list}
-              onQuery={setQuery}
               onSelect={setRecipeId}
-              query={query}
               retry={() => void load()}
               selected={recipeId}
             />

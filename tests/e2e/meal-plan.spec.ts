@@ -169,10 +169,12 @@ test('a member plans a recipe and a typed meal, moves one, edits a note, and rem
     .getByRole('button', { name: `Add to dinner, ${dayName(monday)}` })
     .click();
   let dialog = page.getByRole('dialog');
-  await dialog
-    .getByRole('searchbox', { name: 'Search recipes' })
-    .fill(recipeTitle);
-  await dialog.getByRole('radio', { name: recipeTitle }).check();
+  // The recipe field searches the library as the member types.
+  await dialog.getByRole('combobox', { name: 'Recipe' }).fill(recipeTitle);
+  await page.getByRole('option', { name: recipeTitle }).click();
+  await expect(dialog.getByRole('combobox', { name: 'Recipe' })).toHaveValue(
+    recipeTitle,
+  );
   await dialog.getByRole('textbox', { name: /Note/u }).fill('double batch');
   await dialog.getByRole('button', { name: 'Add to plan' }).click();
   await expect(result(page)).toContainText(
@@ -422,6 +424,9 @@ test('the week fits a phone with touch-sized controls', async ({
     .getByRole('button', { name: `Add to breakfast, ${dayName(monday)}` })
     .click();
   const dialog = page.getByRole('dialog');
+  const recipe = dialog.getByRole('combobox', { name: 'Recipe' });
+  await expect(recipe).toBeVisible();
+  expect((await recipe.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   await dialog.getByRole('radio', { name: 'Type a meal' }).check();
   for (const control of [
     dialog.getByRole('textbox', { name: 'Meal' }),

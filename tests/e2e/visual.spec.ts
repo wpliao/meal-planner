@@ -531,8 +531,16 @@ test('meal plan add dialog', async ({ page }) => {
     .getByRole('button', { name: 'Add to dinner, Thursday 24 September' })
     .click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('radio', { name: RECIPE.title })).toBeVisible();
+  const recipe = dialog.getByRole('combobox', { name: 'Recipe' });
+  await expect(recipe).toBeVisible();
   await expect(dialog).toHaveScreenshot('plan-add-dialog.png');
+
+  // The search shows matches in a dropdown of fixed height, not a list of
+  // the whole library.
+  await recipe.fill('soup');
+  const options = page.getByRole('listbox');
+  await expect(options.getByRole('option')).toHaveCount(1);
+  await expect(options).toHaveScreenshot('plan-recipe-search.png');
 });
 
 test('meal plan screens meet WCAG AA contrast, including errors and conflicts', async ({
@@ -592,9 +600,11 @@ test('every Mantine component on the plan screens has its stylesheet', async ({
   await page
     .getByRole('button', { name: 'Add to lunch, Monday 21 September' })
     .click();
-  await expect(
-    page.getByRole('dialog').getByRole('radio', { name: RECIPE.title }),
-  ).toBeVisible();
+  await page
+    .getByRole('dialog')
+    .getByRole('combobox', { name: 'Recipe' })
+    .click();
+  await expect(page.getByRole('option', { name: RECIPE.title })).toBeVisible();
   await assertEveryMantineClassIsStyled(page);
   await page
     .getByRole('dialog')

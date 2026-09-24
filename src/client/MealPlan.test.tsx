@@ -56,6 +56,21 @@ const openWeek = async (
   return spy;
 };
 
+/** The recipe field: a searchable combobox whose options open in a portal. */
+const recipeField = (dialog: HTMLElement) =>
+  within(dialog).findByRole('combobox', { name: 'Recipe' });
+
+const searchRecipes = async (dialog: HTMLElement, search: string) => {
+  const input = await recipeField(dialog);
+  // Mantine treats a change to an unfocused field as browser autofill and
+  // only accepts an exact title, so the field is focused first, as typing
+  // would do.
+  input.focus();
+  fireEvent.click(input);
+  fireEvent.change(input, { target: { value: search } });
+  return input;
+};
+
 const openMenu = async (name: RegExp | string, item: string) => {
   fireEvent.click(screen.getByRole('button', { name }));
   fireEvent.click(await screen.findByRole('menuitem', { name: item }));
@@ -306,11 +321,10 @@ describe('adding', () => {
       () => jsonResponse(week([added])),
     );
     const dialog = await openAdd();
-    expect(
-      await within(dialog).findAllByRole('radio', { name: /soup|chicken/u }),
-    ).toHaveLength(2);
+    const field = await recipeField(dialog);
+    expect(field).toHaveAccessibleDescription('Type to search 2 recipes.');
 
-    // Saving with nothing chosen says so next to the list.
+    // Saving with nothing chosen says so next to the field.
     fireEvent.click(
       within(dialog).getByRole('button', { name: 'Add to plan' }),
     );
@@ -318,16 +332,11 @@ describe('adding', () => {
       await within(dialog).findByText('Choose a recipe.'),
     ).toBeInTheDocument();
 
-    fireEvent.change(
-      within(dialog).getByRole('searchbox', { name: 'Search recipes' }),
-      {
-        target: { value: 'miso' },
-      },
-    );
-    expect(
-      within(dialog).queryByRole('radio', { name: 'Soy chicken' }),
-    ).not.toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole('radio', { name: 'Miso soup' }));
+    // Every typed word must appear in the title, in any order and case.
+    await searchRecipes(dialog, 'SOUP miso');
+    await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(1));
+    fireEvent.click(screen.getByRole('option', { name: 'Miso soup' }));
+    expect(field).toHaveValue('Miso soup');
     fireEvent.click(
       within(dialog).getByRole('button', { name: 'Add to plan' }),
     );
@@ -346,13 +355,14 @@ describe('adding', () => {
   it('says when no recipe matches the search', async () => {
     await openWeek([], () => jsonResponse({ recipes: [summary()] }));
     const dialog = await openAdd();
-    fireEvent.change(
-      await within(dialog).findByRole('searchbox', { name: 'Search recipes' }),
-      { target: { value: 'pizza' } },
+    expect(await recipeField(dialog)).toHaveAccessibleDescription(
+      'Type to search 1 recipe.',
     );
+    await searchRecipes(dialog, 'pizza');
     expect(
-      within(dialog).getByText('No recipe matches “pizza”.'),
+      await screen.findByText('No recipe matches that search.'),
     ).toBeInTheDocument();
+    expect(screen.queryByRole('option')).not.toBeInTheDocument();
   });
 
   it('points to Add recipe when the library is empty', async () => {
@@ -376,9 +386,7 @@ describe('adding', () => {
     fireEvent.click(
       await within(dialog).findByRole('button', { name: 'Retry' }),
     );
-    expect(
-      await within(dialog).findByRole('radio', { name: 'Soy chicken' }),
-    ).toBeInTheDocument();
+    expect(await recipeField(dialog)).toBeInTheDocument();
   });
 
   it('keeps the typed meal when the meal is full', async () => {
@@ -431,9 +439,8 @@ describe('adding', () => {
       () => jsonResponse({ recipes: [] }),
     );
     const dialog = await openAdd();
-    fireEvent.click(
-      await within(dialog).findByRole('radio', { name: 'Soy chicken' }),
-    );
+    await searchRecipes(dialog, 'soy');
+    fireEvent.click(await screen.findByRole('option', { name: 'Soy chicken' }));
     fireEvent.click(
       within(dialog).getByRole('button', { name: 'Add to plan' }),
     );
@@ -1002,9 +1009,7 @@ describe('closing without a change', () => {
     fireEvent.click(
       within(dialog).getByRole('radio', { name: 'Pick a recipe' }),
     );
-    expect(
-      await within(dialog).findByRole('radio', { name: 'Soy chicken' }),
-    ).toBeInTheDocument();
+    expect(await recipeField(dialog)).toBeInTheDocument();
     fireEvent.keyDown(dialog, { key: 'Escape' });
     await waitFor(() =>
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
