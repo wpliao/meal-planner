@@ -17,7 +17,7 @@ import {
   useRef,
   useState,
   type ChangeEvent,
-  type FormEvent,
+  type SubmitEvent,
   type ReactNode,
 } from 'react';
 import type { Notice } from './api';
@@ -344,7 +344,7 @@ export function RecipeEditor({
       ?.focus();
   }, [attempt]);
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const submit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (pending || blockedReason) return;
     const result = validateRecipeForm({

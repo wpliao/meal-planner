@@ -16,7 +16,7 @@ import {
   useEffect,
   useRef,
   useState,
-  type FormEvent,
+  type SubmitEvent,
 } from 'react';
 import { api, jsonMutation, runMutation, type Notice } from './api';
 import {
@@ -95,7 +95,7 @@ export function Pantry() {
       success,
     );
 
-  const addItem = async (event: FormEvent<HTMLFormElement>) => {
+  const addItem = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) {
@@ -128,7 +128,7 @@ export function Pantry() {
   };
 
   const submitRename = async (
-    event: FormEvent<HTMLFormElement>,
+    event: SubmitEvent<HTMLFormElement>,
     item: PantryItem,
   ) => {
     event.preventDefault();
