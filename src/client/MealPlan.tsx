@@ -16,6 +16,7 @@ import { Link, Navigate, useParams } from 'react-router-dom';
 import { api, type Notice } from './api';
 import {
   AddEntryDialog,
+  ClearWeekDialog,
   EditEntryDialog,
   MoveEntryDialog,
   RemoveEntryDialog,
@@ -35,22 +36,28 @@ import {
 import { touchLink } from './recipe-client';
 import {
   addPlanDays,
+  isClearableWeek,
+  isPlanDate,
+  MEAL_PLAN_USAGE_HINT_AT,
   MEAL_SLOTS,
   planWeekDates,
   planWeekStart,
   type MealPlanEntry,
   type MealPlanResponse,
+  type MealPlanUsage,
   type MealSlot,
 } from '../shared/meal-plan';
 
 type LoadState =
   | { kind: 'loading' }
-  | { kind: 'ready'; entries: MealPlanEntry[] }
+  | { kind: 'ready'; entries: MealPlanEntry[]; usage: MealPlanUsage }
   | { kind: 'unavailable' };
 
 type Dialog =
   | { kind: 'add'; date: string; slot: MealSlot }
-  | { kind: 'move' | 'edit' | 'remove'; entry: MealPlanEntry };
+  | { kind: 'move' | 'edit' | 'remove'; entry: MealPlanEntry }
+  /** The entries on screen when Clear was chosen: exactly what is cleared. */
+  | { kind: 'clear'; entries: MealPlanEntry[] };
 
 const wrap = { overflowWrap: 'anywhere' } as const;
 const slotKey = (date: string, slot: MealSlot) => `${date}:${slot}`;
@@ -84,6 +91,8 @@ function Week({
   // than state that would re-render the week.
   const [addButtons] = useState(() => new Map<string, HTMLButtonElement>());
   const [menuButtons] = useState(() => new Map<string, HTMLButtonElement>());
+  const heading = useRef<HTMLHeadingElement>(null);
+  const clearButton = useRef<HTMLButtonElement>(null);
   const pendingFocus = useRef<(() => void) | null>(null);
   const scrolled = useRef(false);
 
@@ -93,7 +102,11 @@ function Week({
   const load = useCallback(async () => {
     try {
       const response = await api<MealPlanResponse>(weekQuery(weekStart));
-      setState({ kind: 'ready', entries: response.entries });
+      setState({
+        kind: 'ready',
+        entries: response.entries,
+        usage: response.usage,
+      });
     } catch {
       setState({ kind: 'unavailable' });
     }
@@ -128,17 +141,36 @@ function Week({
     void load();
   };
 
-  const closeDialog = async (closing: Dialog, outcome: DialogOutcome) => {
-    setDialog(null);
-
+  /**
+   * Where focus goes when a dialog closes: back to the control that opened
+   * it, or, when that control is gone, to the nearest one that remains.
+   */
+  const focusTargets = (
+    closing: Dialog,
+  ): { opener: () => void; remaining: () => void } => {
+    if (closing.kind === 'clear') {
+      // A cleared week has no Clear button, so its heading takes focus.
+      return {
+        opener: () => clearButton.current?.focus(),
+        remaining: () => heading.current?.focus(),
+      };
+    }
     const addButton =
       closing.kind === 'add'
         ? slotKey(closing.date, closing.slot)
         : slotKey(closing.entry.date, closing.entry.slot);
-    const opener =
-      closing.kind === 'add'
-        ? () => addButtons.get(addButton)?.focus()
-        : () => menuButtons.get(closing.entry.id)?.focus();
+    return {
+      opener:
+        closing.kind === 'add'
+          ? () => addButtons.get(addButton)?.focus()
+          : () => menuButtons.get(closing.entry.id)?.focus(),
+      remaining: () => addButtons.get(addButton)?.focus(),
+    };
+  };
+
+  const closeDialog = async (closing: Dialog, outcome: DialogOutcome) => {
+    setDialog(null);
+    const { opener, remaining } = focusTargets(closing);
 
     if (outcome.kind === 'cancelled') {
       opener();
@@ -147,15 +179,16 @@ function Week({
     // After a change the week is read again; an entry that left its meal
     // hands focus to that meal's Add button.
     pendingFocus.current =
-      outcome.kind === 'saved' && !outcome.left
-        ? opener
-        : () => addButtons.get(addButton)?.focus();
+      outcome.kind === 'saved' && !outcome.left ? opener : remaining;
     setNotice(
       outcome.kind === 'saved'
         ? { tone: 'success', message: outcome.message }
         : {
             tone: 'error',
-            message: 'That entry had already been removed by someone else.',
+            message:
+              closing.kind === 'clear'
+                ? 'This week had already been cleared.'
+                : 'That entry had already been removed by someone else.',
           },
     );
     await load();
@@ -181,7 +214,7 @@ function Week({
       </Title>
 
       <Group align="center" justify="space-between" mb="md" wrap="wrap">
-        <Title data-testid="plan-week" order={2}>
+        <Title data-testid="plan-week" order={2} ref={heading} tabIndex={-1}>
           {weekHeading(weekStart)}
         </Title>
         <Group aria-label="Weeks" component="nav" gap="xs">
@@ -209,6 +242,24 @@ function Week({
           </Button>
         </Group>
       </Group>
+
+      {state.kind === 'ready' &&
+        state.entries.length > 0 &&
+        isClearableWeek(weekStart, todayDate) && (
+          <Group justify="flex-end" mb="md">
+            <Button
+              aria-label={`Clear this week, ${weekHeading(weekStart)}`}
+              color="clay"
+              onClick={() =>
+                setDialog({ kind: 'clear', entries: state.entries })
+              }
+              ref={clearButton}
+              variant="outline"
+            >
+              Clear this week
+            </Button>
+          </Group>
+        )}
 
       {/* One live region for results. It stays mounted so a new message is
           announced, and it does not take focus: focus goes back to the
@@ -242,6 +293,7 @@ function Week({
 
       {week && state.kind === 'ready' && (
         <>
+          <UsageHint usage={state.usage} weekStart={weekStart} />
           {state.entries.length === 0 && (
             <Text c="dimmed" data-testid="plan-empty" mb="md">
               Nothing is planned for this week yet. Use Add under any meal to
@@ -288,7 +340,52 @@ function Week({
           onClose={(outcome) => void closeDialog(dialog, outcome)}
         />
       )}
+      {dialog?.kind === 'clear' && (
+        <ClearWeekDialog
+          entries={dialog.entries}
+          onChanged={() => void load()}
+          onClose={(outcome) => void closeDialog(dialog, outcome)}
+          weekStart={weekStart}
+        />
+      )}
     </Card>
+  );
+}
+
+/**
+ * Near the household limit, every week says how full the plan is and links
+ * to the oldest planned week, where clearing can start (decisions 2 and 3 of
+ * the #56 design). It is static text in reading order, not a live region, so
+ * it is not announced again on every load.
+ */
+function UsageHint({
+  usage,
+  weekStart,
+}: Readonly<{ usage: MealPlanUsage; weekStart: string }>) {
+  if (usage.entries < MEAL_PLAN_USAGE_HINT_AT) return null;
+  const used = `${usage.entries.toLocaleString('en')} of ${usage.limit.toLocaleString('en')} planned meals`;
+  const oldestWeek =
+    usage.oldestDate && isPlanDate(usage.oldestDate)
+      ? planWeekStart(usage.oldestDate)
+      : null;
+  return (
+    <Alert color="clay" data-testid="plan-usage" mb="md" style={wrap}>
+      <Text fz="sm">
+        {usage.entries >= usage.limit
+          ? `The plan is full: ${used}. Clear old weeks before adding more.`
+          : `The plan holds ${used}. Clear old weeks to make room for new plans.`}
+      </Text>
+      {oldestWeek && oldestWeek !== weekStart && (
+        <Anchor
+          component={Link}
+          fz="sm"
+          style={touchLink}
+          to={weekPath(oldestWeek)}
+        >
+          Go to the oldest planned week
+        </Anchor>
+      )}
+    </Alert>
   );
 }
 

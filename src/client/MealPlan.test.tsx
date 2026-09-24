@@ -866,6 +866,328 @@ describe('removing', () => {
   });
 });
 
+describe('clearing a week', () => {
+  const LAST_WEEK = '2026-09-14';
+  const HEADING = '14–20 September 2026';
+  const CLEAR = `Clear this week, ${HEADING}`;
+  const curry = textEntry({ title: 'Curry', date: LAST_WEEK });
+  const soup = textEntry({
+    id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    title: 'Soup',
+    date: '2026-09-20',
+    slot: 'lunch',
+    version: 3,
+  });
+  const weekChanged = (current: MealPlanEntry[]) =>
+    jsonResponse(
+      {
+        error: { code: 'week_changed', message: 'This week changed.' },
+        current,
+      },
+      409,
+    );
+
+  const openPast = async (
+    entries: MealPlanEntry[],
+    ...then: (() => Promise<Response>)[]
+  ) => {
+    const spy = mockFetch(
+      () => jsonResponse(week(entries, LAST_WEEK)),
+      ...then,
+    );
+    renderPlan([`/plan/${LAST_WEEK}`]);
+    await screen.findByTestId('plan-days');
+    return spy;
+  };
+
+  const openClear = async () => {
+    fireEvent.click(screen.getByRole('button', { name: CLEAR }));
+    const dialog = await screen.findByRole('dialog');
+    await waitFor(() =>
+      expect(dialog.contains(document.activeElement)).toBe(true),
+    );
+    return dialog;
+  };
+
+  it('is offered only on a past week that has planned meals', async () => {
+    mockFetch(
+      () => jsonResponse(week([textEntry()])),
+      () => jsonResponse(week([], LAST_WEEK)),
+    );
+    renderPlan([`/plan/${MONDAY}`]);
+    await screen.findByTestId('plan-days');
+    expect(
+      screen.queryByRole('button', { name: /^Clear this week/u }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('link', { name: 'Previous week' }));
+    expect(await screen.findByTestId('plan-empty')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /^Clear this week/u }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('clears after a confirmation that names the week and count, then focuses the heading', async () => {
+    const spy = await openPast(
+      [curry, soup],
+      () => noContent(),
+      () => jsonResponse(week([], LAST_WEEK)),
+    );
+    const button = screen.getByRole('button', { name: CLEAR });
+    expect(button).toHaveTextContent('Clear this week');
+
+    const dialog = await openClear();
+    expect(dialog).toHaveAccessibleName(`Clear ${HEADING}?`);
+    expect(dialog).toHaveTextContent(
+      'This removes all 2 planned meals in this week for everyone. It cannot be undone.',
+    );
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Clear week' }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    expect(sent(spy, 1)).toEqual({
+      url: `/api/meal-plan/weeks/${LAST_WEEK}`,
+      method: 'DELETE',
+      body: {
+        entries: [
+          { id: curry.id, version: 1 },
+          { id: soup.id, version: 3 },
+        ],
+      },
+    });
+    expect(
+      await within(result()).findByText(
+        `Cleared 2 planned meals from ${HEADING}.`,
+      ),
+    ).toBeInTheDocument();
+    expect(await screen.findByTestId('plan-empty')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: CLEAR }),
+    ).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('plan-week')).toHaveFocus());
+  });
+
+  it('names a single planned meal', async () => {
+    await openPast([curry]);
+    const dialog = await openClear();
+    expect(dialog).toHaveTextContent(
+      'This removes the 1 planned meal in this week for everyone.',
+    );
+  });
+
+  it('cancels without a request and returns focus to Clear', async () => {
+    const spy = await openPast([curry]);
+    let dialog = await openClear();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: CLEAR })).toHaveFocus();
+
+    dialog = await openClear();
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: CLEAR })).toHaveFocus();
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the new count after the week changed, and clears that version on request', async () => {
+    const edited = { ...curry, note: 'mild', version: 2 };
+    const latest = [edited, soup];
+    const spy = await openPast(
+      [curry, soup],
+      () => weekChanged(latest),
+      () => jsonResponse(week(latest, LAST_WEEK)),
+      () => noContent(),
+      () => jsonResponse(week([], LAST_WEEK)),
+    );
+    const dialog = await openClear();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Clear week' }));
+
+    const conflict = await within(dialog).findByTestId('week-conflict');
+    expect(conflict).toHaveTextContent(
+      'This week changed after you opened it, so nothing was removed. It now has 2 planned meals.',
+    );
+    expect(
+      within(dialog).queryByRole('button', { name: 'Clear week' }),
+    ).not.toBeInTheDocument();
+    // The week behind the dialog was read again.
+    await waitFor(() => expect(sent(spy, 2).method).toBe('GET'));
+    expect(await screen.findByText('mild')).toBeInTheDocument();
+
+    fireEvent.click(
+      within(conflict).getByRole('button', { name: 'Clear all 2' }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    expect(sent(spy, 3).body).toEqual({
+      entries: [
+        { id: curry.id, version: 2 },
+        { id: soup.id, version: 3 },
+      ],
+    });
+    expect(
+      await within(result()).findByText(
+        `Cleared 2 planned meals from ${HEADING}.`,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('offers to clear a single remaining meal after a conflict', async () => {
+    await openPast(
+      [curry, soup],
+      () => weekChanged([soup]),
+      () => jsonResponse(week([soup], LAST_WEEK)),
+    );
+    const dialog = await openClear();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Clear week' }));
+    const conflict = await within(dialog).findByTestId('week-conflict');
+    expect(conflict).toHaveTextContent('It now has 1 planned meal.');
+    expect(dialog).toHaveTextContent('This removes the 1 planned meal');
+    expect(
+      within(conflict).getByRole('button', {
+        name: 'Clear the 1 planned meal',
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps the week when asked and returns focus to Clear', async () => {
+    const latest = [
+      curry,
+      soup,
+      textEntry({
+        id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+        title: 'Late',
+        date: LAST_WEEK,
+      }),
+    ];
+    await openPast(
+      [curry, soup],
+      () => weekChanged(latest),
+      () => jsonResponse(week(latest, LAST_WEEK)),
+      () => jsonResponse(week(latest, LAST_WEEK)),
+    );
+    const dialog = await openClear();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Clear week' }));
+    fireEvent.click(
+      await within(dialog).findByRole('button', { name: 'Keep them' }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    expect(
+      await within(result()).findByText('The week was left as it is now.'),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: CLEAR })).toHaveFocus(),
+    );
+    expect(screen.getByText('Late')).toBeInTheDocument();
+  });
+
+  it('reports a week someone else already cleared', async () => {
+    await openPast(
+      [curry],
+      () => weekChanged([]),
+      () => jsonResponse(week([], LAST_WEEK)),
+    );
+    const dialog = await openClear();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Clear week' }));
+    expect(
+      await within(result()).findByText('This week had already been cleared.'),
+    ).toBeInTheDocument();
+    expect(await screen.findByTestId('plan-empty')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('plan-week')).toHaveFocus());
+  });
+
+  it.each([
+    [
+      'a failed connection',
+      () => Promise.reject(new TypeError('offline')),
+      'The week could not be cleared. Check your connection and try again.',
+    ],
+    [
+      'a refusal from the Worker',
+      () =>
+        jsonResponse(
+          {
+            error: {
+              code: 'invalid_request',
+              message: 'Only a week that has ended can be cleared.',
+            },
+          },
+          400,
+        ),
+      'Only a week that has ended can be cleared.',
+    ],
+  ])('keeps the dialog open and explains %s', async (_, failure, message) => {
+    await openPast([curry], failure);
+    const dialog = await openClear();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Clear week' }));
+    expect(await within(dialog).findByTestId('dialog-error')).toHaveTextContent(
+      message,
+    );
+    expect(
+      within(dialog).getByRole('button', { name: 'Clear week' }),
+    ).toBeEnabled();
+    expect(screen.getByText('Curry')).toBeInTheDocument();
+  });
+});
+
+describe('the near-limit hint', () => {
+  const openWith = async (usage: {
+    entries: number;
+    oldestDate?: string | null;
+  }) => {
+    mockFetch(() =>
+      jsonResponse(week([], MONDAY, { oldestDate: '2023-03-08', ...usage })),
+    );
+    renderPlan([`/plan/${MONDAY}`]);
+    await screen.findByTestId('plan-days');
+  };
+
+  it('stays hidden below 3,600 planned meals', async () => {
+    await openWith({ entries: 3599 });
+    expect(screen.queryByTestId('plan-usage')).not.toBeInTheDocument();
+  });
+
+  it('says how full the plan is from 3,600, with a link to the oldest week', async () => {
+    await openWith({ entries: 3600 });
+    const hint = screen.getByTestId('plan-usage');
+    expect(hint).toHaveTextContent(
+      'The plan holds 3,600 of 4,000 planned meals. Clear old weeks to make room for new plans.',
+    );
+    expect(
+      within(hint).getByRole('link', { name: 'Go to the oldest planned week' }),
+    ).toHaveAttribute('href', '/plan/2023-03-06');
+  });
+
+  it('says when the plan is full', async () => {
+    await openWith({ entries: 4000 });
+    expect(screen.getByTestId('plan-usage')).toHaveTextContent(
+      'The plan is full: 4,000 of 4,000 planned meals. Clear old weeks before adding more.',
+    );
+  });
+
+  it('leaves out the link on the oldest week itself', async () => {
+    await openWith({ entries: 3700, oldestDate: '2026-09-23' });
+    expect(screen.getByTestId('plan-usage')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: 'Go to the oldest planned week' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('leaves out the link when the oldest date is missing', async () => {
+    await openWith({ entries: 3700, oldestDate: null });
+    expect(
+      screen.queryByRole('link', { name: 'Go to the oldest planned week' }),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe('Add to plan on a recipe', () => {
   const RECIPE_PATH = '/recipes/11111111-1111-4111-8111-111111111111';
 

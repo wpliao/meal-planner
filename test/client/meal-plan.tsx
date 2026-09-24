@@ -11,7 +11,7 @@ import {
 import { theme } from '../../src/client/theme';
 import { MealPlan } from '../../src/client/MealPlan';
 import { RecipeDetail } from '../../src/client/RecipeDetail';
-import type { MealPlanEntry } from '../../src/shared/meal-plan';
+import type { MealPlanEntry, MealPlanUsage } from '../../src/shared/meal-plan';
 
 /** The device's "now" in plan tests: Thursday 24 September 2026, 10:00. */
 export const NOW = new Date(2026, 8, 24, 10, 0);
@@ -47,10 +47,20 @@ export const recipeEntry = (
   ...over,
 });
 
-export const week = (entries: MealPlanEntry[], from = MONDAY) => ({
+export const week = (
+  entries: MealPlanEntry[],
+  from = MONDAY,
+  usage: Partial<MealPlanUsage> = {},
+) => ({
   from,
   to: from === MONDAY ? '2026-09-27' : from,
   entries,
+  usage: {
+    entries: entries.length,
+    limit: 4000,
+    oldestDate: entries[0]?.date ?? null,
+    ...usage,
+  },
 });
 
 function Where() {

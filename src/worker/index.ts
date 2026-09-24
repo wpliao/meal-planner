@@ -19,7 +19,10 @@ import {
 } from '../shared/pantry';
 import {
   isWithinPlanWindow,
+  MEAL_PLAN_SERVER_SLACK_DAYS,
   serverPlanWriteWindow,
+  utcPlanDate,
+  validateClearMealPlanWeek,
   validateCreateMealPlanEntry,
   validateMealPlanRange,
   validateMealPlanVersion,
@@ -56,9 +59,10 @@ import {
   type MemberContext,
 } from './data/household-repository';
 import {
+  clearMealPlanWeek,
   createMealPlanEntry,
   deleteMealPlanEntry,
-  listMealPlanEntries,
+  readMealPlan,
   updateMealPlanEntry,
 } from './data/meal-plan-repository';
 import {
@@ -108,10 +112,16 @@ const MEAL_PLAN_PATH = '/api/meal-plan';
 const MEAL_PLAN_ENTRIES_PATH = '/api/meal-plan/entries';
 const MEAL_PLAN_ENTRY_PATH =
   /^\/api\/meal-plan\/entries\/([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/iu;
+/** Any segment: validation, not the router, explains a date that is wrong. */
+const MEAL_PLAN_WEEK_PATH = /^\/api\/meal-plan\/weeks\/([^/]+)$/u;
 
 // A recipe at every bound is about 134,000 code points; at up to four UTF-8
 // bytes each plus JSON framing it stays under 1 MiB. Other routes keep 8 KiB.
 const RECIPE_MAX_JSON_BYTES = 1024 * 1024;
+
+// A full week names 126 entries by ID and version, about 7.6 KB of JSON: too
+// close to the default 8 KiB, so clearing a week allows 16 KiB.
+const MEAL_PLAN_CLEAR_MAX_JSON_BYTES = 16 * 1024;
 
 /**
  * What the member is told about a failed import. Each class says something
@@ -650,12 +660,7 @@ const handleMealPlan = async (
   );
   const body: MealPlanResponse = {
     ...range,
-    entries: await listMealPlanEntries(
-      env.DB,
-      member.householdId,
-      range.from,
-      range.to,
-    ),
+    ...(await readMealPlan(env.DB, member.householdId, range.from, range.to)),
   };
   return json(body);
 };
@@ -718,6 +723,35 @@ const handleMealPlanEntry = async (
   const version = validateMealPlanVersion(input.version);
   if (!version.ok) throw invalidRequest(version.message);
   await deleteMealPlanEntry(env.DB, member.householdId, entryId, version.value);
+  return noContent();
+};
+
+// Clears one ended week, only as the member saw it (the #56 design).
+const handleMealPlanWeek = async (
+  request: Request,
+  env: AppEnv,
+  weekStart: string,
+  identityProvider: IdentityProvider,
+  clock: Clock,
+): Promise<Response> => {
+  if (request.method !== 'DELETE') {
+    throw new ApiError(404, 'not_found', 'Not found.');
+  }
+  requireMutationHeaders(request);
+  const member = await requireMemberForRequest(request, env, identityProvider);
+  const input = await readJsonObject(request, MEAL_PLAN_CLEAR_MAX_JSON_BYTES);
+  await clearMealPlanWeek(
+    env.DB,
+    member.householdId,
+    requireValid(
+      validateClearMealPlanWeek(
+        weekStart,
+        input,
+        utcPlanDate(clock()),
+        MEAL_PLAN_SERVER_SLACK_DAYS,
+      ),
+    ),
+  );
   return noContent();
 };
 
@@ -797,6 +831,17 @@ const route = async (
       request,
       env,
       entryMatch[1],
+      identityProvider,
+      clock,
+    );
+  }
+
+  const weekMatch = MEAL_PLAN_WEEK_PATH.exec(url.pathname);
+  if (weekMatch) {
+    return handleMealPlanWeek(
+      request,
+      env,
+      weekMatch[1],
       identityProvider,
       clock,
     );

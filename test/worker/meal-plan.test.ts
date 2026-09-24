@@ -6,10 +6,15 @@ import {
   MEAL_PLAN_NOTE_MAX_LENGTH,
   MEAL_PLAN_SLOT_LIMIT,
   MEAL_PLAN_TITLE_MAX_LENGTH,
+  MEAL_PLAN_WEEK_ENTRY_MAX,
+  MEAL_SLOTS,
+  planWeekStart,
   type MealPlanConflictResponse,
   type MealPlanEntry,
   type MealPlanResponse,
+  type MealPlanWeekConflictResponse,
 } from '../../src/shared/meal-plan';
+import { clearMealPlanWeek } from '../../src/worker/data/meal-plan-repository';
 import { createWorker } from '../../src/worker/index';
 import {
   applyMigrations,
@@ -25,6 +30,7 @@ import {
 const PLAN_URL = 'https://example.test/api/meal-plan';
 const ENTRIES_URL = `${PLAN_URL}/entries`;
 const entryUrl = (id: string) => `${ENTRIES_URL}/${id}`;
+const weekUrl = (weekStart: string) => `${PLAN_URL}/weeks/${weekStart}`;
 
 /** The Worker's clock: 2026-09-24 at noon UTC, one second later per call. */
 const TODAY = '2026-09-24';
@@ -76,6 +82,18 @@ const patchOk = async (id: string, body: unknown): Promise<MealPlanEntry> => {
 
 const remove = (id: string, body: unknown): Promise<Response> =>
   call(new Request(entryUrl(id), mutationInit('DELETE', body)));
+
+/** Last week, which has ended by the Worker's date, and its Sunday. */
+const LAST_WEEK = '2026-09-14';
+const LAST_SUNDAY = '2026-09-20';
+
+/** A clear request naming exactly these entries, at their versions. */
+const seen = (entries: readonly MealPlanEntry[]) => ({
+  entries: entries.map(({ id, version }) => ({ id, version })),
+});
+
+const clearWeek = (weekStart: string, body: unknown): Promise<Response> =>
+  call(new Request(weekUrl(weekStart), mutationInit('DELETE', body)));
 
 const errorOf = async (
   response: Response,
@@ -428,6 +446,7 @@ describe('meal plan API', () => {
         [ENTRIES_URL, 'POST', text('Pizza')],
         [entryUrl(entry.id), 'PATCH', { version: 1, note: 'x' }],
         [entryUrl(entry.id), 'DELETE', { version: 1 }],
+        [weekUrl(LAST_WEEK), 'DELETE', seen([entry])],
       ] as const) {
         const crossOrigin = await call(
           new Request(url, {
@@ -468,6 +487,9 @@ describe('meal plan API', () => {
           mutationInit('DELETE', { version: 1 }),
         ),
         new Request(`${PLAN_URL}/weeks`),
+        new Request(weekUrl(LAST_WEEK)),
+        new Request(weekUrl(LAST_WEEK), mutationInit('POST', seen([entry]))),
+        new Request(`${weekUrl(LAST_WEEK)}/entries`),
       ]) {
         const response = await call(request);
         expect(response.status, `${request.method} ${request.url}`).toBe(404);
@@ -741,6 +763,353 @@ describe('meal plan API', () => {
     });
   });
 
+  describe('clearing a week', () => {
+    it('removes every entry of an ended week and nothing outside it', async () => {
+      const monday = await createOk(text('Curry', { date: LAST_WEEK }));
+      const sunday = await createOk(
+        text('Soup', { date: LAST_SUNDAY, slot: 'lunch' }),
+      );
+      const recipeId = await createRecipe('Fried Rice');
+      const planned = await createOk({
+        date: addPlanDays(LAST_WEEK, 3),
+        slot: 'breakfast',
+        recipeId,
+      });
+      const before = await createOk(
+        text('Before', { date: addPlanDays(LAST_WEEK, -1) }),
+      );
+      const after = await createOk(
+        text('After', { date: addPlanDays(LAST_SUNDAY, 1) }),
+      );
+
+      const response = await clearWeek(
+        LAST_WEEK,
+        seen([monday, planned, sunday]),
+      );
+      expect(response.status).toBe(204);
+      expect(await readOk(LAST_WEEK, LAST_SUNDAY)).toEqual([]);
+      expect(await readOk(before.date, before.date)).toEqual([before]);
+      expect(await readOk(after.date, after.date)).toEqual([after]);
+      // The recipe itself is untouched.
+      const recipe = await fetchWorker(
+        new Request(`https://example.test/api/recipes/${recipeId}`),
+      );
+      expect(recipe.status).toBe(200);
+    });
+
+    it('reports one affected row per removed entry', async () => {
+      const householdId = await ownerHouseholdId();
+      const entries = [
+        await createOk(text('One', { date: LAST_WEEK })),
+        await createOk(text('Two', { date: LAST_WEEK })),
+        await createOk(text('Three', { date: LAST_SUNDAY })),
+      ];
+      await expect(
+        clearMealPlanWeek(testEnv.DB, householdId, {
+          weekStart: LAST_WEEK,
+          entries: seen(entries).entries,
+        }),
+      ).resolves.toBe(3);
+      expect(await entryCount()).toBe(0);
+    });
+
+    it('clears a full week of 126 entries within the body limit', async () => {
+      const householdId = await ownerHouseholdId();
+      const ids: string[] = [];
+      for (let day = 0; day < 7; day += 1) {
+        for (const slot of MEAL_SLOTS) {
+          for (let index = 0; index < MEAL_PLAN_SLOT_LIMIT; index += 1) {
+            ids.push(
+              await seedMealPlanEntry(householdId, {
+                date: addPlanDays(LAST_WEEK, day),
+                slot,
+              }),
+            );
+          }
+        }
+      }
+      expect(ids).toHaveLength(MEAL_PLAN_WEEK_ENTRY_MAX);
+      const body = { entries: ids.map((id) => ({ id, version: 1 })) };
+      expect(JSON.stringify(body).length).toBeGreaterThan(7000);
+
+      const response = await clearWeek(LAST_WEEK, body);
+      expect(response.status, await response.clone().text()).toBe(204);
+      expect(await entryCount()).toBe(0);
+    });
+
+    it('refuses a body over 16 KiB without reading the week', async () => {
+      const entry = await createOk(text('Curry', { date: LAST_WEEK }));
+      const response = await clearWeek(LAST_WEEK, {
+        entries: [{ id: entry.id, version: 1 }],
+        padding: 'x'.repeat(16 * 1024),
+      });
+      expect(response.status).toBe(413);
+      expect(await readOk(LAST_WEEK, LAST_WEEK)).toEqual([entry]);
+    });
+
+    it('clears a week from before the write window', async () => {
+      const householdId = await ownerHouseholdId();
+      const oldWeek = planWeekStart(addPlanDays(TODAY, -3 * 365));
+      const ids = [
+        await seedMealPlanEntry(householdId, { date: oldWeek }),
+        await seedMealPlanEntry(householdId, {
+          date: addPlanDays(oldWeek, 4),
+          slot: 'lunch',
+        }),
+      ];
+
+      const response = await clearWeek(oldWeek, {
+        entries: ids.map((id) => ({ id, version: 1 })),
+      });
+      expect(response.status).toBe(204);
+      expect(await entryCount()).toBe(0);
+    });
+
+    it.each([
+      ['the current week', '2026-09-21', 'Only a week that has ended'],
+      ['a future week', '2026-09-28', 'Only a week that has ended'],
+      ['a day that is not a Monday', '2026-09-15', 'Choose the Monday'],
+      ['an impossible date', '2026-02-30', 'Choose the Monday'],
+      ['text that is not a date', 'soon', 'Choose the Monday'],
+      ['an escaped segment', '%E0%A4%A', 'Choose the Monday'],
+    ])('refuses to clear %s', async (_, weekStart, message) => {
+      const entry = await createOk(text('Curry'));
+      const response = await clearWeek(weekStart, seen([entry]));
+      expect(response.status).toBe(400);
+      const error = await errorOf(response);
+      expect(error.code).toBe('invalid_request');
+      expect(error.message).toContain(message);
+      expect(await readOk()).toEqual([entry]);
+    });
+
+    it('accepts a week whose Sunday is the UTC date, a day of slack for families ahead of UTC', async () => {
+      const entry = await createOk(text('Curry'));
+      const onDay = (date: string) =>
+        createWorker(undefined, undefined, () => new Date(`${date}T12:00:00Z`));
+      const request = () =>
+        new Request(
+          weekUrl('2026-09-21'),
+          mutationInit('DELETE', seen([entry])),
+        );
+
+      const saturday = await onDay('2026-09-26').fetch(request(), testEnv);
+      expect(saturday.status).toBe(400);
+      expect(await readOk()).toEqual([entry]);
+      const sunday = await onDay('2026-09-27').fetch(request(), testEnv);
+      expect(sunday.status).toBe(204);
+      expect(await readOk()).toEqual([]);
+    });
+
+    it.each([
+      ['a body that is not an object', []],
+      ['no entries field', {}],
+      ['an empty list', { entries: [] }],
+      ['a list that is not a list', { entries: 'all' }],
+      [
+        'more entries than a week can hold',
+        {
+          entries: Array.from({ length: MEAL_PLAN_WEEK_ENTRY_MAX + 1 }, () => ({
+            id: crypto.randomUUID(),
+            version: 1,
+          })),
+        },
+      ],
+      ['an ID that is not a UUID', { entries: [{ id: 'x', version: 1 }] }],
+      [
+        'a version that is not positive',
+        { entries: [{ id: crypto.randomUUID(), version: 0 }] },
+      ],
+      [
+        'an entry with another field',
+        { entries: [{ id: crypto.randomUUID(), version: 1, title: 'x' }] },
+      ],
+      [
+        'an unexpected field',
+        { entries: [{ id: crypto.randomUUID(), version: 1 }], all: true },
+      ],
+    ])('rejects a clear with %s', async (_, body) => {
+      const entry = await createOk(text('Curry', { date: LAST_WEEK }));
+      const response = await clearWeek(LAST_WEEK, body);
+      expect(response.status).toBe(400);
+      expect((await errorOf(response)).code).toBe('invalid_request');
+      expect(await readOk(LAST_WEEK, LAST_WEEK)).toEqual([entry]);
+    });
+
+    it('rejects an entry named twice, in any letter case', async () => {
+      const entry = await createOk(text('Curry', { date: LAST_WEEK }));
+      const response = await clearWeek(LAST_WEEK, {
+        entries: [
+          { id: entry.id, version: 1 },
+          { id: entry.id.toUpperCase(), version: 1 },
+        ],
+      });
+      expect(response.status).toBe(400);
+      expect((await errorOf(response)).message).toContain('each entry once');
+      expect(await readOk(LAST_WEEK, LAST_WEEK)).toEqual([entry]);
+    });
+
+    it('matches an entry named in upper case', async () => {
+      const entry = await createOk(text('Curry', { date: LAST_WEEK }));
+      const response = await clearWeek(LAST_WEEK, {
+        entries: [{ id: entry.id.toUpperCase(), version: 1 }],
+      });
+      expect(response.status).toBe(204);
+      expect(await entryCount()).toBe(0);
+    });
+
+    it('lets a regular member clear a week', async () => {
+      await fetchWorker(
+        new Request(
+          'https://example.test/api/household/members',
+          mutationInit('POST', { email: 'member@example.test' }),
+        ),
+      );
+      await testEnv.DB.prepare(
+        `UPDATE household_members
+            SET status = 'active', access_subject = 'member-subject',
+                activated_at = ?
+          WHERE normalized_email = 'member@example.test'`,
+      )
+        .bind(new Date().toISOString())
+        .run();
+      const member = createWorker(
+        () =>
+          Promise.resolve({
+            subject: 'member-subject',
+            email: 'member@example.test',
+          }),
+        undefined,
+        () => new Date(NOON),
+      );
+      const entry = await createOk(text('Curry', { date: LAST_WEEK }));
+
+      const response = await member.fetch(
+        new Request(weekUrl(LAST_WEEK), mutationInit('DELETE', seen([entry]))),
+        testEnv,
+      );
+      expect(response.status).toBe(204);
+      expect(await entryCount()).toBe(0);
+    });
+  });
+
+  describe('the week changed after it was read', () => {
+    type Change = (entries: MealPlanEntry[]) => Promise<unknown>;
+    it.each<[string, Change]>([
+      [
+        'an entry was added',
+        () => createOk(text('Late', { date: LAST_WEEK, slot: 'breakfast' })),
+      ],
+      [
+        'an entry was edited',
+        ([first]) => patchOk(first.id, { version: 1, note: 'changed' }),
+      ],
+      [
+        'an entry was moved in',
+        async () => {
+          const mover = await createOk(text('Mover'));
+          return patchOk(mover.id, { version: 1, date: LAST_WEEK });
+        },
+      ],
+      [
+        'an entry was moved out',
+        ([first]) => patchOk(first.id, { version: 1, date: TODAY }),
+      ],
+      [
+        'an entry was moved within the week',
+        ([first]) => patchOk(first.id, { version: 1, slot: 'lunch' }),
+      ],
+      [
+        'an entry was removed',
+        async ([first]) => {
+          expect((await remove(first.id, { version: 1 })).status).toBe(204);
+        },
+      ],
+    ])(
+      'removes nothing when %s, and returns the latest week',
+      async (_, change) => {
+        const read = [
+          await createOk(text('Curry', { date: LAST_WEEK })),
+          await createOk(text('Soup', { date: LAST_SUNDAY })),
+        ];
+        await change(read);
+        const latest = await readOk(LAST_WEEK, LAST_SUNDAY);
+
+        const response = await clearWeek(LAST_WEEK, seen(read));
+        expect(response.status).toBe(409);
+        const body = await response.json<MealPlanWeekConflictResponse>();
+        expect(body.error.code).toBe('week_changed');
+        expect(body.error.message).not.toContain('Curry');
+        expect(body.current).toEqual(latest);
+        expect(await readOk(LAST_WEEK, LAST_SUNDAY)).toEqual(latest);
+
+        // Confirming again against the latest version clears it.
+        expect((await clearWeek(LAST_WEEK, seen(latest))).status).toBe(204);
+        expect(await readOk(LAST_WEEK, LAST_SUNDAY)).toEqual([]);
+      },
+    );
+
+    it('answers a repeated clear with an empty week', async () => {
+      const entry = await createOk(text('Curry', { date: LAST_WEEK }));
+      expect((await clearWeek(LAST_WEEK, seen([entry]))).status).toBe(204);
+
+      const again = await clearWeek(LAST_WEEK, seen([entry]));
+      expect(again.status).toBe(409);
+      const body = await again.json<MealPlanWeekConflictResponse>();
+      expect(body.current).toEqual([]);
+    });
+
+    it('never removes an entry added at the same moment', async () => {
+      const entry = await createOk(text('Curry', { date: LAST_WEEK }));
+      const [cleared, added] = await Promise.all([
+        clearWeek(LAST_WEEK, seen([entry])),
+        create(text('Late', { date: LAST_WEEK, slot: 'lunch' })),
+      ]);
+      expect(added.status).toBe(201);
+      const titles = (await readOk(LAST_WEEK, LAST_SUNDAY)).map(
+        ({ title }) => title,
+      );
+      // Either the clear ran first and the new entry was added after it, or
+      // the entry was added first and the clear refused.
+      if (cleared.status === 204) {
+        expect(titles).toEqual(['Late']);
+      } else {
+        expect(cleared.status).toBe(409);
+        expect(titles).toEqual(['Late', 'Curry']);
+      }
+    });
+  });
+
+  describe('usage', () => {
+    it('reports an empty plan', async () => {
+      const response = await readPlan(TODAY, TODAY);
+      const body = await response.json<MealPlanResponse>();
+      expect(body.usage).toEqual({
+        entries: 0,
+        limit: MEAL_PLAN_HOUSEHOLD_LIMIT,
+        oldestDate: null,
+      });
+    });
+
+    it("counts the whole household, whatever the range, and never another household's entries", async () => {
+      const householdId = await ownerHouseholdId();
+      await createOk(text('Curry'));
+      await createOk(text('Soup', { date: addPlanDays(TODAY, 30) }));
+      await seedMealPlanEntry(householdId, { date: '2024-02-05' });
+      const other = await seedOtherHousehold();
+      await seedMealPlanEntry(other.householdId, { date: '2020-01-06' });
+      await seedMealPlanEntry(other.householdId, { date: TODAY });
+
+      const response = await readPlan(LAST_WEEK, LAST_SUNDAY);
+      const body = await response.json<MealPlanResponse>();
+      expect(body.entries).toEqual([]);
+      expect(body.usage).toEqual({
+        entries: 3,
+        limit: MEAL_PLAN_HOUSEHOLD_LIMIT,
+        oldestDate: '2024-02-05',
+      });
+    });
+  });
+
   describe('authorization and household isolation', () => {
     it("never lets one household read or change another household's entries", async () => {
       const other = await seedOtherHousehold();
@@ -768,6 +1137,47 @@ describe('meal plan API', () => {
       expect(row).toEqual({ title: 'Secret dinner', note: null, version: 1 });
     });
 
+    it("never clears another household's entries in the same week", async () => {
+      const other = await seedOtherHousehold();
+      const foreign = await seedMealPlanEntry(other.householdId, {
+        date: LAST_WEEK,
+        title: 'Secret dinner',
+      });
+      const mine = await createOk(text('Curry', { date: LAST_WEEK }));
+
+      expect((await clearWeek(LAST_WEEK, seen([mine]))).status).toBe(204);
+      const row = await testEnv.DB.prepare(
+        'SELECT title FROM meal_plan_entries WHERE id = ?',
+      )
+        .bind(foreign)
+        .first();
+      expect(row).toEqual({ title: 'Secret dinner' });
+    });
+
+    it("treats another household's entry ID as a changed week and discloses nothing", async () => {
+      const other = await seedOtherHousehold();
+      const foreign = await seedMealPlanEntry(other.householdId, {
+        date: LAST_WEEK,
+        title: 'Secret dinner',
+      });
+      const mine = await createOk(text('Curry', { date: LAST_WEEK }));
+
+      const response = await clearWeek(LAST_WEEK, {
+        entries: [
+          { id: mine.id, version: 1 },
+          { id: foreign, version: 1 },
+        ],
+      });
+      expect(response.status).toBe(409);
+      const raw = await response.text();
+      expect(raw).not.toContain('Secret');
+      expect(raw).not.toContain(foreign);
+      expect((JSON.parse(raw) as MealPlanWeekConflictResponse).current).toEqual(
+        [mine],
+      );
+      expect(await entryCount()).toBe(2);
+    });
+
     const everyRoute = (entryId: string): Request[] => [
       new Request(`${PLAN_URL}?from=${TODAY}&to=${TODAY}`),
       new Request(ENTRIES_URL, mutationInit('POST', text('Pizza'))),
@@ -776,6 +1186,10 @@ describe('meal plan API', () => {
         mutationInit('PATCH', { version: 1, note: 'x' }),
       ),
       new Request(entryUrl(entryId), mutationInit('DELETE', { version: 1 })),
+      new Request(
+        weekUrl(LAST_WEEK),
+        mutationInit('DELETE', { entries: [{ id: entryId, version: 1 }] }),
+      ),
     ];
 
     it('denies a revoked member every plan route', async () => {
@@ -903,7 +1317,7 @@ describe('meal plan API', () => {
       expect(error).toEqual({
         code: 'limit_reached',
         message:
-          'The plan holds at most 4,000 entries. Remove old entries before adding more.',
+          'The plan holds at most 4,000 entries. Clear old weeks before adding more.',
       });
       const recipeId = await createRecipe('Cake');
       expect(
@@ -972,6 +1386,11 @@ describe('meal plan API', () => {
         await deleteRecipe(recipeId, 1);
         await readOk();
         await create({ ...text('saffron'), date: '2099-01-01' });
+        const past = await createOk(text('Saffron past', { date: LAST_WEEK }));
+        await clearWeek(LAST_WEEK, { entries: [] });
+        await patch(past.id, { version: 1, note: 'saffron late' });
+        await clearWeek(LAST_WEEK, seen([past]));
+        await clearWeek(LAST_WEEK, seen([{ ...past, version: 2 }]));
       } finally {
         for (const [level, original] of originals) {
           console[level] = original;

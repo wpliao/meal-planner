@@ -29,9 +29,12 @@ import {
   hasErrors,
   isEntryGone,
   MEAL_SLOT_OPTIONS,
+  mealCount,
   placeLabel,
   planFailure,
   today,
+  weekConflictFrom,
+  weekHeading,
   weekPath,
   type EntryFieldErrors,
 } from './meal-plan-client';
@@ -41,6 +44,7 @@ import {
   MEAL_PLAN_NOTE_MAX_LENGTH,
   MEAL_PLAN_TITLE_MAX_LENGTH,
   planWeekStart,
+  type ClearMealPlanWeekRequest,
   type MealPlanEntry,
   type MealPlanEntryResponse,
   type MealSlot,
@@ -864,6 +868,150 @@ export function AddToPlanDialog({
           </Stack>
         </form>
       )}
+    </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Clear a week that has ended
+
+/** The member kept the week as someone else left it. */
+const KEPT_WEEK: DialogOutcome = {
+  kind: 'saved',
+  message: 'The week was left as it is now.',
+  left: false,
+};
+
+/**
+ * Clears a past week, naming the week and how many planned meals go. The
+ * request names every entry on screen at its version, so only what the member
+ * saw can be removed. If the week changed meanwhile, nothing is removed: the
+ * week behind reloads, and the dialog offers to clear the latest version or
+ * keep it (decision 1 of the #56 design).
+ */
+export function ClearWeekDialog({
+  weekStart,
+  entries,
+  onChanged,
+  onClose,
+}: Readonly<{
+  weekStart: string;
+  entries: readonly MealPlanEntry[];
+  onChanged: () => void;
+  onClose: (outcome: DialogOutcome) => void;
+}>) {
+  const [pending, setPending] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [latest, setLatest] = useState<MealPlanEntry[] | null>(null);
+  const heading = weekHeading(weekStart);
+  const count = (latest ?? entries).length;
+
+  const clear = async (target: readonly MealPlanEntry[]) => {
+    setPending(true);
+    setFailure(null);
+    try {
+      const body: ClearMealPlanWeekRequest = {
+        entries: target.map(({ id, version }) => ({ id, version })),
+      };
+      await api<void>(
+        `/api/meal-plan/weeks/${weekStart}`,
+        jsonMutation('DELETE', body),
+      );
+      onClose({
+        kind: 'saved',
+        message: `Cleared ${mealCount(target.length)} from ${heading}.`,
+        left: true,
+      });
+    } catch (error: unknown) {
+      const current = weekConflictFrom(error);
+      if (current === null) {
+        setFailure(
+          planFailure(
+            error,
+            'The week could not be cleared. Check your connection and try again.',
+          ),
+        );
+      } else if (current.length === 0) {
+        onClose({ kind: 'gone' });
+      } else {
+        setLatest(current);
+        onChanged();
+      }
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <Modal
+      centered
+      closeOnClickOutside={!pending}
+      closeOnEscape={!pending}
+      onClose={() => onClose({ kind: 'cancelled' })}
+      opened
+      returnFocus={false}
+      title={`Clear ${heading}?`}
+    >
+      <form
+        noValidate
+        onSubmit={(event) => {
+          event.preventDefault();
+          void clear(entries);
+        }}
+      >
+        <Stack aria-busy={pending} gap="md">
+          <Text>
+            This removes{' '}
+            {count === 1 ? 'the 1 planned meal' : `all ${mealCount(count)}`} in
+            this week for everyone. It cannot be undone.
+          </Text>
+          {latest && (
+            <Alert
+              color="clay"
+              data-testid="week-conflict"
+              role="alert"
+              style={wrap}
+              title="This week changed"
+            >
+              <Stack gap="xs">
+                <Text fz="sm">
+                  This week changed after you opened it, so nothing was removed.
+                  It now has {mealCount(latest.length)}.
+                </Text>
+                <Group gap="xs">
+                  <Button
+                    color="clay"
+                    disabled={pending}
+                    onClick={() => void clear(latest)}
+                    size="sm"
+                  >
+                    {latest.length === 1
+                      ? 'Clear the 1 planned meal'
+                      : `Clear all ${latest.length.toLocaleString('en')}`}
+                  </Button>
+                  <Button
+                    disabled={pending}
+                    onClick={() => onClose(KEPT_WEEK)}
+                    size="sm"
+                    variant="default"
+                  >
+                    Keep them
+                  </Button>
+                </Group>
+              </Stack>
+            </Alert>
+          )}
+          <DialogError message={failure} />
+          {!latest && (
+            <DialogButtons
+              danger
+              onCancel={() => onClose({ kind: 'cancelled' })}
+              pending={pending}
+              saveLabel="Clear week"
+            />
+          )}
+        </Stack>
+      </form>
     </Modal>
   );
 }

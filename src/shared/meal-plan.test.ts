@@ -2,13 +2,17 @@ import { describe, expect, it } from 'vitest';
 
 import {
   addPlanDays,
+  isClearableWeek,
   isMealSlot,
   isPlanDate,
   isWithinPlanWindow,
   localPlanDate,
+  MEAL_PLAN_HOUSEHOLD_LIMIT,
   MEAL_PLAN_NOTE_MAX_LENGTH,
   MEAL_PLAN_READ_MAX_DAYS,
   MEAL_PLAN_TITLE_MAX_LENGTH,
+  MEAL_PLAN_USAGE_HINT_AT,
+  MEAL_PLAN_WEEK_ENTRY_MAX,
   MEAL_SLOT_LABELS,
   MEAL_SLOTS,
   planDateFromDayNumber,
@@ -19,6 +23,7 @@ import {
   planWriteWindow,
   serverPlanWriteWindow,
   utcPlanDate,
+  validateClearMealPlanWeek,
   validateCreateMealPlanEntry,
   validateMealPlanNote,
   validateMealPlanRange,
@@ -409,6 +414,142 @@ describe('read ranges', () => {
     expect(!result.ok && result.errors.map(({ field }) => field)).toEqual([
       'from',
       'to',
+    ]);
+  });
+});
+
+describe('clearing a week', () => {
+  it('holds at most every meal of every day at its limit', () => {
+    expect(MEAL_PLAN_WEEK_ENTRY_MAX).toBe(126);
+  });
+
+  it('warns from 90% of the household limit', () => {
+    expect(MEAL_PLAN_USAGE_HINT_AT).toBe(MEAL_PLAN_HOUSEHOLD_LIMIT * 0.9);
+  });
+
+  // Thursday 2026-09-24: the current week starts on Monday 2026-09-21.
+  it.each([
+    ['last week, on a Thursday', '2026-09-14', '2026-09-24', 0, true],
+    ['last week, on the Monday after it', '2026-09-14', '2026-09-21', 0, true],
+    ['last week, on its own Sunday', '2026-09-14', '2026-09-20', 0, false],
+    ['the current week', '2026-09-21', '2026-09-24', 0, false],
+    ['a future week', '2026-09-28', '2026-09-24', 0, false],
+    ['a week three years back', '2023-09-18', '2026-09-24', 0, true],
+    ['a week across a year end', '2025-12-29', '2026-01-05', 0, true],
+    ['a week across a month end', '2026-09-28', '2026-10-05', 0, true],
+    ['a date that is not a Monday', '2026-09-15', '2026-09-24', 0, false],
+    ['an impossible date', '2026-02-30', '2026-09-24', 0, false],
+    ['an invalid today', '2026-09-14', 'today', 0, false],
+    ['its Sunday, with a day of slack', '2026-09-14', '2026-09-20', 1, true],
+    ['its Saturday, with a day of slack', '2026-09-14', '2026-09-19', 1, false],
+  ])(
+    '%s: %s on %s (slack %i) is %s',
+    (_, weekStart, today, slack, expected) => {
+      expect(isClearableWeek(weekStart, today, slack)).toBe(expected);
+    },
+  );
+
+  const ID = '3f1c2b9e-8d4a-4c3b-9a2e-1f0e5d6c7b8a';
+  const OTHER = '9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d';
+  const TODAY = '2026-09-24';
+
+  it('accepts distinct entries and lower-cases their IDs', () => {
+    expect(
+      validateClearMealPlanWeek(
+        '2026-09-14',
+        {
+          entries: [
+            { id: ID.toUpperCase(), version: 3 },
+            { id: OTHER, version: 1 },
+          ],
+        },
+        TODAY,
+      ),
+    ).toEqual({
+      ok: true,
+      value: {
+        weekStart: '2026-09-14',
+        entries: [
+          { id: ID, version: 3 },
+          { id: OTHER, version: 1 },
+        ],
+      },
+    });
+  });
+
+  it('accepts a full week of entries', () => {
+    const entries = Array.from(
+      { length: MEAL_PLAN_WEEK_ENTRY_MAX },
+      (_unused, index) => ({
+        id: `${String(index).padStart(8, '0')}-0000-4000-8000-000000000000`,
+        version: 1,
+      }),
+    );
+    expect(validateClearMealPlanWeek('2026-09-14', { entries }, TODAY).ok).toBe(
+      true,
+    );
+  });
+
+  it.each([
+    ['a week that is not a string', 20260914, { entries: [] }, 'weekStart'],
+    ['a day that is not a Monday', '2026-09-15', {}, 'weekStart'],
+    ['the current week', '2026-09-21', {}, 'weekStart'],
+  ])('rejects %s before reading the body', (_, weekStart, body, field) => {
+    const result = validateClearMealPlanWeek(weekStart, body, TODAY);
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.errors.map((error) => error.field)).toEqual([
+      field,
+    ]);
+  });
+
+  it.each([
+    ['a body that is not an object', null, 'request'],
+    ['a list body', [], 'request'],
+    [
+      'an unexpected field',
+      { entries: [{ id: ID, version: 1 }], x: 1 },
+      'request',
+    ],
+    ['no entries', {}, 'entries'],
+    ['an empty list', { entries: [] }, 'entries'],
+    [
+      'too many entries',
+      {
+        entries: Array.from({ length: MEAL_PLAN_WEEK_ENTRY_MAX + 1 }, () => ({
+          id: ID,
+          version: 1,
+        })),
+      },
+      'entries',
+    ],
+    ['an entry that is not an object', { entries: [ID] }, 'entries'],
+    ['a malformed ID', { entries: [{ id: 'abc', version: 1 }] }, 'entries'],
+    ['a missing version', { entries: [{ id: ID }] }, 'entries'],
+    [
+      'a fractional version',
+      { entries: [{ id: ID, version: 1.5 }] },
+      'entries',
+    ],
+    [
+      'an extra field',
+      { entries: [{ id: ID, version: 1, date: TODAY }] },
+      'entries',
+    ],
+    [
+      'the same entry twice',
+      {
+        entries: [
+          { id: ID, version: 1 },
+          { id: ID.toUpperCase(), version: 2 },
+        ],
+      },
+      'entries',
+    ],
+  ])('rejects %s', (_, body, field) => {
+    const result = validateClearMealPlanWeek('2026-09-14', body, TODAY);
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.errors.map((error) => error.field)).toEqual([
+      field,
     ]);
   });
 });

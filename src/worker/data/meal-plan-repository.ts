@@ -1,9 +1,12 @@
 import {
+  addPlanDays,
   MEAL_PLAN_HOUSEHOLD_LIMIT,
   MEAL_PLAN_SLOT_LIMIT,
   type MealPlanEntry,
   type MealPlanEntryKind,
+  type MealPlanUsage,
   type MealSlot,
+  type ValidClearMealPlanWeek,
   type ValidCreateMealPlanEntry,
   type ValidUpdateMealPlanEntry,
 } from '../../shared/meal-plan';
@@ -72,7 +75,15 @@ const householdFull = (): ApiError =>
   new ApiError(
     409,
     'limit_reached',
-    `The plan holds at most ${MEAL_PLAN_HOUSEHOLD_LIMIT.toLocaleString('en')} entries. Remove old entries before adding more.`,
+    `The plan holds at most ${MEAL_PLAN_HOUSEHOLD_LIMIT.toLocaleString('en')} entries. Clear old weeks before adding more.`,
+  );
+
+const weekChanged = (current: MealPlanEntry[]): ApiError =>
+  new ApiError(
+    409,
+    'week_changed',
+    'This week changed after you opened it, so nothing was removed. Review the latest version before clearing it.',
+    { current },
   );
 
 const toEntry = (row: EntryRow): MealPlanEntry => {
@@ -95,6 +106,21 @@ const toEntry = (row: EntryRow): MealPlanEntry => {
     : { ...base, kind: 'text' };
 };
 
+const selectRange = (
+  db: D1Database,
+  householdId: string,
+  from: string,
+  to: string,
+): D1PreparedStatement =>
+  db
+    .prepare(
+      `${ENTRY_SELECT}
+        WHERE entry.household_id = ?
+          AND entry.plan_date BETWEEN ? AND ?
+        ORDER BY entry.plan_date, ${SLOT_ORDER}, entry.placed_at, entry.rowid`,
+    )
+    .bind(householdId, from, to);
+
 /** Entries in an inclusive date range, by date, meal, and placement. */
 export const listMealPlanEntries = async (
   db: D1Database,
@@ -102,16 +128,42 @@ export const listMealPlanEntries = async (
   from: string,
   to: string,
 ): Promise<MealPlanEntry[]> => {
-  const result = await db
-    .prepare(
-      `${ENTRY_SELECT}
-        WHERE entry.household_id = ?
-          AND entry.plan_date BETWEEN ? AND ?
-        ORDER BY entry.plan_date, ${SLOT_ORDER}, entry.placed_at, entry.rowid`,
-    )
-    .bind(householdId, from, to)
-    .all<EntryRow>();
+  const result = await selectRange(db, householdId, from, to).all<EntryRow>();
   return result.results.map(toEntry);
+};
+
+/**
+ * A range of entries and the whole household's usage, read in one batch so
+ * the two agree. The usage is served by the `(household_id, plan_date)`
+ * index, and the household limit bounds it.
+ */
+export const readMealPlan = async (
+  db: D1Database,
+  householdId: string,
+  from: string,
+  to: string,
+): Promise<{ entries: MealPlanEntry[]; usage: MealPlanUsage }> => {
+  const [range, usage] = await db.batch([
+    selectRange(db, householdId, from, to),
+    db
+      .prepare(
+        `SELECT COUNT(*) AS entries, MIN(plan_date) AS oldest
+           FROM meal_plan_entries
+          WHERE household_id = ?`,
+      )
+      .bind(householdId),
+  ]);
+  const totals = (
+    usage.results as { entries: number; oldest: string | null }[]
+  )[0];
+  return {
+    entries: (range.results as EntryRow[]).map(toEntry),
+    usage: {
+      entries: totals?.entries ?? 0,
+      limit: MEAL_PLAN_HOUSEHOLD_LIMIT,
+      oldestDate: totals?.oldest ?? null,
+    },
+  };
 };
 
 const selectEntry = (
@@ -340,4 +392,60 @@ export const deleteMealPlanEntry = async (
   if (result.meta.changes === 0) {
     throw await conflictFor(db, householdId, entryId);
   }
+};
+
+/** Entries of the household dated in the week, as a subquery's FROM clause. */
+const IN_WEEK = `meal_plan_entries AS entry
+  WHERE entry.household_id = ? AND entry.plan_date BETWEEN ? AND ?`;
+
+/**
+ * Removes every entry of one week, but only while the week holds exactly the
+ * entries the member saw, at the versions they saw (decision 1 of the #56
+ * design). The check and the delete are one statement, so one transaction:
+ * nothing can be added, changed, moved, or removed between them. Otherwise
+ * nothing is removed, and the week's latest entries are returned in a
+ * `409 week_changed`, so the member can confirm again.
+ *
+ * Every predicate is scoped to the caller's household, so a foreign ID can
+ * never match; it only makes the counts disagree. Returns the number of
+ * entries removed, which D1 reports one per row: nothing references a plan
+ * entry, so the delete cascades nowhere.
+ */
+export const clearMealPlanWeek = async (
+  db: D1Database,
+  householdId: string,
+  week: ValidClearMealPlanWeek,
+): Promise<number> => {
+  const from = week.weekStart;
+  const to = addPlanDays(from, 6);
+  const expected = week.entries.length;
+  const result = await db
+    .prepare(
+      `DELETE FROM meal_plan_entries
+        WHERE household_id = ? AND plan_date BETWEEN ? AND ?
+          AND (SELECT COUNT(*) FROM ${IN_WEEK}) = ?
+          AND (SELECT COUNT(*) FROM ${IN_WEEK}
+                  AND EXISTS (
+                    SELECT 1 FROM json_each(?) AS seen
+                     WHERE json_extract(seen.value, '$.id') = entry.id
+                       AND json_extract(seen.value, '$.version') = entry.version
+                  )) = ?`,
+    )
+    .bind(
+      householdId,
+      from,
+      to,
+      householdId,
+      from,
+      to,
+      expected,
+      householdId,
+      from,
+      to,
+      JSON.stringify(week.entries),
+      expected,
+    )
+    .run();
+  if (result.meta.changes > 0) return result.meta.changes;
+  throw weekChanged(await listMealPlanEntries(db, householdId, from, to));
 };
