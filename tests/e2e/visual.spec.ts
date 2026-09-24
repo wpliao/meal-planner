@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openedDialog } from './dialog';
 
 /**
  * Visual regression coverage for the surfaces where Phase 2's three styling
@@ -267,7 +268,7 @@ test('remove confirmation dialog', async ({ page }) => {
     .getByRole('button', { name: 'Actions for rice' })
     .click();
   await page.getByRole('menuitem', { name: 'Remove' }).click();
-  await expect(page.getByRole('dialog')).toHaveScreenshot('remove-dialog.png');
+  await expect(await openedDialog(page)).toHaveScreenshot('remove-dialog.png');
 });
 
 test('members panel', async ({ page }) => {
@@ -430,12 +431,9 @@ test('every Mantine component on the recipe screens has its stylesheet', async (
 
   await page.goto(`/recipes/${RECIPE_ID}`);
   await page.getByRole('button', { name: 'Delete recipe' }).click();
-  await expect(page.getByRole('dialog')).toBeVisible();
+  const deletion = await openedDialog(page);
   await assertEveryMantineClassIsStyled(page);
-  await page
-    .getByRole('dialog')
-    .getByRole('button', { name: 'Cancel' })
-    .click();
+  await deletion.getByRole('button', { name: 'Cancel' }).click();
 
   await page.goto('/recipes/new');
   await page.getByRole('button', { name: 'Save recipe' }).click();
@@ -530,7 +528,7 @@ test('meal plan add dialog', async ({ page }) => {
   await page
     .getByRole('button', { name: 'Add to dinner, Thursday 24 September' })
     .click();
-  const dialog = page.getByRole('dialog');
+  const dialog = await openedDialog(page);
   const recipe = dialog.getByRole('combobox', { name: 'Recipe' });
   await expect(recipe).toBeVisible();
   await expect(dialog).toHaveScreenshot('plan-add-dialog.png');
@@ -552,7 +550,7 @@ test('meal plan screens meet WCAG AA contrast, including errors and conflicts', 
   await page
     .getByRole('button', { name: 'Add to dinner, Thursday 24 September' })
     .click();
-  const dialog = page.getByRole('dialog');
+  const dialog = await openedDialog(page);
   await dialog.getByRole('radio', { name: 'Type a meal' }).check();
   await dialog.getByRole('button', { name: 'Add to plan' }).click();
   await expect(dialog.getByText(/between 1 and 120/u)).toBeVisible();
@@ -573,10 +571,11 @@ test('meal plan screens meet WCAG AA contrast, including errors and conflicts', 
   );
   await page.getByRole('button', { name: /Actions for Leftovers/u }).click();
   await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
-  const note = page.getByRole('dialog').getByRole('textbox', { name: /Note/u });
+  const edit = await openedDialog(page);
+  const note = edit.getByRole('textbox', { name: /Note/u });
   await note.fill('cold');
   await expect(note).toHaveValue('cold');
-  await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click();
+  await edit.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByTestId('entry-conflict')).toBeVisible();
   await assertTextContrast(page);
 });
@@ -589,32 +588,24 @@ test('every Mantine component on the plan screens has its stylesheet', async ({
   await expect(page.getByRole('menu')).toBeVisible();
   await assertEveryMantineClassIsStyled(page);
   await page.getByRole('menuitem', { name: 'Move', exact: true }).click();
-  await expect(page.getByRole('dialog')).toBeVisible();
+  const move = await openedDialog(page);
   await assertEveryMantineClassIsStyled(page);
-  await page
-    .getByRole('dialog')
-    .getByRole('button', { name: 'Cancel' })
-    .click();
+  await move.getByRole('button', { name: 'Cancel' }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
 
   await page
     .getByRole('button', { name: 'Add to lunch, Monday 21 September' })
     .click();
-  await page
-    .getByRole('dialog')
-    .getByRole('combobox', { name: 'Recipe' })
-    .click();
+  const add = await openedDialog(page);
+  await add.getByRole('combobox', { name: 'Recipe' }).click();
   await expect(page.getByRole('option', { name: RECIPE.title })).toBeVisible();
   await assertEveryMantineClassIsStyled(page);
-  await page
-    .getByRole('dialog')
-    .getByRole('button', { name: 'Cancel' })
-    .click();
+  await add.getByRole('button', { name: 'Cancel' }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
 
   await page.goto(`/recipes/${RECIPE_ID}`);
   await page.getByRole('button', { name: 'Add to plan' }).click();
-  await expect(page.getByRole('dialog')).toBeVisible();
+  await openedDialog(page);
   await assertEveryMantineClassIsStyled(page);
   await assertTextContrast(page);
 });
@@ -671,13 +662,9 @@ test('every text field on every screen is at least 44px tall', async ({
   await page
     .getByRole('button', { name: 'Add to dinner, Thursday 24 September' })
     .click();
-  await expect(
-    page.getByRole('dialog').getByRole('combobox', { name: 'Recipe' }),
-  ).toBeVisible();
+  const add = await openedDialog(page);
+  await expect(add.getByRole('combobox', { name: 'Recipe' })).toBeVisible();
   await assertTextFieldsMeetTouchFloor(page);
-  await page
-    .getByRole('dialog')
-    .getByRole('radio', { name: 'Type a meal' })
-    .check();
+  await add.getByRole('radio', { name: 'Type a meal' }).check();
   await assertTextFieldsMeetTouchFloor(page);
 });

@@ -5,6 +5,7 @@ import {
   type Page,
   type TestInfo,
 } from '@playwright/test';
+import { openedDialog } from './dialog';
 
 // Each Playwright project gets its own local D1, but specs inside a project
 // share it. Bootstrap only when this run still needs it, and give every
@@ -16,8 +17,8 @@ const openRecipes = async (page: Page) => {
   if (await setup.isVisible().catch(() => false)) {
     await page.getByLabel('Family space name').fill('E2E Family');
     await page.getByRole('button', { name: 'Create family space' }).click();
-    await page
-      .getByRole('dialog')
+    const confirmation = await openedDialog(page);
+    await confirmation
       .getByRole('button', { name: 'Create family space' })
       .click();
   }
@@ -134,14 +135,15 @@ test('a member creates, views, edits, and deletes a recipe', async ({
   // Escape dismisses the confirmation without deleting.
   const trigger = page.getByRole('button', { name: 'Delete recipe' });
   await trigger.click();
-  const dialog = page.getByRole('dialog');
+  const dialog = await openedDialog(page);
   await expect(dialog).toContainText(`Delete “${renamed}”?`);
   await dialog.press('Escape');
   await expect(dialog).toBeHidden();
   await expect(trigger).toBeFocused();
 
   await trigger.click();
-  await dialog.getByRole('button', { name: 'Delete recipe' }).click();
+  const confirmation = await openedDialog(page);
+  await confirmation.getByRole('button', { name: 'Delete recipe' }).click();
   await expect(status(page)).toContainText(`“${renamed}” was deleted.`);
   await expect(page).toHaveURL(/\/recipes$/u);
   await expect(
@@ -309,10 +311,8 @@ test('a stale delete keeps the recipe and shows the latest version', async ({
   });
 
   await page.getByRole('button', { name: 'Delete recipe' }).click();
-  await page
-    .getByRole('dialog')
-    .getByRole('button', { name: 'Delete recipe' })
-    .click();
+  const confirmation = await openedDialog(page);
+  await confirmation.getByRole('button', { name: 'Delete recipe' }).click();
 
   await expect(status(page)).toContainText('so it was not deleted');
   await expect(

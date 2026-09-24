@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openedDialog } from './dialog';
 
 // Each Playwright project gets its own local D1, but specs inside a project
 // share it. Bootstrap only when this run still needs it, and use unique item
@@ -10,8 +11,8 @@ const openFamilySpace = async (page: Page) => {
   if (await setup.isVisible().catch(() => false)) {
     await page.getByLabel('Family space name').fill('E2E Family');
     await page.getByRole('button', { name: 'Create family space' }).click();
-    await page
-      .getByRole('dialog')
+    const confirmation = await openedDialog(page);
+    await confirmation
       .getByRole('button', { name: 'Create family space' })
       .click();
   }
@@ -117,16 +118,15 @@ test('an item can be renamed and removed with confirmation', async ({
 
   // Escape dismisses the confirmation without deleting.
   await itemAction(page, renamed, 'Remove');
-  await expect(page.getByRole('dialog')).toContainText(`Remove ${renamed}?`);
-  await page.getByRole('dialog').press('Escape');
-  await expect(page.getByRole('dialog')).toBeHidden();
+  const removal = await openedDialog(page);
+  await expect(removal).toContainText(`Remove ${renamed}?`);
+  await removal.press('Escape');
+  await expect(removal).toBeHidden();
   await expect(itemCard(page, renamed)).toBeVisible();
 
   await itemAction(page, renamed, 'Remove');
-  await page
-    .getByRole('dialog')
-    .getByRole('button', { name: 'Remove item' })
-    .click();
+  const confirmation = await openedDialog(page);
+  await confirmation.getByRole('button', { name: 'Remove item' }).click();
   await expect(pantryStatus(page)).toContainText(
     `${renamed} was removed from the pantry.`,
   );

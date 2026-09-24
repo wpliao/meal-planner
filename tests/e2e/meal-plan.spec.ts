@@ -5,6 +5,7 @@ import {
   type Page,
   type TestInfo,
 } from '@playwright/test';
+import { openedDialog } from './dialog';
 
 /**
  * Each Playwright project has its own local D1, shared by the specs inside it
@@ -67,8 +68,8 @@ const openPlan = async (page: Page, path: string) => {
   if (await setup.isVisible()) {
     await page.getByLabel('Family space name').fill('E2E Family');
     await page.getByRole('button', { name: 'Create family space' }).click();
-    await page
-      .getByRole('dialog')
+    const confirmation = await openedDialog(page);
+    await confirmation
       .getByRole('button', { name: 'Create family space' })
       .click();
     await page.goto(path);
@@ -168,7 +169,7 @@ test('a member plans a recipe and a typed meal, moves one, edits a note, and rem
   await slot(page, monday, 'dinner')
     .getByRole('button', { name: `Add to dinner, ${dayName(monday)}` })
     .click();
-  let dialog = page.getByRole('dialog');
+  let dialog = await openedDialog(page);
   // The recipe field searches the library as the member types.
   await dialog.getByRole('combobox', { name: 'Recipe' }).fill(recipeTitle);
   await page.getByRole('option', { name: recipeTitle }).click();
@@ -195,7 +196,7 @@ test('a member plans a recipe and a typed meal, moves one, edits a note, and rem
   await slot(page, tuesday, 'lunch')
     .getByRole('button', { name: /^Add to lunch/u })
     .click();
-  dialog = page.getByRole('dialog');
+  dialog = await openedDialog(page);
   await dialog.getByRole('radio', { name: 'Type a meal' }).check();
   await dialog.getByRole('textbox', { name: 'Meal' }).fill(typed);
   await dialog.getByRole('button', { name: 'Add to plan' }).click();
@@ -206,7 +207,7 @@ test('a member plans a recipe and a typed meal, moves one, edits a note, and rem
     .getByRole('button', { name: new RegExp(`Actions for ${typed}`, 'u') })
     .click();
   await page.getByRole('menuitem', { name: 'Move', exact: true }).click();
-  dialog = page.getByRole('dialog');
+  dialog = await openedDialog(page);
   await dialog.getByLabel('Date').fill(wednesday);
   await dialog.getByRole('combobox', { name: 'Meal' }).selectOption('dinner');
   await dialog.getByRole('button', { name: 'Move' }).click();
@@ -223,7 +224,7 @@ test('a member plans a recipe and a typed meal, moves one, edits a note, and rem
     })
     .click();
   await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
-  dialog = page.getByRole('dialog');
+  dialog = await openedDialog(page);
   await dialog.getByRole('textbox', { name: /Note/u }).fill('with greens');
   await dialog.getByRole('button', { name: 'Save' }).click();
   await expect(dinner).toContainText('with greens');
@@ -233,7 +234,7 @@ test('a member plans a recipe and a typed meal, moves one, edits a note, and rem
     .getByRole('button', { name: new RegExp(`Actions for ${typed}`, 'u') })
     .click();
   await page.getByRole('menuitem', { name: 'Remove', exact: true }).click();
-  dialog = page.getByRole('dialog');
+  dialog = await openedDialog(page);
   await expect(dialog).toContainText(`Remove “${typed}”?`);
   await dialog.getByRole('button', { name: 'Remove' }).click();
   await expect(result(page)).toContainText(`Removed “${typed}”`);
@@ -257,7 +258,7 @@ test('a recipe page adds it to the plan and links to that week', async ({
 
   await page.goto(`/recipes/${recipe.id}`);
   await page.getByRole('button', { name: 'Add to plan' }).click();
-  const dialog = page.getByRole('dialog');
+  const dialog = await openedDialog(page);
   await dialog.getByLabel('Date').fill(thursday);
   await dialog.getByRole('combobox', { name: 'Meal' }).selectOption('lunch');
   await dialog.getByRole('button', { name: 'Add to plan' }).click();
@@ -304,7 +305,7 @@ test('a stale change shows the other member’s version and can be applied to it
     .getByRole('button', { name: new RegExp(`Actions for ${title}`, 'u') })
     .click();
   await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
-  const dialog = page.getByRole('dialog');
+  const dialog = await openedDialog(page);
   await dialog.getByRole('textbox', { name: /Note/u }).fill('extra hot');
   await dialog.getByRole('button', { name: 'Save' }).click();
 
@@ -423,7 +424,7 @@ test('the week fits a phone with touch-sized controls', async ({
   await page
     .getByRole('button', { name: `Add to breakfast, ${dayName(monday)}` })
     .click();
-  const dialog = page.getByRole('dialog');
+  const dialog = await openedDialog(page);
   const recipe = dialog.getByRole('combobox', { name: 'Recipe' });
   await expect(recipe).toBeVisible();
   expect((await recipe.boundingBox())!.height).toBeGreaterThanOrEqual(44);
@@ -449,8 +450,7 @@ test('a keyboard alone plans a meal and lands back on Add', async ({
 
   await add.focus();
   await page.keyboard.press('Enter');
-  const dialog = page.getByRole('dialog');
-  await expect(dialog).toBeVisible();
+  const dialog = await openedDialog(page);
   const typeMeal = dialog.getByRole('radio', { name: 'Type a meal' });
   await dialog.getByRole('radio', { name: 'Pick a recipe' }).focus();
   await page.keyboard.press('ArrowRight');
@@ -470,7 +470,7 @@ test('a keyboard alone plans a meal and lands back on Add', async ({
   await page.keyboard.press('Enter');
   await page.getByRole('menuitem', { name: 'Remove', exact: true }).focus();
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('dialog')).toBeVisible();
+  await openedDialog(page);
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toBeHidden();
   await expect(actions).toBeFocused();
@@ -557,7 +557,7 @@ for (const { timeZone, hours, minutes, meal } of [
       await todayCard
         .getByRole('button', { name: new RegExp(`^Add to ${meal}`, 'u') })
         .click();
-      const dialog = page.getByRole('dialog');
+      const dialog = await openedDialog(page);
       await dialog.getByRole('radio', { name: 'Type a meal' }).check();
       await dialog.getByRole('textbox', { name: 'Meal' }).fill(title);
       const saved = page.waitForResponse(

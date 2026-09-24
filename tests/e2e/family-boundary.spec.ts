@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openedDialog } from './dialog';
 
 // The layout owns one result region for session and member outcomes; routed
 // sections such as the pantry have their own. Target the layout's notice
@@ -34,7 +35,7 @@ test('local owner can bootstrap and invite a family member', async ({
 
   await page.getByLabel('Family space name').fill('E2E Family');
   await page.getByRole('button', { name: 'Create family space' }).click();
-  const dialog = page.getByRole('dialog');
+  const dialog = await openedDialog(page);
   await expect(dialog).toContainText('Create “E2E Family”');
   await dialog.getByRole('button', { name: 'Create family space' }).click();
 
@@ -63,17 +64,14 @@ test('local owner can bootstrap and invite a family member', async ({
   );
 
   await invitedRow.getByRole('button', { name: 'Remove' }).click();
-  await expect(page.getByRole('dialog')).toContainText(
-    `Remove ${invitedEmail}?`,
-  );
-  await page.getByRole('dialog').press('Escape');
-  await expect(page.getByRole('dialog')).toBeHidden();
+  const removal = await openedDialog(page);
+  await expect(removal).toContainText(`Remove ${invitedEmail}?`);
+  await removal.press('Escape');
+  await expect(removal).toBeHidden();
 
   await invitedRow.getByRole('button', { name: 'Remove' }).click();
-  await page
-    .getByRole('dialog')
-    .getByRole('button', { name: 'Remove member' })
-    .click();
+  const confirmation = await openedDialog(page);
+  await confirmation.getByRole('button', { name: 'Remove member' }).click();
   await expect(page.getByTestId('result')).toContainText('Member was removed.');
   await expect(invitedRow).toHaveCount(0);
 });
@@ -146,13 +144,11 @@ test('successor confirms owner access before the first owner steps down', async 
   await page.reload();
   const ownerRow = page.getByRole('row', { name: /owner@example\.test/i });
   await ownerRow.getByRole('button', { name: 'Make member' }).click();
-  await expect(page.getByRole('dialog')).toContainText(
+  const demotion = await openedDialog(page);
+  await expect(demotion).toContainText(
     'First confirm another active owner has signed in',
   );
-  await page
-    .getByRole('dialog')
-    .getByRole('button', { name: 'Make member' })
-    .click();
+  await demotion.getByRole('button', { name: 'Make member' }).click();
   await expect(page.getByText('Family member', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Members' })).toHaveCount(0);
 });
