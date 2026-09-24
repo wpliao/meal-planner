@@ -12,6 +12,7 @@ export const testEnv = env as TestEnv;
 export const applyMigrations = async (): Promise<void> => {
   await applyD1Migrations(testEnv.DB, testEnv.TEST_MIGRATIONS);
   await testEnv.DB.batch([
+    testEnv.DB.prepare('DELETE FROM meal_plan_entries'),
     testEnv.DB.prepare('DELETE FROM recipe_steps'),
     testEnv.DB.prepare('DELETE FROM recipe_ingredients'),
     testEnv.DB.prepare('DELETE FROM recipes'),
@@ -99,6 +100,47 @@ export const seedRecipe = async (
       ).bind(id, index + 1, text),
     ),
   ]);
+  return id;
+};
+
+/**
+ * Inserts a plan entry directly, bypassing the API and its limits, so tests
+ * can place rows in any household. A recipe entry copies the recipe's title.
+ */
+export const seedMealPlanEntry = async (
+  householdId: string,
+  entry: {
+    date: string;
+    slot?: 'breakfast' | 'lunch' | 'dinner';
+    recipeId?: string;
+    title?: string;
+  },
+): Promise<string> => {
+  const now = new Date().toISOString();
+  const id = crypto.randomUUID();
+  await testEnv.DB.prepare(
+    `INSERT INTO meal_plan_entries (
+       id, household_id, plan_date, meal_slot, kind, recipe_id, title, note,
+       placed_at, version, created_at, updated_at
+     )
+     SELECT ?, ?, ?, ?, ?, ?,
+            COALESCE((SELECT title FROM recipes WHERE id = ?), ?),
+            NULL, ?, 1, ?, ?`,
+  )
+    .bind(
+      id,
+      householdId,
+      entry.date,
+      entry.slot ?? 'dinner',
+      entry.recipeId ? 'recipe' : 'text',
+      entry.recipeId ?? null,
+      entry.recipeId ?? null,
+      entry.title ?? 'Leftovers',
+      now,
+      now,
+      now,
+    )
+    .run();
   return id;
 };
 

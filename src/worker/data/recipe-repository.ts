@@ -364,22 +364,50 @@ export const updateRecipe = async (
   );
 };
 
-/** Deletes a recipe at its current version; its lines cascade. */
+/**
+ * Deletes a recipe at its current version; its lines cascade, and its plan
+ * entries lose the link (`ON DELETE SET NULL`) but stay. The first statement
+ * copies the recipe's last title onto those entries, guarded by the same
+ * household, ID, and version as the DELETE, so a stale delete changes
+ * nothing at all. Entry versions are not changed: the entry's content is the
+ * same, and a member's open edit of it should still save.
+ */
 export const deleteRecipe = async (
   db: D1Database,
   householdId: string,
   recipeId: string,
   version: number,
 ): Promise<void> => {
-  const result = await db
-    .prepare(
-      `DELETE FROM recipes
-        WHERE household_id = ?
-          AND id = ?
-          AND version = ?`,
-    )
-    .bind(householdId, recipeId, version)
-    .run();
+  const [, result] = await db.batch([
+    db
+      .prepare(
+        `UPDATE meal_plan_entries
+            SET title = (SELECT title FROM recipes
+                          WHERE household_id = ? AND id = ? AND version = ?)
+          WHERE household_id = ?
+            AND recipe_id = ?
+            AND EXISTS (SELECT 1 FROM recipes
+                         WHERE household_id = ? AND id = ? AND version = ?)`,
+      )
+      .bind(
+        householdId,
+        recipeId,
+        version,
+        householdId,
+        recipeId,
+        householdId,
+        recipeId,
+        version,
+      ),
+    db
+      .prepare(
+        `DELETE FROM recipes
+          WHERE household_id = ?
+            AND id = ?
+            AND version = ?`,
+      )
+      .bind(householdId, recipeId, version),
+  ]);
 
   if (result.meta.changes === 0) {
     throw await conflictFor(db, householdId, recipeId);

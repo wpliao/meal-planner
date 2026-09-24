@@ -600,3 +600,170 @@ describe('recipe migration', () => {
     ).toBe(1);
   });
 });
+
+describe('meal plan migration', () => {
+  beforeEach(applyMigrations);
+
+  const seedHousehold = async (): Promise<string> => {
+    const now = new Date().toISOString();
+    const id = crypto.randomUUID();
+    await testEnv.DB.prepare(
+      `INSERT INTO households (id, name, created_at, updated_at)
+       VALUES (?, 'Plan Family', ?, ?)`,
+    )
+      .bind(id, now, now)
+      .run();
+    return id;
+  };
+
+  interface EntryColumns {
+    date?: string;
+    slot?: string;
+    kind?: string;
+    recipeId?: string | null;
+    title?: string;
+    note?: string | null;
+    version?: number;
+  }
+
+  const insertEntry = (
+    householdId: string,
+    columns: EntryColumns = {},
+  ): Promise<unknown> => {
+    const now = new Date().toISOString();
+    return testEnv.DB.prepare(
+      `INSERT INTO meal_plan_entries (
+         id, household_id, plan_date, meal_slot, kind, recipe_id, title, note,
+         placed_at, version, created_at, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        crypto.randomUUID(),
+        householdId,
+        columns.date ?? '2026-09-24',
+        columns.slot ?? 'dinner',
+        columns.kind ?? 'text',
+        columns.recipeId ?? null,
+        columns.title ?? 'Leftovers',
+        columns.note ?? null,
+        now,
+        columns.version ?? 1,
+        now,
+        now,
+      )
+      .run();
+  };
+
+  it('applies 0004 on top of the existing schema without altering it', async () => {
+    const tables = await testEnv.DB.prepare(
+      `SELECT name FROM sqlite_master WHERE type = 'table'
+          AND name IN ('households', 'recipes', 'meal_plan_entries')
+        ORDER BY name`,
+    ).all<{ name: string }>();
+    expect(tables.results.map(({ name }) => name)).toEqual([
+      'households',
+      'meal_plan_entries',
+      'recipes',
+    ]);
+
+    const indexes = await testEnv.DB.prepare(
+      `SELECT name FROM sqlite_master
+        WHERE type = 'index' AND tbl_name = 'meal_plan_entries'
+          AND name NOT LIKE 'sqlite_autoindex%'
+        ORDER BY name`,
+    ).all<{ name: string }>();
+    expect(indexes.results.map(({ name }) => name)).toEqual([
+      'meal_plan_entries_household_date_idx',
+      'meal_plan_entries_recipe_idx',
+    ]);
+  });
+
+  it('accepts only real YYYY-MM-DD dates through the date() CHECK', async () => {
+    const householdId = await seedHousehold();
+
+    for (const date of ['2024-02-29', '2026-12-31', '2026-01-01']) {
+      await expect(insertEntry(householdId, { date })).resolves.toBeDefined();
+    }
+    // An impossible date, malformed dates for which date() returns NULL, and
+    // a timestamp. The CHECK uses IS, because a CHECK that evaluates to NULL
+    // passes: `date(plan_date) = plan_date` would accept '2026-2-3'.
+    for (const date of [
+      '2026-02-30',
+      '2025-02-29',
+      '2026-13-01',
+      '2026-2-3',
+      'tomorrow',
+      '',
+      '2026-02-03 ',
+      '2026-02-03T00:00',
+    ]) {
+      await expect(insertEntry(householdId, { date }), date).rejects.toThrow(
+        /CHECK/u,
+      );
+    }
+  });
+
+  it('enforces slot, kind, recipe link, text bounds, and version', async () => {
+    const householdId = await seedHousehold();
+
+    await expect(insertEntry(householdId, { slot: 'snack' })).rejects.toThrow();
+    await expect(insertEntry(householdId, { kind: 'note' })).rejects.toThrow();
+    await expect(insertEntry(householdId, { title: '' })).rejects.toThrow();
+    await expect(
+      insertEntry(householdId, { title: 't'.repeat(121) }),
+    ).rejects.toThrow();
+    await expect(insertEntry(householdId, { note: '' })).rejects.toThrow();
+    await expect(
+      insertEntry(householdId, { note: 'n'.repeat(201) }),
+    ).rejects.toThrow();
+    await expect(insertEntry(householdId, { version: 0 })).rejects.toThrow();
+
+    const recipeId = await seedRecipe(householdId, 'Soup');
+    // A text entry can never carry a recipe link.
+    await expect(
+      insertEntry(householdId, { kind: 'text', recipeId }),
+    ).rejects.toThrow(/CHECK/u);
+    // A recipe link must name an existing recipe.
+    await expect(
+      insertEntry(householdId, {
+        kind: 'recipe',
+        recipeId: crypto.randomUUID(),
+      }),
+    ).rejects.toThrow(/FOREIGN KEY/u);
+
+    await expect(
+      insertEntry(householdId, {
+        kind: 'recipe',
+        recipeId,
+        title: 't'.repeat(120),
+        note: 'n'.repeat(200),
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it('keeps an entry when its recipe is deleted and cascades on household delete', async () => {
+    const householdId = await seedHousehold();
+    const otherId = await seedHousehold();
+    const recipeId = await seedRecipe(householdId, 'Soup');
+    await insertEntry(householdId, { kind: 'recipe', recipeId, title: 'Soup' });
+    await insertEntry(otherId);
+
+    await testEnv.DB.prepare('DELETE FROM recipes WHERE id = ?')
+      .bind(recipeId)
+      .run();
+    const kept = await testEnv.DB.prepare(
+      'SELECT kind, recipe_id, title FROM meal_plan_entries WHERE household_id = ?',
+    )
+      .bind(householdId)
+      .first();
+    expect(kept).toEqual({ kind: 'recipe', recipe_id: null, title: 'Soup' });
+
+    await testEnv.DB.prepare('DELETE FROM households WHERE id = ?')
+      .bind(householdId)
+      .run();
+    const remaining = await testEnv.DB.prepare(
+      'SELECT household_id FROM meal_plan_entries',
+    ).all<{ household_id: string }>();
+    expect(remaining.results).toEqual([{ household_id: otherId }]);
+  });
+});

@@ -26,7 +26,8 @@ export const DELETE_INSTALLATION_POINTER_SQL = `DELETE FROM app_installation
 
 /**
  * Removes the reviewed household, which cascades to its members, pantry
- * rows, and recipes, and from each recipe to its ingredient and step lines. It only matches while no installation pointer remains, so it deletes
+ * rows, meal-plan entries, and recipes, and from each recipe to its ingredient
+ * and step lines. It only matches while no installation pointer remains, so it deletes
  * nothing when the first statement matched no row because the pointer names a
  * different household. On its own, the `ON DELETE RESTRICT` foreign key also
  * blocks deleting a household that the pointer still references.
@@ -65,7 +66,9 @@ export const HOUSEHOLD_COUNTS_SQL = `SELECT
     WHERE recipe_id IN (SELECT id FROM recipes WHERE household_id = ?1)) AS target_recipe_ingredient_rows,
   (SELECT COUNT(*) FROM recipe_steps) AS recipe_step_rows,
   (SELECT COUNT(*) FROM recipe_steps
-    WHERE recipe_id IN (SELECT id FROM recipes WHERE household_id = ?1)) AS target_recipe_step_rows`;
+    WHERE recipe_id IN (SELECT id FROM recipes WHERE household_id = ?1)) AS target_recipe_step_rows,
+  (SELECT COUNT(*) FROM meal_plan_entries) AS meal_plan_rows,
+  (SELECT COUNT(*) FROM meal_plan_entries WHERE household_id = ?1) AS target_meal_plan_rows`;
 
 export const householdCountsStatement = (
   householdId: string,
@@ -86,6 +89,8 @@ export const COUNT_FIELDS = [
   'target_recipe_ingredient_rows',
   'recipe_step_rows',
   'target_recipe_step_rows',
+  'meal_plan_rows',
+  'target_meal_plan_rows',
 ] as const;
 
 export type CountField = (typeof COUNT_FIELDS)[number];
@@ -95,11 +100,16 @@ export type HouseholdCounts = Record<CountField, number>;
  * Affected-row counts a successful deletion batch may report, in statement
  * order, given the preflight counts. The pointer delete always changes one
  * row. The Workers-runtime D1 engine counts the rows removed by `ON DELETE
- * CASCADE` in the household delete's `changes`, while SQLite's own
- * `changes()` counts only the household row. Until the development rehearsal
- * shows which one the D1 REST API reports, both exact values are accepted and
- * anything else is a failure. Verification then requires every count to be
- * zero regardless.
+ * CASCADE` in the household delete's `changes`, and the development rehearsal
+ * (`V-DEV-H2`) showed the D1 REST API does the same, while SQLite's own
+ * `changes()` counts only the household row. Both exact values are accepted
+ * and anything else is a failure. Verification then requires every count to
+ * be zero regardless.
+ *
+ * Meal-plan entries are counted once, as deleted rows. The household delete
+ * removes them before its recipes, so the recipes' `ON DELETE SET NULL` finds
+ * no entry left to update; a Workers-runtime test measures exactly this. (A
+ * recipe deleted on its own does count each entry it sets to null.)
  */
 export const acceptableDeletionChanges = (
   counts: HouseholdCounts,
@@ -111,7 +121,8 @@ export const acceptableDeletionChanges = (
       counts.target_pantry_rows +
       counts.target_recipe_rows +
       counts.target_recipe_ingredient_rows +
-      counts.target_recipe_step_rows,
+      counts.target_recipe_step_rows +
+      counts.target_meal_plan_rows,
   ],
   [1, 1],
 ];
@@ -141,6 +152,7 @@ export const EXPECTED_TABLES: readonly string[] = [
   'd1_migrations',
   'household_members',
   'households',
+  'meal_plan_entries',
   'pantry_items',
   'recipe_ingredients',
   'recipe_steps',

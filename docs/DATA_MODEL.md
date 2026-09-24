@@ -2,8 +2,8 @@
 
 Phase 1 introduces only the identity and household-boundary tables needed to
 authorize product data. Later phases add product tables only through accepted
-feature designs; the schema still deliberately excludes speculative nutrition,
-image, and meal-plan concepts.
+feature designs; the schema still deliberately excludes speculative nutrition
+and image concepts.
 
 ## Phase 1 tables
 
@@ -106,6 +106,61 @@ a recipe removes its lines. The operator's household deletion (clear
 `app_installation`, then delete the household, in one batch) removes every
 recipe row with no further change. As with the pantry, deletion from the live
 tables does not imply erasure from D1 Time Travel history.
+
+## Phase 4 meal-plan model
+
+[Feature #49](features/0049-meal-planning.md) adds a shared household meal
+plan, created by `migrations/0004_create_meal_plan_entries.sql`. The migration
+is additive: it creates one table and two indexes and alters nothing that
+exists. It is committed and applied locally and in tests; it has not been
+applied to any remote environment.
+
+```text
+households (1) ──< meal_plan_entries (*) >── (0..1) recipes
+                     household_id → households.id   ON DELETE CASCADE
+                     recipe_id    → recipes.id      ON DELETE SET NULL
+```
+
+Each entry has an opaque ID; household ID; a calendar `plan_date`
+(`YYYY-MM-DD`, with no time and no time zone); a `meal_slot` of `breakfast`,
+`lunch`, or `dinner`; a `kind` of `recipe` or `text`; a nullable `recipe_id`;
+a `title`; an optional one-line `note`; `placed_at`, which orders entries
+within a meal and is reset by every move; a version for conflict-safe edits;
+and creation/last-change timestamps. The household owns the plan, as it owns
+the pantry and recipes, and every active member may change it.
+
+A text entry's `title` is its text. A recipe entry's `title` is the recipe's
+title when it was placed, refreshed to the recipe's last title when the recipe
+is deleted; reads show the live recipe title through a join on both the recipe
+ID and the entry's household, so a renamed recipe needs no write and a recipe
+from another household can never supply a title or ID. Deleting a recipe runs
+one batch: a version-guarded `UPDATE` copies the last title onto its entries,
+then the version-guarded `DELETE` lets `ON DELETE SET NULL` drop the link. A
+stale recipe delete changes neither. A recipe entry whose `recipe_id` is null
+is reported as `recipeRemoved`.
+
+`CHECK` constraints enforce the storage bounds from `src/shared/meal-plan.ts`:
+a real calendar date (`date(plan_date) IS plan_date`; `IS` rather than `=`
+because `date()` returns `NULL` for malformed text and a `CHECK` that is
+`NULL` passes), the three meals, the two kinds, no `recipe_id` on a text
+entry, title 1–120 and note 1–200 code points or `NULL`, and a positive
+version. A foreign key cannot require a recipe's household to match the
+entry's, so the Worker writes `recipe_id` only through an `INSERT … SELECT`
+that requires `recipes.household_id` to equal the caller's household. The
+limits of 6 entries per meal per day and 4,000 per household, and the write
+window of 8 weeks back to 52 weeks ahead, are enforced by the Worker; both
+limits use guarded statements, so concurrent writes cannot exceed them. The
+`(household_id, plan_date)` index serves the week read and the limits; the
+`recipe_id` index serves `ON DELETE SET NULL`.
+
+Entries are kept until a member removes one or the household is deleted.
+There is no time-based deletion: the 4,000-entry limit bounds stored history.
+Removing an entry deletes its row, with no tombstone or edit history.
+`meal_plan_entries.household_id` cascades from `households`, so the #32
+operator batch removes every entry with no further change, and the
+decommission procedure counts the table. As with the pantry and recipes,
+deletion from the live table does not imply erasure from D1 Time Travel
+history.
 
 ## Durable principles
 

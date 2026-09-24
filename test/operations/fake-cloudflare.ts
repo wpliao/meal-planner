@@ -27,6 +27,7 @@ export const TABLES = [
   'd1_migrations',
   'household_members',
   'households',
+  'meal_plan_entries',
   'pantry_items',
   'recipe_ingredients',
   'recipe_steps',
@@ -50,6 +51,8 @@ export const installedCounts = (
   target_recipe_ingredient_rows: 7,
   recipe_step_rows: 4,
   target_recipe_step_rows: 4,
+  meal_plan_rows: 9,
+  target_meal_plan_rows: 9,
   ...overrides,
 });
 
@@ -68,6 +71,8 @@ export const zeroCounts = (): HouseholdCounts => ({
   target_recipe_ingredient_rows: 0,
   recipe_step_rows: 0,
   target_recipe_step_rows: 0,
+  meal_plan_rows: 0,
+  target_meal_plan_rows: 0,
 });
 
 export interface RecordedCall {
