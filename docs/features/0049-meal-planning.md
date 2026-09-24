@@ -1,6 +1,6 @@
 # Feature: Meal planning
 
-- Status: Designing
+- Status: Accepted
 - Phase: 4 — meal planning
 - Issue: [#49](https://github.com/wpliao/meal-planner/issues/49)
 - Product owner: Repository owner
@@ -21,9 +21,8 @@ week, change them as plans change, and see the current week at a glance on a
 phone.
 
 The product owner resolved all eight open design decisions on 2026-09-24; see
-[Resolved design decisions](#resolved-design-decisions). The design stays
-`Designing` until the owner records acceptance on
-[issue #49](https://github.com/wpliao/meal-planner/issues/49). Acceptance
+[Resolved design decisions](#resolved-design-decisions). The owner [accepted this
+design](https://github.com/wpliao/meal-planner/issues/49#issuecomment-5806668289) on 2026-09-24. Acceptance
 authorizes implementation only. It does not authorize applying migration `0004`
 remotely, deploying, or changing production, which keep their existing
 approval gates.
@@ -66,9 +65,10 @@ approval gates.
 
 ## Acceptance criteria
 
-These proposed identifiers mirror
-[issue #49](https://github.com/wpliao/meal-planner/issues/49). They become
-stable when the design is accepted.
+These stable identifiers mirror
+[issue #49](https://github.com/wpliao/meal-planner/issues/49). `AC-06` and
+`AC-07` were reworded before acceptance to follow decision 6. No criterion is
+complete yet.
 
 - [ ] `AC-01`: Active members can view, add, change, and remove only their
       household's plan entries; unauthenticated visitors and non-members
@@ -401,7 +401,8 @@ decommission inventory; then the week view, dialogs, and Add to plan.
 
 1. Record the owner's decisions and acceptance in the issue, and set this
    document to `Accepted` on `main`, before any feature code or migration is
-   written.
+   written. The decisions and acceptance were recorded on 2026-09-24; the
+   `Accepted` status reaches `main` when PR #50 merges.
 2. Implement on focused `codex/` branches, with the migration, decommission
    inventory, and tests together. Run the full Dev Container gate, and
    require CI, Sonar, and a security review.
@@ -450,10 +451,11 @@ chose the recommended option except decision 6.
 
 ## Decision and change log
 
-| Date       | Change                                                                                                                                                                               | Reason                                                                                                                                                                                                | Evidence                                                      |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| 2026-09-24 | Initial design proposal; status `Designing`                                                                                                                                          | Start Phase 4 with reviewable scope and explicit open decisions after the Phase 3 release                                                                                                             | [Issue #49](https://github.com/wpliao/meal-planner/issues/49) |
-| 2026-09-24 | Resolve the eight open decisions; retention becomes keep-until-removed, bounded by the 4,000-entry household limit, with no time-based deletion; `AC-06` and `AC-07` wording follows | The owner's answers in the design session: the recommended option for decisions 1–5, 7, and 8, and "keep until deleted" for decision 6. The count limit is the retention bound on stored plan history | [PR #50](https://github.com/wpliao/meal-planner/pull/50)      |
+| Date       | Change                                                                                                                                                                               | Reason                                                                                                                                                                                                | Evidence                                                                             |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| 2026-09-24 | Initial design proposal; status `Designing`                                                                                                                                          | Start Phase 4 with reviewable scope and explicit open decisions after the Phase 3 release                                                                                                             | [Issue #49](https://github.com/wpliao/meal-planner/issues/49)                        |
+| 2026-09-24 | Resolve the eight open decisions; retention becomes keep-until-removed, bounded by the 4,000-entry household limit, with no time-based deletion; `AC-06` and `AC-07` wording follows | The owner's answers in the design session: the recommended option for decisions 1–5, 7, and 8, and "keep until deleted" for decision 6. The count limit is the retention bound on stored plan history | [PR #50](https://github.com/wpliao/meal-planner/pull/50)                             |
+| 2026-09-24 | Accept design; status `Accepted`; `AC-01`–`AC-07` stable                                                                                                                             | Product owner: "I accept the design"                                                                                                                                                                  | [Approval](https://github.com/wpliao/meal-planner/issues/49#issuecomment-5806668289) |
 
 ## Release record
 
