@@ -522,9 +522,7 @@ test('meal plan week', async ({ page }) => {
   await stubPlan(page);
   // Catches a day card squeezing its meals, the Today marking, and the
   // removed-recipe line on a phone and in WebKit.
-  await expect(planPanel(page)).toHaveScreenshot('plan-week.png', {
-    fullPage: true,
-  });
+  await expect(planPanel(page)).toHaveScreenshot('plan-week.png');
 });
 
 test('meal plan add dialog', async ({ page }) => {
