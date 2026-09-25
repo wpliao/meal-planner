@@ -84,16 +84,16 @@ export interface MealSuggestionInput {
 // Text
 
 /**
- * Compares by Unicode code point, so every runtime agrees. UTF-16 order is
- * the same except where a surrogate pair meets a character from U+E000 to
- * U+FFFF, so only the first difference is read as a code point.
+ * Compares by Unicode code point, so every runtime agrees. Where both
+ * strings hold the same UTF-16 unit, their code points there are equal too,
+ * so the first difference found this way is the first code point difference.
  */
 export const compareCodePoints = (a: string, b: string): number => {
   const length = Math.min(a.length, b.length);
   for (let index = 0; index < length; index += 1) {
-    if (a.charCodeAt(index) !== b.charCodeAt(index)) {
-      return (a.codePointAt(index) ?? 0) - (b.codePointAt(index) ?? 0);
-    }
+    const left = a.codePointAt(index) ?? 0;
+    const right = b.codePointAt(index) ?? 0;
+    if (left !== right) return left - right;
   }
   return a.length - b.length;
 };
@@ -128,17 +128,21 @@ interface WordName {
   words: string[];
 }
 
-/**
- * Matches pantry names against ingredient lines. Names are indexed by the
- * word a match must start with, so each line is read once, word by word,
- * however large the pantry.
- */
-const createPantryMatcher = (
-  pantry: readonly SuggestionPantryItem[],
-): ((lines: readonly string[]) => Set<number>) => {
-  const byFirstWord = new Map<string, WordName[]>();
-  const spaceless: { item: number; text: string }[] = [];
+interface SpacelessName {
+  item: number;
+  text: string;
+}
 
+interface PantryIndex {
+  /** Word-matched names by the word a match must start with. */
+  byFirstWord: Map<string, WordName[]>;
+  /** Names in a script without spaces, matched as substrings. */
+  spaceless: SpacelessName[];
+}
+
+const indexPantry = (pantry: readonly SuggestionPantryItem[]): PantryIndex => {
+  const byFirstWord = new Map<string, WordName[]>();
+  const spaceless: SpacelessName[] = [];
   pantry.forEach((entry, item) => {
     const text = normalizePantryName(entry.name);
     if (SPACELESS_SCRIPT.test(text)) {
@@ -156,43 +160,74 @@ const createPantryMatcher = (
       else byFirstWord.set(key, [{ item, words }]);
     }
   });
+  return { byFirstWord, spaceless };
+};
 
-  const matchesAt = (lineWords: string[], start: number, words: string[]) => {
-    const last = words.length - 1;
-    if (start + last >= lineWords.length) return false;
-    for (let offset = 0; offset < last; offset += 1) {
-      if (lineWords[start + offset] !== words[offset]) return false;
+/** Whether `words` appear in `lineWords` from `start`, consecutively. */
+const matchesAt = (
+  lineWords: readonly string[],
+  start: number,
+  words: readonly string[],
+): boolean => {
+  const last = words.length - 1;
+  if (start + last >= lineWords.length) return false;
+  for (let offset = 0; offset < last; offset += 1) {
+    if (lineWords[start + offset] !== words[offset]) return false;
+  }
+  return isWordForm(lineWords[start + last], words[last]);
+};
+
+/** Adds every word-matched name that `lineWords` contain to `found`. */
+const findWordNames = (
+  lineWords: readonly string[],
+  byFirstWord: PantryIndex['byFirstWord'],
+  found: Set<number>,
+): void => {
+  for (let start = 0; start < lineWords.length; start += 1) {
+    const names = byFirstWord.get(lineWords[start]);
+    if (names === undefined) continue;
+    for (const name of names) {
+      if (!found.has(name.item) && matchesAt(lineWords, start, name.words)) {
+        found.add(name.item);
+      }
     }
-    return isWordForm(lineWords[start + last], words[last]);
-  };
+  }
+};
 
+/** Adds every spaceless name that `line` contains to `found`. */
+const findSpacelessNames = (
+  line: string,
+  spaceless: readonly SpacelessName[],
+  found: Set<number>,
+): void => {
+  // The full clean-up, spacing included, runs only on the lines that need it.
+  const text = normalizePantryName(line);
+  for (const name of spaceless) {
+    if (!found.has(name.item) && text.includes(name.text)) {
+      found.add(name.item);
+    }
+  }
+};
+
+/**
+ * Matches pantry names against ingredient lines. Names are indexed by the
+ * word a match must start with, so each line is read once, word by word,
+ * however large the pantry.
+ */
+const createPantryMatcher = (
+  pantry: readonly SuggestionPantryItem[],
+): ((lines: readonly string[]) => Set<number>) => {
+  const { byFirstWord, spaceless } = indexPantry(pantry);
   return (lines) => {
     const found = new Set<number>();
     for (const line of lines) {
       if (found.size === pantry.length) break;
-      // Words need only NFKC and lower case; spacing matters only to the
-      // substring match, which does the full clean-up on the lines it reads.
+      // Words need only NFKC and lower case.
       const text = line.normalize('NFKC').toLowerCase();
-      const lineWords = byFirstWord.size > 0 ? wordsOf(text) : [];
-      for (let start = 0; start < lineWords.length; start += 1) {
-        const names = byFirstWord.get(lineWords[start]);
-        if (names === undefined) continue;
-        for (const name of names) {
-          if (
-            !found.has(name.item) &&
-            matchesAt(lineWords, start, name.words)
-          ) {
-            found.add(name.item);
-          }
-        }
-      }
+      if (byFirstWord.size > 0)
+        findWordNames(wordsOf(text), byFirstWord, found);
       if (spaceless.length > 0 && SPACELESS_SCRIPT.test(text)) {
-        const spaced = normalizePantryName(line);
-        for (const name of spaceless) {
-          if (!found.has(name.item) && spaced.includes(name.text)) {
-            found.add(name.item);
-          }
-        }
+        findSpacelessNames(line, spaceless, found);
       }
     }
     return found;

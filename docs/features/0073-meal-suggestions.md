@@ -295,7 +295,8 @@ against the 5 million budget, which the household shares with every other
 request.
 
 The committed matcher was measured the same way on 2026-09-25, on generated
-libraries of the same shapes: 2.5 ms, 19 ms, and 418 ms. Two changes made it
+libraries of the same shapes: about 2.2 ms, 15 ms, and
+360–430 ms (medians of 15 runs, repeated three times). Two changes made it
 faster than the prototype. Lines are only put in NFKC form and lower case for
 word matching, and the full spacing clean-up runs only on lines in Chinese,
 Japanese, or Korean script. Titles are compared without first being split
