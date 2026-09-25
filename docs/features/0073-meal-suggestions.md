@@ -29,8 +29,11 @@ It uses the pantry and plan history only; stored household preferences are a
 later Phase 5 feature with their own retention design.
 
 The product owner settled seven choices on 2026-09-25, before this design was
-written. They are recorded under [Resolved design decisions](#resolved-design-decisions).
-Three decisions remain open for the owner; see [Open design decisions](#open-design-decisions).
+written, and [answered](https://github.com/wpliao/meal-planner/pull/74#issuecomment-5827466243) the three decisions the design left open, each
+with the recommended option. All ten are recorded under
+[Resolved design decisions](#resolved-design-decisions). The design awaits the
+owner's acceptance; acceptance authorizes implementation only, not deploying
+or changing production, which keep their existing approval gates.
 
 ## User scenarios
 
@@ -100,7 +103,7 @@ dinner" sits above the **Recipe** search field. It is a radio group of up to
 five recipes. Each option shows the recipe title, with its reasons on one or
 two short lines below. Choosing an option selects that recipe: the **Recipe**
 field shows it, and **Add to plan** plans it with any note, exactly as a
-searched recipe is planned (see [open decision 3](#open-design-decisions)).
+searched recipe is planned ([decision 3](#resolved-design-decisions)).
 Choosing a different recipe in the search field clears the radio choice unless
 that recipe is also a suggestion. **Type a meal** mode shows no suggestions.
 
@@ -158,7 +161,7 @@ duplicate detection. Ingredient lines are never changed; only the comparison
 copy is normalised.
 
 **Matching a pantry item to a recipe** (resolved decision R3, with
-[open decision 2](#open-design-decisions) for scripts without spaces):
+[decision 2](#resolved-design-decisions) for scripts without spaces):
 
 - A pantry name is split into words: runs of letters and digits
   (`\p{L}` and `\p{N}`). Everything else, such as spaces, commas, hyphens,
@@ -171,7 +174,7 @@ copy is normalised.
   "eggplant", and "oil" does match "olive oil".
 - A name containing Chinese, Japanese, or Korean characters matches wherever
   its normalised text appears inside a line, because those scripts do not put
-  spaces between words ([open decision 2](#open-design-decisions)).
+  spaces between words ([decision 2](#resolved-design-decisions)).
 - A recipe mentions a pantry item if any of its ingredient lines matches the
   item. Steps, notes, and titles are not searched.
 
@@ -291,8 +294,9 @@ against the 5 million budget, which the household shares with every other
 request.
 
 A library near the maximum is unlikely: it means 500 recipes, each with 100
-ingredient lines of 300 characters. [Open decision 1](#open-design-decisions)
-settles how the design handles it.
+ingredient lines of 300 characters. By
+[decision 1](#resolved-design-decisions), suggestions are computed per request
+and fail on their own if a library ever outgrows the budget.
 
 ### Security and privacy
 
@@ -386,8 +390,9 @@ ranking, the Worker route, the dialog, and the tests, with no migration.
 
 ## Rollout and rollback
 
-1. The owner answers the open decisions and accepts the design. The status
-   becomes `Accepted` on `main` before any feature code is written.
+1. The owner answered the three open decisions on 2026-09-25. The owner then
+   accepts the design, and the status becomes `Accepted` on `main` before any
+   feature code is written.
 2. Implement on a focused `claude/` branch. Run the full Dev Container gate,
    and require CI, Sonar, and a security review. There is no migration.
 3. Merge to `main`, then deploy development. Validate on a phone
@@ -402,41 +407,33 @@ ranking, the Worker route, the dialog, and the tests, with no migration.
 Rollback redeploys the Worker version that was live before the release. There
 is no data to restore, because nothing is written.
 
-## Open design decisions
-
-For each, the recommended option is first.
-
-1. **How the design handles a very large library (Workers Free CPU).**
-   - **Recommended — compute per request, and let suggestions fail on their
-     own.** A typical and even a large library fit the budget (see
-     [Cost on Workers Free](#cost-on-workers-free)). If a library ever grows
-     near the maximum, suggestion requests fail and show **Retry**, while
-     adding meals keeps working. Development validation records real CPU
-     time, and a follow-up would add precomputation if a real household
-     approaches the limit.
-   - Precompute each recipe's matchable words when it is saved: a new column,
-     a migration, and a backfill of existing recipes. Requests then stay
-     cheap at any size, but this adds write-path work for a case no household
-     has yet.
-   - Move the account to Workers Paid (US$5 a month, 30 s of CPU per request,
-     and also a 30-day D1 Time Travel window). Removes the limit, at a cost.
-2. **Pantry names in scripts without spaces (Chinese, Japanese, Korean).**
-   - **Recommended — match as a substring.** "豆腐" matches "300克豆腐". The
-     cost is false matches inside longer words: "蔥" (scallion) also matches
-     "洋蔥" (onion). The reason shows the match, so a person can see it.
-   - Whole words only, as for other scripts. Such names would then almost
-     never match, because the line has no spaces to find a word boundary.
-3. **What choosing a suggestion does.**
-   - **Recommended — it selects the recipe; Add to plan still plans it.**
-     This matches `AC-01` ("exactly as picking it from the list does"), keeps
-     the optional note, and gives one place to confirm. It is two taps.
-   - A per-suggestion **Add** button that plans it at once, in one tap, as
-     the issue's first scenario puts it. That skips the note, and it is a second
-     way to submit the dialog.
-
 ## Resolved design decisions
 
-The product owner chose these on 2026-09-25, before the design, each with the
+The product owner [answered these](https://github.com/wpliao/meal-planner/pull/74#issuecomment-5827466243) on 2026-09-25 on the design PR,
+each with the recommended option.
+
+1. **A very large library on Workers Free (10 ms CPU):** **compute per request,
+   and let suggestions fail on their own.** A typical and even a large library
+   fit the budget (see [Cost on Workers Free](#cost-on-workers-free)). If a
+   library ever grows near the maximum, suggestion requests fail and show
+   **Retry**, while adding meals keeps working. Development validation
+   records real CPU time, and a follow-up would add precomputation if a real
+   household approaches the limit. Rejected: precomputing each recipe's
+   matchable words on save (a new column, a migration, and a backfill, for a
+   case no household has yet); moving the account to Workers Paid (US$5 a
+   month).
+2. **Pantry names in Chinese, Japanese, or Korean:** **match as a substring.**
+   "豆腐" matches "300克豆腐". The cost is false matches inside longer words:
+   "蔥" (scallion) also matches "洋蔥" (onion). The reason shows the match, so
+   a person can see it. Rejected: whole words only, under which such names
+   would almost never match.
+3. **Choosing a suggestion:** **it selects the recipe, and Add to plan plans
+   it.** This matches `AC-01` ("exactly as picking it from the list does"),
+   keeps the optional note, and gives one place to confirm, in two taps.
+   Rejected: a one-tap **Add** button on each suggestion, which skips the note
+   and is a second way to submit the dialog.
+
+The owner chose these on 2026-09-25, before the design, each with the
 recommended option.
 
 - **R1 — Signals:** the pantry and recent plans only. Preferences and "Not
@@ -463,9 +460,10 @@ recommended option.
 
 ## Decision and change log
 
-| Date       | Change                                                                                                                                       | Reason                                                                                                                               | Evidence                                                                                                             |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
-| 2026-09-25 | Initial design proposal; status `Designing`; seven decisions resolved by the owner before the design and three open. Authored by Claude Code | First Phase 5 feature. The owner chose the first slice's signals, placement, matching, status rule, order, and runtime on 2026-09-25 | [Issue #73](https://github.com/wpliao/meal-planner/issues/73); [#74](https://github.com/wpliao/meal-planner/pull/74) |
+| Date       | Change                                                                                                                                                                                                                                                                                                                                     | Reason                                                                                                                               | Evidence                                                                                                             |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-25 | Initial design proposal; status `Designing`; seven decisions resolved by the owner before the design and three open. Authored by Claude Code                                                                                                                                                                                               | First Phase 5 feature. The owner chose the first slice's signals, placement, matching, status rule, order, and runtime on 2026-09-25 | [Issue #73](https://github.com/wpliao/meal-planner/issues/73); [#74](https://github.com/wpliao/meal-planner/pull/74) |
+| 2026-09-25 | Resolve the three open decisions with the recommended options: compute per request and let suggestions fail on their own; match Chinese, Japanese, and Korean pantry names as substrings; choosing a suggestion selects it and **Add to plan** plans it. No acceptance criterion changes. Status stays `Designing` until the owner accepts | The owner's answers on the design PR                                                                                                 | [Owner comment](https://github.com/wpliao/meal-planner/pull/74#issuecomment-5827466243)                              |
 
 ## Release record
 
