@@ -1,6 +1,6 @@
 # Feature: Family favourites and "Not now" for meal suggestions
 
-- Status: Designing
+- Status: Accepted
 - Phase: 5 — deterministic suggestions
 - Issue: [#78](https://github.com/wpliao/meal-planner/issues/78)
 - Product owner: Repository owner
@@ -29,9 +29,11 @@ household preferences, so it settles their retention here
 
 The product owner settled four choices on 2026-09-25, before this design was
 written. They are recorded under
-[Resolved design decisions](#resolved-design-decisions). Three questions remain
-open under [Open design decisions](#open-design-decisions), each with a
-recommendation.
+[Resolved design decisions](#resolved-design-decisions). The owner then chose
+the recommended option for each of the three questions the design left open,
+and [accepted the design](https://github.com/wpliao/meal-planner/pull/79#issuecomment-5832688761) on 2026-09-25.
+Acceptance authorizes implementation only, not deploying or changing
+production, which keep their existing approval gates.
 
 ## User scenarios
 
@@ -323,8 +325,9 @@ the dialog, and the tests.
 
 ## Rollout and rollback
 
-1. The owner answers the open decisions and accepts the design. Its status
-   becomes `Accepted` on `main` before any feature code is written.
+1. The owner answered the open decisions and accepted the design on
+   2026-09-25, and the status became `Accepted` before the design merged and
+   before any feature code was written.
 2. Implement on a focused `claude/` branch, with the migration and the
    decommission inventory in the same pull request. Run the full Dev Container
    gate, and require CI, Sonar, and a security review.
@@ -341,29 +344,27 @@ Rollback redeploys the Worker version that was live before the release. The
 table stays and is unused. Preferences set after the release are kept, and
 are applied again if the release is redeployed.
 
-## Open design decisions
-
-1. **Where preferences are stored.** Recommended: **a separate
-   `recipe_preferences` table**, as above. A preference is household state
-   about a recipe, not recipe content: it has its own retention (**Not now**
-   expires), must not bump the recipe's version, and must not be caught by
-   the recipe edit conflict check. Alternative: two columns on `recipes`,
-   updated without touching `version`. That needs no inventory change, but
-   mixes content and state in one row, and every recipe write path would have
-   to preserve them.
-2. **When "7 days" ends.** Recommended: **exactly 7 × 24 hours after the
-   tap**, from the Worker's clock. It needs no time zone and is the same for
-   every member, and the recipe page shows the end in the device's own
-   calendar. Alternative: the end of the 7th day in the family's time zone,
-   which reads more naturally ("until Friday"), but the Worker would need the
-   device's time zone.
-3. **Where a favourite shows.** Recommended: **the recipe page and the
-   suggestions only**. Alternative: also a star in the recipe library list,
-   which makes favourites visible at a glance but widens the change to
-   another screen and its visual snapshots, and invites the library filter
-   this slice leaves out.
-
 ## Resolved design decisions
+
+The owner [answered these](https://github.com/wpliao/meal-planner/pull/79#issuecomment-5832688761) on 2026-09-25 on the design PR,
+each with the recommended option.
+
+1. **Where preferences are stored:** **a separate `recipe_preferences`
+   table**, as above. A preference is household state about a recipe, not
+   recipe content: it has its own retention (**Not now** expires), must not
+   bump the recipe's version, and must not be caught by the recipe edit
+   conflict check. Rejected: two columns on `recipes`, updated without
+   touching `version`, which mix content and state in one row, so every
+   recipe write path would have to preserve them.
+2. **When "7 days" ends:** **exactly 7 × 24 hours after the tap**, on the
+   Worker's clock. It needs no time zone and is the same for every member,
+   and the recipe page shows the end in the device's own calendar. Rejected:
+   the end of the 7th day in the family's time zone, for which the Worker
+   would need the device's time zone.
+3. **Where a favourite shows:** **the recipe page and the suggestions only**.
+   Rejected: also a star in the recipe library list, which widens the change
+   to another screen and its visual snapshots, and invites the library filter
+   this slice leaves out.
 
 The owner chose these on 2026-09-25, before the design, each with the
 recommended option.
@@ -383,9 +384,11 @@ recommended option.
 
 ## Decision and change log
 
-| Date       | Change                                                                                                                                      | Reason                                                                                              | Evidence                                                                                                             |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| 2026-09-25 | Initial design proposal; status `Designing`; four decisions resolved by the owner before the design and three open. Authored by Claude Code | Second Phase 5 feature, and the follow-up the #73 design named. The owner chose F1–F4 on 2026-09-25 | [Issue #78](https://github.com/wpliao/meal-planner/issues/78); [#79](https://github.com/wpliao/meal-planner/pull/79) |
+| Date       | Change                                                                                                                                                                                                                                                 | Reason                                                                                              | Evidence                                                                                                             |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-25 | Initial design proposal; status `Designing`; four decisions resolved by the owner before the design and three open. Authored by Claude Code                                                                                                            | Second Phase 5 feature, and the follow-up the #73 design named. The owner chose F1–F4 on 2026-09-25 | [Issue #78](https://github.com/wpliao/meal-planner/issues/78); [#79](https://github.com/wpliao/meal-planner/pull/79) |
+| 2026-09-25 | Resolve the three open decisions with the recommended options: a separate `recipe_preferences` table; **Not now** ends exactly 7 × 24 hours after the tap; favourites show on the recipe page and in suggestions only. No acceptance criterion changes | The owner's answers in a Claude Code session, recorded on the design PR                             | [Owner decisions](https://github.com/wpliao/meal-planner/pull/79#issuecomment-5832688761)                            |
+| 2026-09-25 | Accept design; status `Accepted`; `AC-01`–`AC-06` stable. Recorded in the design PR, before it merged                                                                                                                                                  | Product owner: "I accept the design"                                                                | [Approval](https://github.com/wpliao/meal-planner/pull/79#issuecomment-5832688761)                                   |
 
 ## Release record
 
