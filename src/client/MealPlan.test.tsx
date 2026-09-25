@@ -18,6 +18,7 @@ import {
   summary,
 } from '../../test/client/recipes';
 import type { MealPlanEntry } from '../shared/meal-plan';
+import type { MealSuggestion } from '../shared/meal-suggestions';
 
 beforeEach(() => {
   // Only the clock is faked; promises and Mantine's transitions run for real.
@@ -37,6 +38,9 @@ const THURSDAY = 'Thursday 24 September';
 const DINNER_ADD = `Add to dinner, ${THURSDAY}`;
 
 const saved = (entry: MealPlanEntry) => jsonResponse({ entry }, 201);
+/** The add dialog asks for suggestions right after the recipe list. */
+const suggestions = (list: MealSuggestion[] = []) =>
+  jsonResponse({ suggestions: list });
 const stale = (current: MealPlanEntry) =>
   jsonResponse(
     {
@@ -248,6 +252,7 @@ describe('adding', () => {
     const spy = await openWeek(
       [],
       () => jsonResponse({ recipes: [] }),
+      () => suggestions(),
       () => saved(added),
       () => jsonResponse(week([added])),
     );
@@ -279,7 +284,7 @@ describe('adding', () => {
     await waitFor(() =>
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
     );
-    expect(sent(spy, 2)).toEqual({
+    expect(sent(spy, 3)).toEqual({
       url: '/api/meal-plan/entries',
       method: 'POST',
       body: {
@@ -317,6 +322,7 @@ describe('adding', () => {
             }),
           ],
         }),
+      () => suggestions(),
       () => saved(added),
       () => jsonResponse(week([added])),
     );
@@ -344,7 +350,7 @@ describe('adding', () => {
     await waitFor(() =>
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
     );
-    expect(sent(spy, 2).body).toEqual({
+    expect(sent(spy, 3).body).toEqual({
       date: TODAY,
       slot: 'dinner',
       note: null,
@@ -353,7 +359,11 @@ describe('adding', () => {
   });
 
   it('says when no recipe matches the search', async () => {
-    await openWeek([], () => jsonResponse({ recipes: [summary()] }));
+    await openWeek(
+      [],
+      () => jsonResponse({ recipes: [summary()] }),
+      () => suggestions(),
+    );
     const dialog = await openAdd();
     expect(await recipeField(dialog)).toHaveAccessibleDescription(
       'Type to search 1 recipe.',
@@ -366,7 +376,11 @@ describe('adding', () => {
   });
 
   it('points to Add recipe when the library is empty', async () => {
-    await openWeek([], () => jsonResponse({ recipes: [] }));
+    await openWeek(
+      [],
+      () => jsonResponse({ recipes: [] }),
+      () => suggestions(),
+    );
     const dialog = await openAdd();
     expect(await within(dialog).findByTestId('picker-empty')).toHaveTextContent(
       'The recipe library is empty.',
@@ -380,6 +394,7 @@ describe('adding', () => {
     await openWeek(
       [],
       () => jsonResponse({}, 503),
+      () => suggestions(),
       () => jsonResponse({ recipes: [summary()] }),
     );
     const dialog = await openAdd();
@@ -393,6 +408,7 @@ describe('adding', () => {
     await openWeek(
       [],
       () => jsonResponse({ recipes: [] }),
+      () => suggestions(),
       () =>
         jsonResponse(
           {
@@ -426,6 +442,7 @@ describe('adding', () => {
     const spy = await openWeek(
       [],
       () => jsonResponse({ recipes: [summary()] }),
+      () => suggestions(),
       () =>
         jsonResponse(
           {
@@ -437,6 +454,7 @@ describe('adding', () => {
           404,
         ),
       () => jsonResponse({ recipes: [] }),
+      () => suggestions(),
     );
     const dialog = await openAdd();
     await searchRecipes(dialog, 'soy');
@@ -451,13 +469,15 @@ describe('adding', () => {
     expect(
       await within(dialog).findByTestId('picker-empty'),
     ).toBeInTheDocument();
-    expect(sent(spy, 3).url).toBe('/api/recipes');
+    expect(sent(spy, 4).url).toBe('/api/recipes');
+    expect(sent(spy, 5).url).toBe('/api/meal-plan/suggestions?date=2026-09-24');
   });
 
   it('reports a failed connection and keeps the note', async () => {
     await openWeek(
       [],
       () => jsonResponse({ recipes: [] }),
+      () => suggestions(),
       () => Promise.reject(new TypeError('Failed to fetch')),
     );
     const dialog = await openAdd();
@@ -492,7 +512,11 @@ describe('adding', () => {
   });
 
   it('cancels without saving and returns focus to Add', async () => {
-    const spy = await openWeek([], () => jsonResponse({ recipes: [] }));
+    const spy = await openWeek(
+      [],
+      () => jsonResponse({ recipes: [] }),
+      () => suggestions(),
+    );
     const dialog = await openAdd(`Add to breakfast, ${THURSDAY}`);
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     await waitFor(() =>
@@ -501,6 +525,296 @@ describe('adding', () => {
     expect(
       screen.getByRole('button', { name: `Add to breakfast, ${THURSDAY}` }),
     ).toHaveFocus();
+    expect(spy).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('suggestions', () => {
+  const CURRY = '22222222-2222-4222-8222-222222222222';
+  const SOUP = '33333333-3333-4333-8333-333333333333';
+  const OTHER = '44444444-4444-4444-8444-444444444444';
+
+  const suggestion = (over: Partial<MealSuggestion> = {}): MealSuggestion => ({
+    recipeId: CURRY,
+    title: 'Chicken curry',
+    pantry: { held: [], needed: [] },
+    recent: null,
+    lastPlanned: null,
+    ...over,
+  });
+
+  const library = () =>
+    jsonResponse({
+      recipes: [
+        summary({ id: CURRY, title: 'Chicken curry' }),
+        summary({ id: SOUP, title: 'Miso soup' }),
+        summary({ id: OTHER, title: 'Pasta bake' }),
+      ],
+    });
+
+  const openAdd = async () => {
+    fireEvent.click(screen.getByRole('button', { name: DINNER_ADD }));
+    return screen.findByRole('dialog');
+  };
+
+  const group = (dialog: HTMLElement) =>
+    within(dialog).findByRole('radiogroup', {
+      name: 'Suggested for Thursday dinner',
+    });
+
+  it('shows suggestions for the meal in Pick a recipe mode only', async () => {
+    let answer: (response: Response) => void = () => undefined;
+    const spy = await openWeek(
+      [],
+      library,
+      () =>
+        new Promise<Response>((resolve) => {
+          answer = resolve;
+        }),
+    );
+    const dialog = await openAdd();
+    expect(
+      await within(dialog).findByText('Finding suggestions…'),
+    ).toBeInTheDocument();
+    // The recipe list does not wait for the suggestions.
+    expect(await recipeField(dialog)).toBeInTheDocument();
+    answer(
+      await suggestions([
+        suggestion(),
+        suggestion({ recipeId: SOUP, title: 'Miso soup' }),
+      ]),
+    );
+
+    const radios = within(await group(dialog)).getAllByRole('radio');
+    expect(radios.map((radio) => radio.getAttribute('value'))).toEqual([
+      CURRY,
+      SOUP,
+    ]);
+    expect(radios[0]).toHaveAccessibleName('Chicken curry');
+    expect(radios[0]).toHaveAccessibleDescription('Not planned before');
+    expect(radios.some((radio) => (radio as HTMLInputElement).checked)).toBe(
+      false,
+    );
+    expect(sent(spy, 2).url).toBe('/api/meal-plan/suggestions?date=2026-09-24');
+
+    fireEvent.click(within(dialog).getByRole('radio', { name: 'Type a meal' }));
+    expect(
+      within(dialog).queryByRole('radiogroup', {
+        name: 'Suggested for Thursday dinner',
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('words each reason from the data', async () => {
+    await openWeek([], library, () =>
+      suggestions([
+        suggestion({
+          title: 'Fried rice',
+          pantry: {
+            held: [
+              { name: 'chicken', status: 'available' },
+              { name: 'eggs', status: 'available' },
+              { name: 'garlic', status: 'available' },
+              { name: 'onion', status: 'available' },
+              { name: 'rice', status: 'low' },
+              { name: 'spring onion', status: 'available' },
+            ],
+            needed: ['soy sauce'],
+          },
+          recent: TODAY,
+          lastPlanned: '2026-09-10',
+        }),
+        suggestion({
+          recipeId: SOUP,
+          title: 'Miso soup',
+          pantry: {
+            held: [
+              { name: 'miso', status: 'low' },
+              { name: 'tofu', status: 'available' },
+            ],
+            needed: [],
+          },
+          recent: '2026-10-02',
+        }),
+        suggestion({
+          recipeId: OTHER,
+          title: 'Pasta bake',
+          pantry: { held: [], needed: ['a', 'b', 'c', 'd', 'e'] },
+          lastPlanned: '2026-08-03',
+        }),
+        suggestion({
+          recipeId: '55555555-5555-4555-8555-555555555555',
+          title: 'Stew',
+          lastPlanned: '2025-12-29',
+        }),
+        suggestion({
+          recipeId: '66666666-6666-4666-8666-666666666666',
+          title: 'Salad',
+        }),
+      ]),
+    );
+    const dialog = await openAdd();
+    const radios = within(await group(dialog)).getAllByRole('radio');
+    expect(
+      radios.map((radio) => radio.getAttribute('aria-describedby')),
+    ).not.toContain(null);
+    const described = radios.map((radio) => {
+      const id = radio.getAttribute('aria-describedby') as string;
+      return Array.from(
+        (document.getElementById(id) as HTMLElement).children,
+      ).map((line) => line.textContent);
+    });
+    expect(described).toEqual([
+      [
+        'Uses what you have: chicken, eggs, garlic, onion and 2 more · Needs: soy sauce',
+        'Already planned for this day',
+      ],
+      [
+        'Uses what you have: miso (low), tofu',
+        'Also planned on Friday 2 October',
+      ],
+      ['Needs: a, b, c, d and 1 more', 'Last planned on Monday 3 August'],
+      ['Last planned on Monday 29 December 2025'],
+      ['Not planned before'],
+    ]);
+    expect(radios[1]).toHaveAccessibleName('Miso soup');
+  });
+
+  it('plans a chosen suggestion exactly as a searched recipe', async () => {
+    const added = recipeEntry({ title: 'Miso soup' });
+    const spy = await openWeek(
+      [],
+      library,
+      () =>
+        suggestions([
+          suggestion(),
+          suggestion({ recipeId: SOUP, title: 'Miso soup' }),
+        ]),
+      () => saved(added),
+      () => jsonResponse(week([added])),
+    );
+    const dialog = await openAdd();
+    const choices = await group(dialog);
+    fireEvent.click(within(choices).getByRole('radio', { name: 'Miso soup' }));
+    expect(
+      within(choices).getByRole('radio', { name: 'Miso soup' }),
+    ).toBeChecked();
+    expect(await recipeField(dialog)).toHaveValue('Miso soup');
+
+    // A recipe from the search that is not suggested clears the choice; a
+    // suggested one checks its option.
+    await searchRecipes(dialog, 'pasta');
+    fireEvent.click(await screen.findByRole('option', { name: 'Pasta bake' }));
+    expect(
+      within(choices)
+        .getAllByRole('radio')
+        .some((radio) => (radio as HTMLInputElement).checked),
+    ).toBe(false);
+    await searchRecipes(dialog, 'curry');
+    fireEvent.click(
+      await screen.findByRole('option', { name: 'Chicken curry' }),
+    );
+    expect(
+      within(choices).getByRole('radio', { name: 'Chicken curry' }),
+    ).toBeChecked();
+
+    fireEvent.click(within(choices).getByRole('radio', { name: 'Miso soup' }));
+    fireEvent.change(within(dialog).getByRole('textbox', { name: /Note/u }), {
+      target: { value: 'extra tofu' },
+    });
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Add to plan' }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    expect(sent(spy, 3)).toEqual({
+      url: '/api/meal-plan/entries',
+      method: 'POST',
+      body: { date: TODAY, slot: 'dinner', note: 'extra tofu', recipeId: SOUP },
+    });
+  });
+
+  it('keeps the picker working when suggestions fail, and retries them', async () => {
+    const added = recipeEntry({ title: 'Miso soup' });
+    const spy = await openWeek(
+      [],
+      library,
+      () => jsonResponse({}, 503),
+      () => suggestions([suggestion()]),
+      () => saved(added),
+      () => jsonResponse(week([added])),
+    );
+    const dialog = await openAdd();
+    const failed = await within(dialog).findByTestId('suggestions-unavailable');
+    expect(failed).toHaveTextContent(
+      'Suggestions are not available right now.',
+    );
+
+    // The search still works while suggestions are unavailable.
+    await searchRecipes(dialog, 'miso');
+    fireEvent.click(await screen.findByRole('option', { name: 'Miso soup' }));
+
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Retry suggestions' }),
+    );
+    expect(
+      within(await group(dialog)).getByRole('radio', { name: 'Chicken curry' }),
+    ).not.toBeChecked();
+    expect(sent(spy, 3).url).toBe('/api/meal-plan/suggestions?date=2026-09-24');
+
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Add to plan' }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
+    expect(sent(spy, 4).body).toMatchObject({ recipeId: SOUP });
+  });
+
+  it('treats a malformed answer as unavailable', async () => {
+    await openWeek([], library, () => jsonResponse({ recipes: [] }));
+    const dialog = await openAdd();
+    expect(
+      await within(dialog).findByTestId('suggestions-unavailable'),
+    ).toBeInTheDocument();
+    expect(await recipeField(dialog)).toBeInTheDocument();
+  });
+
+  it('shows no group for an empty library', async () => {
+    await openWeek(
+      [],
+      () => jsonResponse({ recipes: [] }),
+      () => suggestions(),
+    );
+    const dialog = await openAdd();
+    expect(
+      await within(dialog).findByTestId('picker-empty'),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        within(dialog).queryByText('Finding suggestions…'),
+      ).not.toBeInTheDocument(),
+    );
+    expect(
+      within(dialog).queryByRole('radiogroup', { name: /Suggested/u }),
+    ).toBeNull();
+    expect(within(dialog).queryByTestId('suggestions-unavailable')).toBeNull();
+  });
+
+  it('asks for nothing on a date that cannot be planned', async () => {
+    const spy = mockFetch(() => jsonResponse(week([], '2026-06-01')), library);
+    renderPlan(['/plan/2026-06-01']);
+    await screen.findByTestId('plan-days');
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Add to dinner, Thursday 4 June' }),
+    );
+    const dialog = await screen.findByRole('dialog');
+    expect(await recipeField(dialog)).toBeInTheDocument();
+    expect(within(dialog).queryByText('Finding suggestions…')).toBeNull();
+    expect(
+      within(dialog).queryByRole('radiogroup', { name: /Suggested/u }),
+    ).toBeNull();
     expect(spy).toHaveBeenCalledTimes(2);
   });
 });
@@ -1323,7 +1637,9 @@ describe('closing without a change', () => {
     await openWeek(
       [],
       () => jsonResponse({ recipes: [summary()] }),
+      () => suggestions(),
       () => jsonResponse({ recipes: [summary()] }),
+      () => suggestions(),
     );
     fireEvent.click(screen.getByRole('button', { name: DINNER_ADD }));
     const dialog = await screen.findByRole('dialog');

@@ -18,6 +18,7 @@ import {
   type MealSlot,
   type PlanDateWindow,
 } from '../shared/meal-plan';
+import type { MealSuggestion } from '../shared/meal-suggestions';
 
 /**
  * Pure helpers for the plan screens. Dates are plan dates (`YYYY-MM-DD`)
@@ -238,4 +239,61 @@ export const filterRecipes = <T extends { title: string }>(
     const title = recipe.title.toLocaleLowerCase();
     return words.every((word) => title.includes(word));
   });
+};
+
+// ---------------------------------------------------------------------------
+// Suggestions
+
+export const suggestionsQuery = (date: string): string =>
+  `/api/meal-plan/suggestions?date=${encodeURIComponent(date)}`;
+
+/** "Suggested for Thursday dinner". */
+export const suggestionsHeading = (date: string, slot: MealSlot): string =>
+  `Suggested for ${weekdayName(date)} ${slotLabel(slot).toLowerCase()}`;
+
+/** Names a reason lists before it says how many more there are. */
+const REASON_NAME_LIMIT = 4;
+
+/** "chicken, rice (low), garlic", or the first four and "and 2 more". */
+const nameList = (names: readonly string[]): string => {
+  const shown = names.slice(0, REASON_NAME_LIMIT).join(', ');
+  const more = names.length - REASON_NAME_LIMIT;
+  return more > 0 ? `${shown} and ${more} more` : shown;
+};
+
+/** The pantry's part of a suggestion's reasons, or null when it has none. */
+export const pantryReason = (suggestion: MealSuggestion): string | null => {
+  const { held, needed } = suggestion.pantry;
+  const parts: string[] = [];
+  if (held.length > 0) {
+    parts.push(
+      `Uses what you have: ${nameList(
+        held.map(({ name, status }) =>
+          status === 'low' ? `${name} (low)` : name,
+        ),
+      )}`,
+    );
+  }
+  if (needed.length > 0) parts.push(`Needs: ${nameList(needed)}`);
+  return parts.length > 0 ? parts.join(' · ') : null;
+};
+
+/**
+ * Exactly one planning reason for every suggestion, so none is ever shown
+ * without a reason (`AC-02` of the #73 design).
+ */
+export const planningReason = (
+  suggestion: MealSuggestion,
+  mealDate: string,
+): string => {
+  if (suggestion.recent === mealDate) return 'Already planned for this day';
+  if (suggestion.recent)
+    return `Also planned on ${dayLabel(suggestion.recent)}`;
+  if (suggestion.lastPlanned) {
+    const year = suggestion.lastPlanned.slice(0, 4);
+    return `Last planned on ${dayLabel(suggestion.lastPlanned)}${
+      year === mealDate.slice(0, 4) ? '' : ` ${Number(year)}`
+    }`;
+  }
+  return 'Not planned before';
 };
