@@ -398,3 +398,111 @@ describe('Recipe deletion', () => {
     ).toBeInTheDocument();
   });
 });
+
+describe('Recipe preferences', () => {
+  const favouriteButton = () =>
+    screen.getByRole('button', { name: 'Mark as favourite' });
+  const preferencesResponse = (
+    favourite: boolean,
+    notNowUntil: string | null = null,
+  ) => jsonResponse({ preferences: { favourite, notNowUntil } });
+
+  it('marks and unmarks a family favourite without touching the recipe', async () => {
+    const spy = mockFetch(
+      () =>
+        jsonResponse({
+          recipe: recipe(),
+          preferences: { favourite: false, notNowUntil: null },
+        }),
+      () => preferencesResponse(true),
+      () => preferencesResponse(false),
+    );
+    renderRecipes([detailPath]);
+    await screen.findByRole('heading', { level: 1, name: 'Soy chicken' });
+
+    expect(favouriteButton()).toHaveAttribute('aria-pressed', 'false');
+    expect(favouriteButton()).toHaveTextContent('Mark as favourite');
+    fireEvent.click(favouriteButton());
+    await waitFor(() =>
+      expect(favouriteButton()).toHaveAttribute('aria-pressed', 'true'),
+    );
+    expect(favouriteButton()).toHaveTextContent('Favourite');
+    expect(sent(spy, 1)).toEqual({
+      url: `/api/recipes/${RECIPE_ID}/preferences`,
+      method: 'PUT',
+      body: { favourite: true },
+    });
+
+    fireEvent.click(favouriteButton());
+    await waitFor(() =>
+      expect(favouriteButton()).toHaveAttribute('aria-pressed', 'false'),
+    );
+    expect(sent(spy, 2).body).toEqual({ favourite: false });
+    expect(spy).toHaveBeenCalledTimes(3);
+  });
+
+  it('keeps the state and says so when a change fails', async () => {
+    mockFetch(
+      () =>
+        jsonResponse({
+          recipe: recipe(),
+          preferences: { favourite: true, notNowUntil: null },
+        }),
+      () => Promise.reject(new TypeError('Failed to fetch')),
+    );
+    renderRecipes([detailPath]);
+    await screen.findByRole('heading', { level: 1, name: 'Soy chicken' });
+
+    fireEvent.click(favouriteButton());
+    expect(await screen.findByTestId('recipe-result')).toHaveTextContent(
+      'That could not be saved. Try again.',
+    );
+    expect(favouriteButton()).toHaveAttribute('aria-pressed', 'true');
+    expect(favouriteButton()).toBeEnabled();
+  });
+
+  it('says when a recipe is hidden from suggestions and shows it again', async () => {
+    const spy = mockFetch(
+      () =>
+        jsonResponse({
+          recipe: recipe(),
+          preferences: {
+            favourite: false,
+            notNowUntil: '2099-01-02T12:00:00.000Z',
+          },
+        }),
+      () => preferencesResponse(false),
+    );
+    renderRecipes([detailPath]);
+    const hidden = await screen.findByTestId('recipe-not-now');
+    expect(hidden).toHaveTextContent(
+      'Hidden from suggestions until Friday 2 January.',
+    );
+
+    fireEvent.click(
+      within(hidden).getByRole('button', { name: 'Show in suggestions' }),
+    );
+    await waitFor(() =>
+      expect(screen.queryByTestId('recipe-not-now')).not.toBeInTheDocument(),
+    );
+    expect(sent(spy, 1).body).toEqual({ notNow: false });
+    expect(
+      await screen.findByText('“Soy chicken” can be suggested again.'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows nothing for a Not now that has already ended', async () => {
+    mockFetch(() =>
+      jsonResponse({
+        recipe: recipe(),
+        preferences: {
+          favourite: false,
+          notNowUntil: '2000-01-01T00:00:00.000Z',
+        },
+      }),
+    );
+    renderRecipes([detailPath]);
+    await screen.findByRole('heading', { level: 1, name: 'Soy chicken' });
+    expect(screen.queryByTestId('recipe-not-now')).not.toBeInTheDocument();
+  });
+});

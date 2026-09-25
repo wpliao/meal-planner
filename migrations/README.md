@@ -24,6 +24,15 @@ plan for [feature #49](../docs/features/0049-meal-planning.md):
 table. The household decommission procedure counts the table; a later table
 must be added there in the same pull request as its migration.
 
+Migration `0005_create_recipe_preferences.sql` adds the household's recipe
+preferences for [feature #78](../docs/features/0078-recipe-preferences.md):
+`recipe_preferences`, at most one row per recipe, cascading from both the
+recipe and the household, with `CHECK` constraints that a row holds a
+favourite or a valid "Not now" end instant. It is additive and alters no
+existing table, and the household decommission procedure counts it. Rolling
+back the Worker leaves the table unread; retiring it needs a forward
+migration.
+
 Migrations are immutable and ordered. Test each migration against a fresh local
 D1 database, apply it to the development D1 database before any production
 rollout, and obtain explicit production approval before applying it to

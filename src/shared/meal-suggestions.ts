@@ -18,6 +18,7 @@ import {
   type MealPlanValidation,
 } from './meal-plan';
 import { normalizePantryName, type PantryStatus } from './pantry';
+import { notNowActive } from './recipe-preferences';
 
 /** Suggestions returned for one meal. */
 export const MEAL_SUGGESTION_LIMIT = 5;
@@ -44,6 +45,8 @@ export interface MealSuggestion {
   recent: string | null;
   /** The latest planned date before the meal's date, or null. */
   lastPlanned: string | null;
+  /** Whether the household marked it as a family favourite (#78). */
+  favourite: boolean;
 }
 
 export interface MealSuggestionsResponse {
@@ -78,6 +81,16 @@ export interface MealSuggestionInput {
    * same result, which lets the Worker aggregate in SQL.
    */
   planned: readonly SuggestionPlannedDate[];
+  /** The household's recipe preferences; recipes without one have none. */
+  preferences: readonly SuggestionPreference[];
+  /** The current instant, which decides whether "Not now" is in effect. */
+  now: Date;
+}
+
+export interface SuggestionPreference {
+  recipeId: string;
+  favourite: boolean;
+  notNowUntil: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -309,8 +322,9 @@ const byName = (
 /**
  * Orders recipes by, in turn: more held pantry items (`available` or `low`)
  * mentioned; not planned within {@link MEAL_SUGGESTION_RECENT_DAYS} days
- * either side of the meal's date; least recently planned before it, never
- * planned first; title by code point; and recipe ID. Returns the first
+ * either side of the meal's date; family favourites (#78); least recently
+ * planned before it, never planned first; title by code point; and recipe
+ * ID. Recipes under "Not now" at `now` are left out first. Returns the first
  * `limit`.
  */
 export const rankMealSuggestions = (
@@ -328,7 +342,18 @@ export const rankMealSuggestions = (
     index,
   }));
 
-  const ranked: Ranked[] = input.recipes.map((recipe) => {
+  const favourites = new Set<string>();
+  const hidden = new Set<string>();
+  for (const preference of input.preferences) {
+    if (preference.favourite) favourites.add(preference.recipeId);
+    if (notNowActive(preference.notNowUntil, input.now)) {
+      hidden.add(preference.recipeId);
+    }
+  }
+
+  // "Not now" leaves a recipe out before ranking, so it frees its place.
+  const candidates = input.recipes.filter(({ id }) => !hidden.has(id));
+  const ranked: Ranked[] = candidates.map((recipe) => {
     const found = [...matcher(recipe.ingredients)]
       .map((index) => names[index])
       .sort(byName);
@@ -347,6 +372,7 @@ export const rankMealSuggestions = (
         pantry: { held, needed },
         recent: fact?.recent ?? null,
         lastPlanned: fact?.lastPlanned ?? null,
+        favourite: favourites.has(recipe.id),
       },
       sortTitle: normalizePantryName(recipe.title),
     };
@@ -357,6 +383,7 @@ export const rankMealSuggestions = (
       b.suggestion.pantry.held.length - a.suggestion.pantry.held.length ||
       Number(a.suggestion.recent !== null) -
         Number(b.suggestion.recent !== null) ||
+      Number(b.suggestion.favourite) - Number(a.suggestion.favourite) ||
       compareLastPlanned(a.suggestion.lastPlanned, b.suggestion.lastPlanned) ||
       compareCodePoints(a.sortTitle, b.sortTitle) ||
       compareCodePoints(a.suggestion.recipeId, b.suggestion.recipeId),

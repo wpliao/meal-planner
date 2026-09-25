@@ -12,6 +12,7 @@ export const testEnv = env as TestEnv;
 export const applyMigrations = async (): Promise<void> => {
   await applyD1Migrations(testEnv.DB, testEnv.TEST_MIGRATIONS);
   await testEnv.DB.batch([
+    testEnv.DB.prepare('DELETE FROM recipe_preferences'),
     testEnv.DB.prepare('DELETE FROM meal_plan_entries'),
     testEnv.DB.prepare('DELETE FROM recipe_steps'),
     testEnv.DB.prepare('DELETE FROM recipe_ingredients'),
@@ -144,8 +145,32 @@ export const seedMealPlanEntry = async (
   return id;
 };
 
+/**
+ * Inserts a recipe preference directly, bypassing the API, so tests can place
+ * rows in any household and with any end time.
+ */
+export const seedRecipePreference = async (
+  householdId: string,
+  recipeId: string,
+  preference: { favourite?: boolean; notNowUntil?: string | null } = {},
+): Promise<void> => {
+  await testEnv.DB.prepare(
+    `INSERT INTO recipe_preferences (
+       recipe_id, household_id, favourite, not_now_until, updated_at
+     ) VALUES (?, ?, ?, ?, ?)`,
+  )
+    .bind(
+      recipeId,
+      householdId,
+      (preference.favourite ?? true) ? 1 : 0,
+      preference.notNowUntil ?? null,
+      new Date().toISOString(),
+    )
+    .run();
+};
+
 export const mutationInit = (
-  method: 'POST' | 'PATCH' | 'DELETE',
+  method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   body?: unknown,
 ): RequestInit => ({
   method,

@@ -540,6 +540,7 @@ describe('suggestions', () => {
     pantry: { held: [], needed: [] },
     recent: null,
     lastPlanned: null,
+    favourite: false,
     ...over,
   });
 
@@ -800,6 +801,124 @@ describe('suggestions', () => {
       within(dialog).queryByRole('radiogroup', { name: /Suggested/u }),
     ).toBeNull();
     expect(within(dialog).queryByTestId('suggestions-unavailable')).toBeNull();
+  });
+
+  it('leads with Family favourite for a favourite', async () => {
+    await openWeek([], library, () =>
+      suggestions([
+        suggestion({
+          favourite: true,
+          pantry: { held: [{ name: 'rice', status: 'low' }], needed: [] },
+        }),
+        suggestion({ recipeId: SOUP, title: 'Miso soup', favourite: true }),
+      ]),
+    );
+    const dialog = await openAdd();
+    const radios = within(await group(dialog)).getAllByRole('radio');
+    expect(radios[0]).toHaveAccessibleDescription(
+      'Family favourite · Uses what you have: rice (low) Not planned before',
+    );
+    expect(radios[1]).toHaveAccessibleDescription(
+      'Family favourite Not planned before',
+    );
+  });
+
+  const notNowOk = (notNowUntil: string | null) =>
+    jsonResponse({ preferences: { favourite: false, notNowUntil } });
+
+  it('hides a suggestion with Not now, and Undo brings it back', async () => {
+    const both = [
+      suggestion(),
+      suggestion({ recipeId: SOUP, title: 'Miso soup' }),
+    ];
+    const spy = await openWeek(
+      [],
+      library,
+      () => suggestions(both),
+      () => notNowOk('2026-10-01T10:00:00.000Z'),
+      () => suggestions([both[1]]),
+      () => notNowOk(null),
+      () => suggestions(both),
+    );
+    const dialog = await openAdd();
+    await group(dialog);
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Not now: Chicken curry' }),
+    );
+
+    const status = await within(dialog).findByTestId('not-now-status');
+    expect(status).toHaveTextContent(
+      '“Chicken curry” is hidden from suggestions for 7 days.',
+    );
+    const undo = within(dialog).getByRole('button', { name: 'Undo' });
+    await waitFor(() => expect(undo).toHaveFocus());
+    expect(sent(spy, 3)).toEqual({
+      url: `/api/recipes/${CURRY}/preferences`,
+      method: 'PUT',
+      body: { notNow: true },
+    });
+    await waitFor(() =>
+      expect(
+        within(dialog).queryByRole('radio', { name: 'Chicken curry' }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(sent(spy, 4).url).toBe('/api/meal-plan/suggestions?date=2026-09-24');
+    // The search still lists every recipe.
+    await searchRecipes(dialog, 'curry');
+    expect(
+      await screen.findByRole('option', { name: 'Chicken curry' }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Undo' }));
+    const restored = await within(dialog).findByRole('radio', {
+      name: 'Chicken curry',
+    });
+    await waitFor(() => expect(restored).toHaveFocus());
+    expect(sent(spy, 5).body).toEqual({ notNow: false });
+    expect(within(dialog).queryByTestId('not-now-status')).toBeNull();
+  });
+
+  it('clears the choice when the chosen suggestion is hidden', async () => {
+    await openWeek(
+      [],
+      library,
+      () => suggestions([suggestion()]),
+      () => notNowOk('2026-10-01T10:00:00.000Z'),
+      () => suggestions([]),
+    );
+    const dialog = await openAdd();
+    fireEvent.click(
+      within(await group(dialog)).getByRole('radio', { name: 'Chicken curry' }),
+    );
+    expect(await recipeField(dialog)).toHaveValue('Chicken curry');
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Not now: Chicken curry' }),
+    );
+    await within(dialog).findByTestId('not-now-status');
+    await waitFor(async () =>
+      expect(await recipeField(dialog)).toHaveValue(''),
+    );
+  });
+
+  it('says so when Not now fails, and keeps the suggestion', async () => {
+    const spy = await openWeek(
+      [],
+      library,
+      () => suggestions([suggestion()]),
+      () => Promise.reject(new TypeError('Failed to fetch')),
+    );
+    const dialog = await openAdd();
+    await group(dialog);
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Not now: Chicken curry' }),
+    );
+    expect(
+      await within(dialog).findByTestId('not-now-status'),
+    ).toHaveTextContent('That could not be saved. Try again.');
+    expect(
+      within(dialog).getByRole('radio', { name: 'Chicken curry' }),
+    ).toBeInTheDocument();
+    expect(spy).toHaveBeenCalledTimes(4);
   });
 
   it('asks for nothing on a date that cannot be planned', async () => {

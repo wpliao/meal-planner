@@ -96,7 +96,7 @@ const result = (page: Page) => page.getByTestId('plan-result');
 const call = async <T>(
   request: APIRequestContext,
   testInfo: TestInfo,
-  method: 'POST' | 'PATCH' | 'DELETE',
+  method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   path: string,
   data: unknown,
 ): Promise<T> => {
@@ -565,13 +565,20 @@ test('a member plans a suggested recipe, with reasons from the pantry and the pl
     ),
   );
 
-  // The whole option is a touch target the width of the group, and the
-  // dialog does not scroll sideways on a phone.
+  // The option's label and its Not now button (#78) together span the
+  // group, each a touch target, and the dialog does not scroll sideways on a
+  // phone.
   const label = page.locator(`label[for="${await option.getAttribute('id')}"]`);
   const labelBox = (await label.boundingBox())!;
+  const notNowBox = (await dialog
+    .getByRole('button', { name: `Not now: ${title}` })
+    .boundingBox())!;
   const groupBox = (await group.boundingBox())!;
   expect(labelBox.height).toBeGreaterThanOrEqual(44);
-  expect(labelBox.width).toBeGreaterThan(groupBox.width * 0.75);
+  expect(notNowBox.height).toBeGreaterThanOrEqual(44);
+  expect(labelBox.width + notNowBox.width).toBeGreaterThan(
+    groupBox.width * 0.75,
+  );
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(page.viewportSize()!.width);
@@ -645,9 +652,21 @@ test('a keyboard alone chooses a suggestion and plans it', async ({
     chosen,
   );
 
-  // On through the recipe field to the note, and Enter adds it.
+  // Tab passes the Not now buttons (#78) of the chosen option and those
+  // after it, then reaches the recipe field; on to the note, and Enter adds
+  // it.
+  const recipeField = dialog.getByRole('combobox', { name: 'Recipe' });
   await page.keyboard.press('Tab');
-  await expect(dialog.getByRole('combobox', { name: 'Recipe' })).toBeFocused();
+  await expect(
+    dialog.getByRole('button', { name: `Not now: ${chosen}` }),
+  ).toBeFocused();
+  for (let stop = 0; stop < 5; stop += 1) {
+    if (await recipeField.evaluate((field) => field === document.activeElement))
+      break;
+    await expect(page.locator(':focus')).toHaveAccessibleName(/^Not now: /u);
+    await page.keyboard.press('Tab');
+  }
+  await expect(recipeField).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(dialog.getByRole('textbox', { name: /Note/u })).toBeFocused();
   await page.keyboard.type('by keyboard');
@@ -656,6 +675,148 @@ test('a keyboard alone chooses a suggestion and plans it', async ({
     `Added “${chosen}” to breakfast on ${dayName(saturday)}.`,
   );
   await expect(add).toBeFocused();
+});
+
+// ---------------------------------------------------------------------------
+// Favourites and Not now (#78)
+
+/**
+ * A recipe that uses six pantry items no other test has, so it ranks among
+ * the first five suggestions whatever else the shared library holds.
+ */
+const createSuggestedRecipe = async (
+  page: Page,
+  testInfo: TestInfo,
+  title: string,
+): Promise<{ recipe: Saved; held: string[] }> => {
+  const held = ['a', 'b', 'c', 'd', 'e', 'f'].map(randomWord);
+  for (const name of held) {
+    await createPantryItem(page, testInfo, name, 'available');
+  }
+  const recipe = await createRecipeWith(
+    page,
+    testInfo,
+    title,
+    held.map((name) => `1 ${name}`),
+  );
+  return { recipe, held };
+};
+
+const setPreference = (
+  page: Page,
+  testInfo: TestInfo,
+  id: string,
+  body: Record<string, boolean>,
+) =>
+  call(page.request, testInfo, 'PUT', `/api/recipes/${id}/preferences`, body);
+
+test('a favourite marked on the recipe page leads its suggestion', async ({
+  page,
+}, testInfo) => {
+  const monday = futureWeek(13);
+  await openPlan(page, '/plan');
+  const title = unique('Family stew');
+  const { recipe, held } = await createSuggestedRecipe(page, testInfo, title);
+
+  await page.goto(`/recipes/${recipe.id}`);
+  const favourite = page.getByRole('button', { name: 'Mark as favourite' });
+  await expect(favourite).toHaveAttribute('aria-pressed', 'false');
+  expect((await favourite.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await favourite.click();
+  await expect(favourite).toHaveAttribute('aria-pressed', 'true');
+  await expect(favourite).toHaveText(/Favourite/u);
+  // Another member's view is the same: it is the household's.
+  await page.reload();
+  await expect(
+    page.getByRole('button', { name: 'Mark as favourite' }),
+  ).toHaveAttribute('aria-pressed', 'true');
+
+  await openPlan(page, `/plan/${monday}`);
+  await slot(page, monday, 'dinner')
+    .getByRole('button', { name: `Add to dinner, ${dayName(monday)}` })
+    .click();
+  const dialog = await openedDialog(page);
+  const option = dialog
+    .getByRole('radiogroup', { name: 'Suggested for Monday dinner' })
+    .getByRole('radio', { name: title });
+  await expect(option).toHaveAccessibleDescription(
+    new RegExp(
+      `^Family favourite · Uses what you have: ${held[0]}, ${held[1]}, ${held[2]}, ${held[3]} and 2 more`,
+      'u',
+    ),
+  );
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toBeHidden();
+  await setPreference(page, testInfo, recipe.id, { favourite: false });
+});
+
+test('Not now hides a suggestion; Undo and the recipe page bring it back, by keyboard', async ({
+  page,
+}, testInfo) => {
+  const monday = futureWeek(14);
+  await openPlan(page, '/plan');
+  const title = unique('Weeknight bake');
+  const { recipe } = await createSuggestedRecipe(page, testInfo, title);
+  // A favourite too, so it ranks above any other test's recipe with as many
+  // pantry matches.
+  await setPreference(page, testInfo, recipe.id, { favourite: true });
+  await openPlan(page, `/plan/${monday}`);
+
+  const add = page.getByRole('button', {
+    name: `Add to lunch, ${dayName(monday)}`,
+  });
+  await add.focus();
+  await page.keyboard.press('Enter');
+  let dialog = await openedDialog(page);
+  const group = dialog.getByRole('radiogroup', {
+    name: 'Suggested for Monday lunch',
+  });
+  await expect(group.getByRole('radio', { name: title })).toBeVisible();
+
+  const notNow = dialog.getByRole('button', { name: `Not now: ${title}` });
+  expect((await notNow.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await notNow.focus();
+  await page.keyboard.press('Enter');
+  await expect(dialog.getByTestId('not-now-status')).toHaveText(
+    `“${title}” is hidden from suggestions for 7 days.`,
+  );
+  const undo = dialog.getByRole('button', { name: 'Undo' });
+  await expect(undo).toBeFocused();
+  await expect(group.getByRole('radio', { name: title })).toHaveCount(0);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(page.viewportSize()!.width);
+
+  await page.keyboard.press('Enter');
+  const restored = group.getByRole('radio', { name: title });
+  await expect(restored).toBeFocused();
+  await expect(dialog.getByTestId('not-now-status')).toHaveCount(0);
+
+  // Hide it again and leave; the recipe page offers to show it again.
+  await dialog.getByRole('button', { name: `Not now: ${title}` }).click();
+  await expect(dialog.getByTestId('not-now-status')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toBeHidden();
+
+  await page.goto(`/recipes/${recipe.id}`);
+  const hidden = page.getByTestId('recipe-not-now');
+  await expect(hidden).toContainText('Hidden from suggestions until');
+  await hidden.getByRole('button', { name: 'Show in suggestions' }).click();
+  await expect(hidden).toHaveCount(0);
+  await expect(page.getByTestId('recipe-result')).toHaveText(
+    `“${title}” can be suggested again.`,
+  );
+
+  await openPlan(page, `/plan/${monday}`);
+  await add.click();
+  dialog = await openedDialog(page);
+  await expect(
+    dialog
+      .getByRole('radiogroup', { name: 'Suggested for Monday lunch' })
+      .getByRole('radio', { name: title }),
+  ).toBeVisible();
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await setPreference(page, testInfo, recipe.id, { favourite: false });
 });
 
 test('a member clears a past week, and only a past week offers it', async ({

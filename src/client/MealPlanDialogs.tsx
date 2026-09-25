@@ -17,7 +17,9 @@ import {
   useCallback,
   useEffect,
   useId,
+  useRef,
   useState,
+  type ReactNode,
   type SubmitEvent,
 } from 'react';
 import { Link } from 'react-router-dom';
@@ -36,7 +38,7 @@ import {
   isEntryGone,
   MEAL_SLOT_OPTIONS,
   mealCount,
-  pantryReason,
+  leadingReason,
   placeLabel,
   planFailure,
   planningReason,
@@ -66,6 +68,10 @@ import type {
   MealSuggestion,
   MealSuggestionsResponse,
 } from '../shared/meal-suggestions';
+import {
+  RECIPE_NOT_NOW_DAYS,
+  type RecipePreferencesResponse,
+} from '../shared/recipe-preferences';
 import type { RecipeSummary, RecipesResponse } from '../shared/recipes';
 
 /**
@@ -392,93 +398,206 @@ function SuggestionOption({
   suggestion,
   mealDate,
   checked,
+  pending,
+  focus,
+  onFocused,
+  onNotNow,
 }: Readonly<{
   suggestion: MealSuggestion;
   mealDate: string;
   checked: boolean;
+  pending: boolean;
+  /** Move focus to this option's radio once it is shown. */
+  focus: boolean;
+  onFocused: () => void;
+  onNotNow: () => void;
 }>) {
   const id = useId();
-  const pantry = pantryReason(suggestion);
-  // The whole card is the radio's label, so all of it is a touch target. Its
-  // accessible name is the title alone, and the reasons are its description.
+  const radio = useRef<HTMLInputElement>(null);
+  const leading = leadingReason(suggestion);
+  useEffect(() => {
+    if (!focus) return;
+    radio.current?.focus();
+    onFocused();
+  }, [focus, onFocused]);
+  // The card holds the radio and, beside it, Not now. The radio's label is
+  // the rest of the card, so all of it is a touch target; its accessible name
+  // is the title alone, and the reasons are its description. Not now sits
+  // outside the label, so tapping it never chooses the recipe.
   return (
-    <Radio
-      aria-describedby={`${id}-reasons`}
-      aria-labelledby={`${id}-title`}
-      label={
-        <>
-          <Text component="span" display="block" fw={600} id={`${id}-title`}>
-            {suggestion.title}
-          </Text>
-          <Text
-            c="dimmed"
-            component="span"
-            display="block"
-            fz="sm"
-            id={`${id}-reasons`}
-          >
-            {pantry && (
-              <Text component="span" display="block" inherit>
-                {pantry}
-              </Text>
-            )}
-            <Text component="span" display="block" inherit>
-              {planningReason(suggestion, mealDate)}
-            </Text>
-          </Text>
-        </>
-      }
-      styles={{
-        root: {
-          border: `1px solid var(--mantine-color-${checked ? 'sage-6' : 'paper-3'})`,
-          borderRadius: 'var(--mantine-radius-md)',
-          paddingInlineStart: 'var(--mantine-spacing-sm)',
-        },
-        body: { alignItems: 'center' },
-        labelWrapper: { flex: 1 },
-        label: {
-          cursor: 'pointer',
-          minHeight: 'var(--mp-touch-target)',
-          paddingBlock: 'var(--mantine-spacing-xs)',
-          paddingInlineEnd: 'var(--mantine-spacing-sm)',
-          ...wrap,
-        },
+    <Group
+      align="stretch"
+      gap={0}
+      style={{
+        border: `1px solid var(--mantine-color-${checked ? 'sage-6' : 'paper-3'})`,
+        borderRadius: 'var(--mantine-radius-md)',
       }}
-      value={suggestion.recipeId}
-    />
+      wrap="nowrap"
+    >
+      <Radio
+        aria-describedby={`${id}-reasons`}
+        aria-labelledby={`${id}-title`}
+        label={
+          <>
+            <Text component="span" display="block" fw={600} id={`${id}-title`}>
+              {suggestion.title}
+            </Text>
+            <Text
+              c="dimmed"
+              component="span"
+              display="block"
+              fz="sm"
+              id={`${id}-reasons`}
+            >
+              {leading && (
+                <Text component="span" display="block" inherit>
+                  {leading}
+                </Text>
+              )}
+              <Text component="span" display="block" inherit>
+                {planningReason(suggestion, mealDate)}
+              </Text>
+            </Text>
+          </>
+        }
+        ref={radio}
+        styles={{
+          root: {
+            flex: 1,
+            minWidth: 0,
+            paddingInlineStart: 'var(--mantine-spacing-sm)',
+          },
+          body: { alignItems: 'center', height: '100%' },
+          labelWrapper: { flex: 1 },
+          label: {
+            cursor: 'pointer',
+            minHeight: 'var(--mp-touch-target)',
+            paddingBlock: 'var(--mantine-spacing-xs)',
+            paddingInlineEnd: 'var(--mantine-spacing-xs)',
+            ...wrap,
+          },
+        }}
+        value={suggestion.recipeId}
+      />
+      <Button
+        aria-label={`Not now: ${suggestion.title}`}
+        disabled={pending}
+        onClick={onNotNow}
+        px="sm"
+        style={{ alignSelf: 'center', flexShrink: 0 }}
+        variant="subtle"
+      >
+        Not now
+      </Button>
+    </Group>
   );
 }
+
+/** The result of the last Not now or Undo, shown above the suggestions. */
+type NotNowStatus =
+  | { kind: 'hidden'; recipeId: string; title: string }
+  | { kind: 'failed' }
+  | null;
+
+const saveNotNow = (recipeId: string, notNow: boolean) =>
+  api<RecipePreferencesResponse>(
+    `/api/recipes/${encodeURIComponent(recipeId)}/preferences`,
+    jsonMutation('PUT', { notNow }),
+  );
 
 /**
  * Up to five recipes ranked for this meal, above the search field (the #73
  * design). Choosing one selects it exactly as searching for it would, and
- * Add to plan plans it.
+ * Add to plan plans it. Not now hides one from the household's suggestions
+ * for 7 days, with Undo (the #78 design); the search still lists it.
  */
 function MealSuggestions({
   list,
-  retry,
+  reload,
   heading,
   mealDate,
   selected,
   onSelect,
+  onHidden,
 }: Readonly<{
   list: SuggestionList;
-  retry: () => void;
+  reload: () => void;
   heading: string;
   mealDate: string;
   selected: string;
   onSelect: (id: string) => void;
+  /** A recipe left the suggestions; the dialog clears it if it was chosen. */
+  onHidden: (id: string) => void;
 }>) {
-  if (list.kind === 'loading') {
-    return <Text component="output">Finding suggestions…</Text>;
+  const [status, setStatus] = useState<NotNowStatus>(null);
+  const [pending, setPending] = useState(false);
+  const [focusId, setFocusId] = useState<string | null>(null);
+  const undo = useRef<HTMLButtonElement>(null);
+  const clearFocus = useCallback(() => setFocusId(null), []);
+
+  useEffect(() => {
+    if (status?.kind === 'hidden') undo.current?.focus();
+  }, [status]);
+
+  const change = async (
+    suggestion: { recipeId: string; title: string },
+    notNow: boolean,
+  ) => {
+    setPending(true);
+    try {
+      await saveNotNow(suggestion.recipeId, notNow);
+      if (notNow) {
+        setStatus({ kind: 'hidden', ...suggestion });
+        onHidden(suggestion.recipeId);
+      } else {
+        setStatus(null);
+        setFocusId(suggestion.recipeId);
+      }
+      reload();
+    } catch {
+      setStatus({ kind: 'failed' });
+    } finally {
+      setPending(false);
+    }
+  };
+
+  let notice: ReactNode = null;
+  if (status?.kind === 'hidden') {
+    notice = (
+      <Group gap="xs">
+        <Text component="output" data-testid="not-now-status" style={wrap}>
+          “{status.title}” is hidden from suggestions for {RECIPE_NOT_NOW_DAYS}{' '}
+          days.
+        </Text>
+        <Button
+          disabled={pending}
+          onClick={() => void change(status, false)}
+          ref={undo}
+          size="sm"
+          variant="default"
+        >
+          Undo
+        </Button>
+      </Group>
+    );
+  } else if (status?.kind === 'failed') {
+    notice = (
+      <Text component="output" data-testid="not-now-status">
+        That could not be saved. Try again.
+      </Text>
+    );
   }
-  if (list.kind === 'unavailable') {
-    return (
+
+  let body: ReactNode = null;
+  if (list.kind === 'loading') {
+    body = <Text component="output">Finding suggestions…</Text>;
+  } else if (list.kind === 'unavailable') {
+    body = (
       <Stack align="flex-start" data-testid="suggestions-unavailable" gap="xs">
         <Text component="output">Suggestions are not available right now.</Text>
         <Button
           aria-label="Retry suggestions"
-          onClick={retry}
+          onClick={reload}
           size="sm"
           variant="default"
         >
@@ -486,29 +605,40 @@ function MealSuggestions({
         </Button>
       </Stack>
     );
+  } else if (list.suggestions.length > 0) {
+    const value = list.suggestions.some(({ recipeId }) => recipeId === selected)
+      ? selected
+      : null;
+    body = (
+      <Radio.Group
+        data-testid="meal-suggestions"
+        label={heading}
+        onChange={onSelect}
+        value={value}
+      >
+        <Stack gap="xs" mt="xs">
+          {list.suggestions.map((suggestion) => (
+            <SuggestionOption
+              checked={suggestion.recipeId === value}
+              focus={suggestion.recipeId === focusId}
+              key={suggestion.recipeId}
+              mealDate={mealDate}
+              onFocused={clearFocus}
+              onNotNow={() => void change(suggestion, true)}
+              pending={pending}
+              suggestion={suggestion}
+            />
+          ))}
+        </Stack>
+      </Radio.Group>
+    );
   }
-  if (list.suggestions.length === 0) return null;
-  const value = list.suggestions.some(({ recipeId }) => recipeId === selected)
-    ? selected
-    : null;
+  if (!notice && !body) return null;
   return (
-    <Radio.Group
-      data-testid="meal-suggestions"
-      label={heading}
-      onChange={onSelect}
-      value={value}
-    >
-      <Stack gap="xs" mt="xs">
-        {list.suggestions.map((suggestion) => (
-          <SuggestionOption
-            checked={suggestion.recipeId === value}
-            key={suggestion.recipeId}
-            mealDate={mealDate}
-            suggestion={suggestion}
-          />
-        ))}
-      </Stack>
-    </Radio.Group>
+    <Stack gap="xs">
+      {notice}
+      {body}
+    </Stack>
   );
 }
 
@@ -622,8 +752,11 @@ export function AddEntryDialog({
                   heading={suggestionsHeading(target.date, target.slot)}
                   list={suggestions.list}
                   mealDate={target.date}
+                  onHidden={(id) => {
+                    if (id === recipeId) setRecipeId('');
+                  }}
                   onSelect={setRecipeId}
-                  retry={() => void suggestions.load()}
+                  reload={() => void suggestions.load()}
                   selected={recipeId}
                 />
               )}

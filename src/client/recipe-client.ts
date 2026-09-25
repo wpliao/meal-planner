@@ -23,6 +23,11 @@ import {
   type RecipeTruncationNotice,
   type RecipeUrlProblem,
 } from '../shared/recipes';
+import {
+  NO_RECIPE_PREFERENCES,
+  type RecipeDetailResponse,
+  type RecipePreferences,
+} from '../shared/recipe-preferences';
 
 /**
  * What the recipe form starts from: empty for a new recipe, the saved recipe
@@ -114,13 +119,19 @@ export type RecipeLoadState =
  */
 export const useRecipe = (id: string) => {
   const [state, setState] = useState<RecipeLoadState>({ kind: 'loading' });
+  // The household's preferences arrive with the recipe (#78). A screen that
+  // does not show them ignores them.
+  const [preferences, setPreferences] = useState<RecipePreferences>(
+    NO_RECIPE_PREFERENCES,
+  );
 
   const load = useCallback(async () => {
     setState({ kind: 'loading' });
     try {
-      const response = await api<RecipeResponse>(
-        `/api/recipes/${encodeURIComponent(id)}`,
-      );
+      const response = await api<
+        RecipeResponse & Partial<Pick<RecipeDetailResponse, 'preferences'>>
+      >(`/api/recipes/${encodeURIComponent(id)}`);
+      setPreferences(response.preferences ?? NO_RECIPE_PREFERENCES);
       setState({ kind: 'ready', recipe: response.recipe });
     } catch (error: unknown) {
       setState({ kind: isNotFound(error) ? 'not-found' : 'unavailable' });
@@ -131,7 +142,7 @@ export const useRecipe = (id: string) => {
     queueMicrotask(() => void load());
   }, [load]);
 
-  return { state, setState, load };
+  return { state, setState, load, preferences, setPreferences };
 };
 
 // ---------------------------------------------------------------------------
