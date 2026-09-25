@@ -1,11 +1,11 @@
 # Feature: Suggest recipes for a meal from the pantry and recent plans
 
-- Status: Designing
+- Status: Accepted
 - Phase: 5 — deterministic suggestions
 - Issue: [#73](https://github.com/wpliao/meal-planner/issues/73)
 - Product owner: Repository owner
 - Last updated: 2026-09-25
-- Pull requests: [#74 — design proposal](https://github.com/wpliao/meal-planner/pull/74)
+- Pull requests: [#74 — design proposal](https://github.com/wpliao/meal-planner/pull/74); [#75 — design acceptance record](https://github.com/wpliao/meal-planner/pull/75)
 
 ## Problem and outcome
 
@@ -31,8 +31,9 @@ later Phase 5 feature with their own retention design.
 The product owner settled seven choices on 2026-09-25, before this design was
 written, and [answered](https://github.com/wpliao/meal-planner/pull/74#issuecomment-5827466243) the three decisions the design left open, each
 with the recommended option. All ten are recorded under
-[Resolved design decisions](#resolved-design-decisions). The design awaits the
-owner's acceptance; acceptance authorizes implementation only, not deploying
+[Resolved design decisions](#resolved-design-decisions). The owner
+[accepted the design](https://github.com/wpliao/meal-planner/pull/74#issuecomment-5827643026)
+on 2026-09-25; acceptance authorizes implementation only, not deploying
 or changing production, which keep their existing approval gates.
 
 ## User scenarios
@@ -390,9 +391,9 @@ ranking, the Worker route, the dialog, and the tests, with no migration.
 
 ## Rollout and rollback
 
-1. The owner answered the three open decisions on 2026-09-25. The owner then
-   accepts the design, and the status becomes `Accepted` on `main` before any
-   feature code is written.
+1. The owner answered the three open decisions and accepted the design on
+   2026-09-25. The status became `Accepted` on `main` before any feature code
+   was written.
 2. Implement on a focused `claude/` branch. Run the full Dev Container gate,
    and require CI, Sonar, and a security review. There is no migration.
 3. Merge to `main`, then deploy development. Validate on a phone
@@ -460,10 +461,11 @@ recommended option.
 
 ## Decision and change log
 
-| Date       | Change                                                                                                                                                                                                                                                                                                                                     | Reason                                                                                                                               | Evidence                                                                                                             |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
-| 2026-09-25 | Initial design proposal; status `Designing`; seven decisions resolved by the owner before the design and three open. Authored by Claude Code                                                                                                                                                                                               | First Phase 5 feature. The owner chose the first slice's signals, placement, matching, status rule, order, and runtime on 2026-09-25 | [Issue #73](https://github.com/wpliao/meal-planner/issues/73); [#74](https://github.com/wpliao/meal-planner/pull/74) |
-| 2026-09-25 | Resolve the three open decisions with the recommended options: compute per request and let suggestions fail on their own; match Chinese, Japanese, and Korean pantry names as substrings; choosing a suggestion selects it and **Add to plan** plans it. No acceptance criterion changes. Status stays `Designing` until the owner accepts | The owner's answers on the design PR                                                                                                 | [Owner comment](https://github.com/wpliao/meal-planner/pull/74#issuecomment-5827466243)                              |
+| Date       | Change                                                                                                                                                                                                                                                                                                                                     | Reason                                                                                                                               | Evidence                                                                                                                                  |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-25 | Initial design proposal; status `Designing`; seven decisions resolved by the owner before the design and three open. Authored by Claude Code                                                                                                                                                                                               | First Phase 5 feature. The owner chose the first slice's signals, placement, matching, status rule, order, and runtime on 2026-09-25 | [Issue #73](https://github.com/wpliao/meal-planner/issues/73); [#74](https://github.com/wpliao/meal-planner/pull/74)                      |
+| 2026-09-25 | Resolve the three open decisions with the recommended options: compute per request and let suggestions fail on their own; match Chinese, Japanese, and Korean pantry names as substrings; choosing a suggestion selects it and **Add to plan** plans it. No acceptance criterion changes. Status stays `Designing` until the owner accepts | The owner's answers on the design PR                                                                                                 | [Owner comment](https://github.com/wpliao/meal-planner/pull/74#issuecomment-5827466243)                                                   |
+| 2026-09-25 | Accept design; status `Accepted`; `AC-01`–`AC-06` stable. Recorded after #74 merged, because #74 merged while the status still read `Designing`                                                                                                                                                                                            | Product owner: "I accept the design"                                                                                                 | [Approval](https://github.com/wpliao/meal-planner/pull/74#issuecomment-5827643026); [#75](https://github.com/wpliao/meal-planner/pull/75) |
 
 ## Release record
 
