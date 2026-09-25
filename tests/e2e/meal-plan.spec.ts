@@ -482,6 +482,182 @@ test('a keyboard alone plans a meal and lands back on Add', async ({
   await expect(actions).toBeFocused();
 });
 
+// ---------------------------------------------------------------------------
+// Suggestions (#73)
+
+/** A word of letters only, unlike any other test's, so matches are ours. */
+const randomWord = (prefix: string) =>
+  prefix +
+  Array.from(
+    { length: 8 },
+    () => 'abcdefghijklmnopqrstuvwxyz'[Math.floor(Math.random() * 26)],
+  ).join('');
+
+const createPantryItem = (
+  page: Page,
+  testInfo: TestInfo,
+  name: string,
+  status: 'available' | 'low' | 'needed',
+) =>
+  call(page.request, testInfo, 'POST', '/api/pantry/items', { name, status });
+
+const createRecipeWith = async (
+  page: Page,
+  testInfo: TestInfo,
+  title: string,
+  ingredients: string[],
+): Promise<Saved> =>
+  (
+    await call<{ recipe: Saved }>(
+      page.request,
+      testInfo,
+      'POST',
+      '/api/recipes',
+      { title, ingredients, steps: ['Cook it.'] },
+    )
+  ).recipe;
+
+test('a member plans a suggested recipe, with reasons from the pantry and the plan', async ({
+  page,
+}, testInfo) => {
+  const monday = futureWeek(11);
+  const thursday = addDays(monday, 3);
+  const friday = addDays(monday, 4);
+  await openPlan(page, '/plan');
+
+  // Five items at home, one of them low, and one needed. The prefixes fix
+  // their order in the reason, which lists names in order.
+  const held = ['a', 'b', 'c', 'd', 'e'].map(randomWord);
+  const needed = randomWord('n');
+  for (const [index, name] of held.entries()) {
+    await createPantryItem(
+      page,
+      testInfo,
+      name,
+      index === 1 ? 'low' : 'available',
+    );
+  }
+  await createPantryItem(page, testInfo, needed, 'needed');
+  const title = unique('Harvest bowl');
+  await createRecipeWith(page, testInfo, title, [
+    `200 g ${held[0]}s`,
+    `1 ${held[1]}, chopped`,
+    `${held[2]} (optional)`,
+    `2 tbsp ${held[3]}`,
+    `a handful of ${held[4]}`,
+    `1 tsp ${needed}`,
+  ]);
+  await openPlan(page, `/plan/${monday}`);
+
+  await slot(page, thursday, 'dinner')
+    .getByRole('button', { name: `Add to dinner, ${dayName(thursday)}` })
+    .click();
+  let dialog = await openedDialog(page);
+  let group = dialog.getByRole('radiogroup', {
+    name: 'Suggested for Thursday dinner',
+  });
+  let option = group.getByRole('radio', { name: title });
+  await expect(option).toBeVisible();
+  await expect(option).toHaveAccessibleDescription(
+    new RegExp(
+      `^Uses what you have: ${held[0]}, ${held[1]} \\(low\\), ${held[2]}, ${held[3]} and 1 more · Needs: ${needed}\\s*Not planned before$`,
+      'u',
+    ),
+  );
+
+  // The whole option is a touch target the width of the group, and the
+  // dialog does not scroll sideways on a phone.
+  const label = page.locator(`label[for="${await option.getAttribute('id')}"]`);
+  const labelBox = (await label.boundingBox())!;
+  const groupBox = (await group.boundingBox())!;
+  expect(labelBox.height).toBeGreaterThanOrEqual(44);
+  expect(labelBox.width).toBeGreaterThan(groupBox.width * 0.75);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(page.viewportSize()!.width);
+
+  await label.click();
+  await expect(option).toBeChecked();
+  await expect(dialog.getByRole('combobox', { name: 'Recipe' })).toHaveValue(
+    title,
+  );
+  await dialog.getByRole('button', { name: 'Add to plan' }).click();
+  await expect(result(page)).toContainText(
+    `Added “${title}” to dinner on ${dayName(thursday)}.`,
+  );
+  await expect(
+    slot(page, thursday, 'dinner').getByRole('link', { name: title }),
+  ).toBeVisible();
+
+  // The next day, the same recipe says when it is already planned.
+  await slot(page, friday, 'dinner')
+    .getByRole('button', { name: `Add to dinner, ${dayName(friday)}` })
+    .click();
+  dialog = await openedDialog(page);
+  group = dialog.getByRole('radiogroup', {
+    name: 'Suggested for Friday dinner',
+  });
+  option = group.getByRole('radio', { name: title });
+  await expect(option).toHaveAccessibleDescription(
+    new RegExp(`Also planned on ${dayName(thursday)}$`, 'u'),
+  );
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+});
+
+test('a keyboard alone chooses a suggestion and plans it', async ({
+  page,
+}, testInfo) => {
+  const monday = futureWeek(12);
+  const saturday = addDays(monday, 5);
+  await openPlan(page, '/plan');
+  // At least two recipes, so there are two suggestions to move between.
+  await createRecipeWith(page, testInfo, unique('Omelette'), ['eggs']);
+  await createRecipeWith(page, testInfo, unique('Porridge'), ['oats']);
+  await openPlan(page, `/plan/${monday}`);
+
+  const add = page.getByRole('button', {
+    name: `Add to breakfast, ${dayName(saturday)}`,
+  });
+  await add.focus();
+  await page.keyboard.press('Enter');
+  const dialog = await openedDialog(page);
+  const group = dialog.getByRole('radiogroup', {
+    name: 'Suggested for Saturday breakfast',
+  });
+  const radios = group.getByRole('radio');
+  await expect(radios.nth(1)).toBeVisible();
+
+  // Tab leaves "What to add" for the suggestions; arrows choose among them.
+  await dialog.getByRole('radio', { name: 'Pick a recipe' }).focus();
+  await page.keyboard.press('Tab');
+  await expect(radios.first()).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(radios.first()).toBeChecked();
+  await page.keyboard.press('ArrowDown');
+  await expect(radios.nth(1)).toBeFocused();
+  await expect(radios.nth(1)).toBeChecked();
+  const chosen = await radios.nth(1).evaluate((radio) => {
+    const id = radio.getAttribute('aria-labelledby') ?? '';
+    return document.getElementById(id)?.textContent ?? '';
+  });
+  await expect(dialog.getByRole('combobox', { name: 'Recipe' })).toHaveValue(
+    chosen,
+  );
+
+  // On through the recipe field to the note, and Enter adds it.
+  await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('combobox', { name: 'Recipe' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('textbox', { name: /Note/u })).toBeFocused();
+  await page.keyboard.type('by keyboard');
+  await page.keyboard.press('Enter');
+  await expect(result(page)).toContainText(
+    `Added “${chosen}” to breakfast on ${dayName(saturday)}.`,
+  );
+  await expect(add).toBeFocused();
+});
+
 test('a member clears a past week, and only a past week offers it', async ({
   page,
 }, testInfo) => {

@@ -13,7 +13,13 @@ import {
   type ComboboxItem,
   type OptionsFilter,
 } from '@mantine/core';
-import { useCallback, useEffect, useState, type SubmitEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useState,
+  type SubmitEvent,
+} from 'react';
 import { Link } from 'react-router-dom';
 import { api, jsonMutation } from './api';
 import {
@@ -30,8 +36,12 @@ import {
   isEntryGone,
   MEAL_SLOT_OPTIONS,
   mealCount,
+  pantryReason,
   placeLabel,
   planFailure,
+  planningReason,
+  suggestionsHeading,
+  suggestionsQuery,
   today,
   weekConflictFrom,
   weekHeading,
@@ -40,6 +50,7 @@ import {
 } from './meal-plan-client';
 import {
   isMealSlot,
+  isWithinPlanWindow,
   validateMealPlanTitle,
   MEAL_PLAN_NOTE_MAX_LENGTH,
   MEAL_PLAN_TITLE_MAX_LENGTH,
@@ -51,6 +62,10 @@ import {
   type PlanDateWindow,
   type UpdateMealPlanEntryRequest,
 } from '../shared/meal-plan';
+import type {
+  MealSuggestion,
+  MealSuggestionsResponse,
+} from '../shared/meal-suggestions';
 import type { RecipeSummary, RecipesResponse } from '../shared/recipes';
 
 /**
@@ -314,6 +329,13 @@ function RecipePicker({
   }
   return (
     <Select
+      // With suggestions above it, the field can sit at the modal's bottom
+      // edge, where a dropdown has no room and is hidden as detached (on a
+      // Chromium phone it also flickered in a loop). Focus brings the field
+      // to the middle of the modal first; jsdom has no scrollIntoView.
+      onFocus={(event) =>
+        event.currentTarget.scrollIntoView?.({ block: 'center' })
+      }
       data={list.recipes.map((recipe) => ({
         value: recipe.id,
         label: recipe.title,
@@ -329,6 +351,164 @@ function RecipePicker({
       searchable
       value={selected || null}
     />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Suggestions for the picker
+
+type SuggestionList =
+  | { kind: 'loading' }
+  | { kind: 'ready'; suggestions: MealSuggestion[] }
+  | { kind: 'unavailable' };
+
+/**
+ * Loads suggestions for one meal date, separately from the recipe list, so
+ * neither waits for the other and a failure here never stops the picker.
+ */
+const useSuggestions = (active: boolean, date: string) => {
+  const [list, setList] = useState<SuggestionList>({ kind: 'loading' });
+  const load = useCallback(async () => {
+    setList({ kind: 'loading' });
+    try {
+      const response = await api<MealSuggestionsResponse>(
+        suggestionsQuery(date),
+      );
+      if (!Array.isArray(response?.suggestions)) {
+        throw new TypeError('Unexpected suggestions response.');
+      }
+      setList({ kind: 'ready', suggestions: response.suggestions });
+    } catch {
+      setList({ kind: 'unavailable' });
+    }
+  }, [date]);
+  useEffect(() => {
+    if (active) queueMicrotask(() => void load());
+  }, [active, load]);
+  return { list, load };
+};
+
+function SuggestionOption({
+  suggestion,
+  mealDate,
+  checked,
+}: Readonly<{
+  suggestion: MealSuggestion;
+  mealDate: string;
+  checked: boolean;
+}>) {
+  const id = useId();
+  const pantry = pantryReason(suggestion);
+  // The whole card is the radio's label, so all of it is a touch target. Its
+  // accessible name is the title alone, and the reasons are its description.
+  return (
+    <Radio
+      aria-describedby={`${id}-reasons`}
+      aria-labelledby={`${id}-title`}
+      label={
+        <>
+          <Text component="span" display="block" fw={600} id={`${id}-title`}>
+            {suggestion.title}
+          </Text>
+          <Text
+            c="dimmed"
+            component="span"
+            display="block"
+            fz="sm"
+            id={`${id}-reasons`}
+          >
+            {pantry && (
+              <Text component="span" display="block" inherit>
+                {pantry}
+              </Text>
+            )}
+            <Text component="span" display="block" inherit>
+              {planningReason(suggestion, mealDate)}
+            </Text>
+          </Text>
+        </>
+      }
+      styles={{
+        root: {
+          border: `1px solid var(--mantine-color-${checked ? 'sage-6' : 'paper-3'})`,
+          borderRadius: 'var(--mantine-radius-md)',
+          paddingInlineStart: 'var(--mantine-spacing-sm)',
+        },
+        body: { alignItems: 'center' },
+        labelWrapper: { flex: 1 },
+        label: {
+          cursor: 'pointer',
+          minHeight: 'var(--mp-touch-target)',
+          paddingBlock: 'var(--mantine-spacing-xs)',
+          paddingInlineEnd: 'var(--mantine-spacing-sm)',
+          ...wrap,
+        },
+      }}
+      value={suggestion.recipeId}
+    />
+  );
+}
+
+/**
+ * Up to five recipes ranked for this meal, above the search field (the #73
+ * design). Choosing one selects it exactly as searching for it would, and
+ * Add to plan plans it.
+ */
+function MealSuggestions({
+  list,
+  retry,
+  heading,
+  mealDate,
+  selected,
+  onSelect,
+}: Readonly<{
+  list: SuggestionList;
+  retry: () => void;
+  heading: string;
+  mealDate: string;
+  selected: string;
+  onSelect: (id: string) => void;
+}>) {
+  if (list.kind === 'loading') {
+    return <Text component="output">Finding suggestions…</Text>;
+  }
+  if (list.kind === 'unavailable') {
+    return (
+      <Stack align="flex-start" data-testid="suggestions-unavailable" gap="xs">
+        <Text component="output">Suggestions are not available right now.</Text>
+        <Button
+          aria-label="Retry suggestions"
+          onClick={retry}
+          size="sm"
+          variant="default"
+        >
+          Retry
+        </Button>
+      </Stack>
+    );
+  }
+  if (list.suggestions.length === 0) return null;
+  const value = list.suggestions.some(({ recipeId }) => recipeId === selected)
+    ? selected
+    : null;
+  return (
+    <Radio.Group
+      data-testid="meal-suggestions"
+      label={heading}
+      onChange={onSelect}
+      value={value}
+    >
+      <Stack gap="xs" mt="xs">
+        {list.suggestions.map((suggestion) => (
+          <SuggestionOption
+            checked={suggestion.recipeId === value}
+            key={suggestion.recipeId}
+            mealDate={mealDate}
+            suggestion={suggestion}
+          />
+        ))}
+      </Stack>
+    </Radio.Group>
   );
 }
 
@@ -352,6 +532,13 @@ export function AddEntryDialog({
   const [failure, setFailure] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const { list, load } = useRecipeList(mode === 'recipe');
+  // A date outside the write window cannot be planned, so nothing is
+  // suggested for it; adding there fails as it always has.
+  const suggestable = isWithinPlanWindow(target.date, clientWriteWindow());
+  const suggestions = useSuggestions(
+    mode === 'recipe' && suggestable,
+    target.date,
+  );
 
   const where = placeLabel(target.date, target.slot);
 
@@ -389,6 +576,7 @@ export function AddEntryDialog({
         // The recipe was deleted meanwhile; show the library as it is now.
         setRecipeId('');
         void load();
+        if (suggestable) void suggestions.load();
       }
       setFailure(
         planFailure(
@@ -428,13 +616,25 @@ export function AddEntryDialog({
           </Radio.Group>
 
           {mode === 'recipe' ? (
-            <RecipePicker
-              error={errors.recipe}
-              list={list}
-              onSelect={setRecipeId}
-              retry={() => void load()}
-              selected={recipeId}
-            />
+            <>
+              {suggestable && (
+                <MealSuggestions
+                  heading={suggestionsHeading(target.date, target.slot)}
+                  list={suggestions.list}
+                  mealDate={target.date}
+                  onSelect={setRecipeId}
+                  retry={() => void suggestions.load()}
+                  selected={recipeId}
+                />
+              )}
+              <RecipePicker
+                error={errors.recipe}
+                list={list}
+                onSelect={setRecipeId}
+                retry={() => void load()}
+                selected={recipeId}
+              />
+            </>
           ) : (
             <TextInput
               data-autofocus

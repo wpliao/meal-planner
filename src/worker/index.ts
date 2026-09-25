@@ -31,6 +31,11 @@ import {
   type MealPlanResponse,
 } from '../shared/meal-plan';
 import {
+  rankMealSuggestions,
+  validateSuggestionQuery,
+  type MealSuggestionsResponse,
+} from '../shared/meal-suggestions';
+import {
   validateCreateRecipe,
   validateRecipeVersion,
   validateUpdateRecipe,
@@ -65,6 +70,7 @@ import {
   readMealPlan,
   updateMealPlanEntry,
 } from './data/meal-plan-repository';
+import { readSuggestionInput } from './data/meal-suggestion-repository';
 import {
   createPantryItem,
   deletePantryItem,
@@ -110,6 +116,7 @@ const RECIPE_PATH =
 const RECIPE_IMPORT_PATH = '/api/recipes/import-preview';
 const MEAL_PLAN_PATH = '/api/meal-plan';
 const MEAL_PLAN_ENTRIES_PATH = '/api/meal-plan/entries';
+const MEAL_PLAN_SUGGESTIONS_PATH = '/api/meal-plan/suggestions';
 const MEAL_PLAN_ENTRY_PATH =
   /^\/api\/meal-plan\/entries\/([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/iu;
 /** Any segment: validation, not the router, explains a date that is wrong. */
@@ -665,6 +672,32 @@ const handleMealPlan = async (
   return json(body);
 };
 
+/**
+ * Read-only: ranks the household's own recipes for one meal date (the #73
+ * design). Membership is checked before the query and before any household
+ * statement; nothing is written and nothing leaves the Worker.
+ */
+const handleMealSuggestions = async (
+  request: Request,
+  env: AppEnv,
+  identityProvider: IdentityProvider,
+  clock: Clock,
+): Promise<Response> => {
+  if (request.method !== 'GET') {
+    throw new ApiError(404, 'not_found', 'Not found.');
+  }
+  const member = await requireMemberForRequest(request, env, identityProvider);
+  const { date } = requireValid(
+    validateSuggestionQuery(new URL(request.url).searchParams, clock()),
+  );
+  const body: MealSuggestionsResponse = {
+    suggestions: rankMealSuggestions(
+      await readSuggestionInput(env.DB, member.householdId, date),
+    ),
+  };
+  return json(body);
+};
+
 const handleMealPlanEntries = async (
   request: Request,
   env: AppEnv,
@@ -819,6 +852,10 @@ const route = async (
 
   if (url.pathname === MEAL_PLAN_PATH) {
     return handleMealPlan(request, env, identityProvider);
+  }
+
+  if (url.pathname === MEAL_PLAN_SUGGESTIONS_PATH) {
+    return handleMealSuggestions(request, env, identityProvider, clock);
   }
 
   if (url.pathname === MEAL_PLAN_ENTRIES_PATH) {

@@ -525,6 +525,72 @@ const PAST_PLAN = {
   usage: { entries: 3650, limit: 4000, oldestDate: '2023-03-08' },
 };
 
+/**
+ * Suggestions for Thursday dinner that show every kind of reason: a long
+ * pantry list, a low item, a needed item, and each planning reason.
+ */
+const SUGGESTIONS = {
+  suggestions: [
+    {
+      recipeId: RECIPE_ID,
+      title: RECIPE.title,
+      pantry: {
+        held: [
+          { name: 'chicken thighs', status: 'available' },
+          { name: 'garlic', status: 'available' },
+          { name: 'honey', status: 'low' },
+          { name: 'rice', status: 'available' },
+          { name: 'spring onion', status: 'available' },
+          { name: 'sesame seeds', status: 'available' },
+        ],
+        needed: ['soy sauce'],
+      },
+      recent: '2026-09-24',
+      lastPlanned: '2026-09-10',
+    },
+    {
+      recipeId: '77777777-7777-4777-8777-777777777777',
+      title: 'Grandma’s miso soup',
+      pantry: {
+        held: [
+          { name: 'miso', status: 'low' },
+          { name: 'tofu', status: 'available' },
+        ],
+        needed: [],
+      },
+      recent: '2026-10-02',
+      lastPlanned: null,
+    },
+    {
+      recipeId: '99999999-9999-4999-8999-000000000001',
+      title: 'Vegetable lasagne with a long title that wraps on a phone',
+      pantry: { held: [], needed: ['lasagne sheets'] },
+      recent: null,
+      lastPlanned: '2025-12-29',
+    },
+    {
+      recipeId: '99999999-9999-4999-8999-000000000002',
+      title: 'Pancakes',
+      pantry: { held: [], needed: [] },
+      recent: null,
+      lastPlanned: null,
+    },
+  ],
+};
+
+const stubSuggestions = (page: Page, status = 200) =>
+  page.route('**/api/meal-plan/suggestions?*', (route) =>
+    route.fulfill({
+      status,
+      contentType: 'application/json',
+      body: JSON.stringify(
+        status === 200
+          ? SUGGESTIONS
+          : { error: { code: 'service_unavailable', message: 'Unavailable.' } },
+      ),
+    }),
+  );
+
 const stubPlan = async (
   page: Page,
   path = '/plan/2026-09-21',
@@ -537,6 +603,8 @@ const stubPlan = async (
       body: JSON.stringify(plan),
     }),
   );
+  // Registered later, so it wins over the plan's pattern for this path.
+  await stubSuggestions(page);
   await stubRecipes(page, path, 'Plan');
   await expect(page.getByTestId('plan-entry')).toHaveCount(plan.entries.length);
 };
@@ -558,14 +626,36 @@ test('meal plan add dialog', async ({ page }) => {
   const dialog = await openedDialog(page);
   const recipe = dialog.getByRole('combobox', { name: 'Recipe' });
   await expect(recipe).toBeVisible();
+  const suggestions = dialog.getByRole('radiogroup', {
+    name: 'Suggested for Thursday dinner',
+  });
+  await expect(suggestions.getByRole('radio')).toHaveCount(4);
   await expect(dialog).toHaveScreenshot('plan-add-dialog.png');
 
   // The search shows matches in a dropdown of fixed height, not a list of
-  // the whole library.
+  // the whole library. With suggestions above it, the field starts near the
+  // modal's bottom edge; focus brings it to the middle so the list has room.
   await recipe.fill('soup');
   const options = page.getByRole('listbox');
   await expect(options.getByRole('option')).toHaveCount(1);
   await expect(options).toHaveScreenshot('plan-recipe-search.png');
+
+  // A searched recipe that is also suggested marks its suggestion.
+  await options.getByRole('option', { name: 'Grandma’s miso soup' }).click();
+  await expect(recipe).toHaveValue('Grandma’s miso soup');
+  const chosen = suggestions.getByRole('radio', {
+    name: 'Grandma’s miso soup',
+  });
+  await expect(chosen).toBeChecked();
+  // Only the chosen option: on a phone the modal's sticky header would
+  // cover the top of the whole group once the form has scrolled.
+  const option = chosen.locator(
+    'xpath=ancestor::div[contains(@class, "mantine-Radio-root")]',
+  );
+  await option.evaluate((element) =>
+    element.scrollIntoView({ block: 'center' }),
+  );
+  await expect(option).toHaveScreenshot('plan-suggestion-chosen.png');
 });
 
 test('meal plan clear week and near-limit hint', async ({ page }) => {
@@ -615,6 +705,11 @@ test('meal plan screens meet WCAG AA contrast, including errors and conflicts', 
     .getByRole('button', { name: 'Add to dinner, Thursday 24 September' })
     .click();
   const dialog = await openedDialog(page);
+  // The suggestions' reasons are secondary text on the dialog surface.
+  await expect(
+    dialog.getByRole('radiogroup', { name: /^Suggested for/u }),
+  ).toBeVisible();
+  await assertTextContrast(page);
   await dialog.getByRole('radio', { name: 'Type a meal' }).check();
   await dialog.getByRole('button', { name: 'Add to plan' }).click();
   await expect(dialog.getByText(/between 1 and 120/u)).toBeVisible();
@@ -661,10 +756,27 @@ test('every Mantine component on the plan screens has its stylesheet', async ({
     .getByRole('button', { name: 'Add to lunch, Monday 21 September' })
     .click();
   const add = await openedDialog(page);
+  await expect(
+    add.getByRole('radiogroup', { name: 'Suggested for Monday lunch' }),
+  ).toBeVisible();
   await add.getByRole('combobox', { name: 'Recipe' }).click();
   await expect(page.getByRole('option', { name: RECIPE.title })).toBeVisible();
   await assertEveryMantineClassIsStyled(page);
   await add.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+
+  // The failure state, with its Retry.
+  await stubSuggestions(page, 503);
+  await page
+    .getByRole('button', { name: 'Add to lunch, Monday 21 September' })
+    .click();
+  const failed = await openedDialog(page);
+  await expect(
+    failed.getByRole('button', { name: 'Retry suggestions' }),
+  ).toBeVisible();
+  await assertEveryMantineClassIsStyled(page);
+  await assertTextContrast(page);
+  await failed.getByRole('button', { name: 'Cancel' }).click();
   await expect(page.getByRole('dialog')).toBeHidden();
 
   await page.goto(`/recipes/${RECIPE_ID}`);
