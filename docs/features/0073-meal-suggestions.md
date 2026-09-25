@@ -5,7 +5,7 @@
 - Issue: [#73](https://github.com/wpliao/meal-planner/issues/73)
 - Product owner: Repository owner
 - Last updated: 2026-09-25
-- Pull requests: [#PRn — design proposal](https://github.com/wpliao/meal-planner/pull/PRn)
+- Pull requests: [#74 — design proposal](https://github.com/wpliao/meal-planner/pull/74)
 
 ## Problem and outcome
 
@@ -463,9 +463,9 @@ recommended option.
 
 ## Decision and change log
 
-| Date       | Change                                                                                                                                       | Reason                                                                                                                               | Evidence                                                                                                               |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| 2026-09-25 | Initial design proposal; status `Designing`; seven decisions resolved by the owner before the design and three open. Authored by Claude Code | First Phase 5 feature. The owner chose the first slice's signals, placement, matching, status rule, order, and runtime on 2026-09-25 | [Issue #73](https://github.com/wpliao/meal-planner/issues/73); [#PRn](https://github.com/wpliao/meal-planner/pull/PRn) |
+| Date       | Change                                                                                                                                       | Reason                                                                                                                               | Evidence                                                                                                             |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-25 | Initial design proposal; status `Designing`; seven decisions resolved by the owner before the design and three open. Authored by Claude Code | First Phase 5 feature. The owner chose the first slice's signals, placement, matching, status rule, order, and runtime on 2026-09-25 | [Issue #73](https://github.com/wpliao/meal-planner/issues/73); [#74](https://github.com/wpliao/meal-planner/pull/74) |
 
 ## Release record
 
