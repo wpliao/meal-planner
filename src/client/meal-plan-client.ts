@@ -261,10 +261,14 @@ const nameList = (names: readonly string[]): string => {
   return more > 0 ? `${shown} and ${more} more` : shown;
 };
 
-/** The pantry's part of a suggestion's reasons, or null when it has none. */
-export const pantryReason = (suggestion: MealSuggestion): string | null => {
+/**
+ * A suggestion's first reason line: "Family favourite" (#78), then what it
+ * uses from the pantry and what it needs; null when it has none of them.
+ */
+export const leadingReason = (suggestion: MealSuggestion): string | null => {
   const { held, needed } = suggestion.pantry;
   const parts: string[] = [];
+  if (suggestion.favourite) parts.push('Family favourite');
   if (held.length > 0) {
     parts.push(
       `Uses what you have: ${nameList(
@@ -297,3 +301,7 @@ export const planningReason = (
   }
   return 'Not planned before';
 };
+
+/** "Friday 2 October": the device's calendar day of an instant. */
+export const instantDayLabel = (instant: string): string =>
+  dayLabel(localPlanDate(new Date(instant)));

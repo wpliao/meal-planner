@@ -337,10 +337,18 @@ const stubRecipes = async (page: Page, path: string, heading: string) => {
       body: JSON.stringify(RECIPES),
     }),
   );
+  // A favourite hidden by Not now, so the page shows both (#78). The end is
+  // far ahead, so the notice never expires under the real clock.
   await page.route(`**/api/recipes/${RECIPE_ID}`, (route) =>
     route.fulfill({
       contentType: 'application/json',
-      body: JSON.stringify({ recipe: RECIPE }),
+      body: JSON.stringify({
+        recipe: RECIPE,
+        preferences: {
+          favourite: true,
+          notNowUntil: '2099-01-02T12:00:00.000Z',
+        },
+      }),
     }),
   );
   await stub(page, path, heading);
@@ -547,6 +555,7 @@ const SUGGESTIONS = {
       },
       recent: '2026-09-24',
       lastPlanned: '2026-09-10',
+      favourite: false,
     },
     {
       recipeId: '77777777-7777-4777-8777-777777777777',
@@ -560,6 +569,7 @@ const SUGGESTIONS = {
       },
       recent: '2026-10-02',
       lastPlanned: null,
+      favourite: true,
     },
     {
       recipeId: '99999999-9999-4999-8999-000000000001',
@@ -567,6 +577,7 @@ const SUGGESTIONS = {
       pantry: { held: [], needed: ['lasagne sheets'] },
       recent: null,
       lastPlanned: '2025-12-29',
+      favourite: false,
     },
     {
       recipeId: '99999999-9999-4999-8999-000000000002',
@@ -574,6 +585,7 @@ const SUGGESTIONS = {
       pantry: { held: [], needed: [] },
       recent: null,
       lastPlanned: null,
+      favourite: false,
     },
   ],
 };
@@ -647,10 +659,11 @@ test('meal plan add dialog', async ({ page }) => {
     name: 'Grandma’s miso soup',
   });
   await expect(chosen).toBeChecked();
-  // Only the chosen option: on a phone the modal's sticky header would
-  // cover the top of the whole group once the form has scrolled.
+  // Only the chosen option's card, with its Not now button: on a phone the
+  // modal's sticky header would cover the top of the whole group once the
+  // form has scrolled.
   const option = chosen.locator(
-    'xpath=ancestor::div[contains(@class, "mantine-Radio-root")]',
+    'xpath=ancestor::div[contains(@class, "mantine-Group-root")][1]',
   );
   await option.evaluate((element) =>
     element.scrollIntoView({ block: 'center' }),
@@ -709,6 +722,23 @@ test('meal plan screens meet WCAG AA contrast, including errors and conflicts', 
   await expect(
     dialog.getByRole('radiogroup', { name: /^Suggested for/u }),
   ).toBeVisible();
+  await assertTextContrast(page);
+  // Not now's status line and Undo (#78).
+  await page.route('**/api/recipes/*/preferences', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        preferences: {
+          favourite: false,
+          notNowUntil: '2026-10-01T12:00:00.000Z',
+        },
+      }),
+    }),
+  );
+  await dialog
+    .getByRole('button', { name: `Not now: ${RECIPE.title}` })
+    .click();
+  await expect(dialog.getByRole('button', { name: 'Undo' })).toBeFocused();
   await assertTextContrast(page);
   await dialog.getByRole('radio', { name: 'Type a meal' }).check();
   await dialog.getByRole('button', { name: 'Add to plan' }).click();

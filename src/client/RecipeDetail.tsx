@@ -3,6 +3,12 @@ import { useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, jsonMutation } from './api';
 import { AddToPlanDialog } from './MealPlanDialogs';
+import { instantDayLabel } from './meal-plan-client';
+import {
+  notNowActive,
+  type RecipePreferenceChange,
+  type RecipePreferencesResponse,
+} from '../shared/recipe-preferences';
 import {
   RecipeBody,
   RecipeNotice,
@@ -24,11 +30,12 @@ import {
 export function RecipeDetail() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
-  const { state, setState, load } = useRecipe(id);
+  const { state, setState, load, preferences, setPreferences } = useRecipe(id);
   const [notice, setNotice] = useRecipeFlash();
   const [confirming, setConfirming] = useState(false);
   const [planning, setPlanning] = useState(false);
   const [pending, setPending] = useState(false);
+  const [saving, setSaving] = useState(false);
   const deleteTrigger = useRef<HTMLButtonElement>(null);
   const planTrigger = useRef<HTMLButtonElement>(null);
 
@@ -90,6 +97,34 @@ export function RecipeDetail() {
 
   const href = safeSourceHref(recipe.source);
 
+  /** Sets or clears a household preference; the recipe itself is untouched. */
+  const changePreference = async (
+    change: RecipePreferenceChange,
+    done?: string,
+  ) => {
+    setSaving(true);
+    setNotice(null);
+    try {
+      const response = await api<RecipePreferencesResponse>(
+        `/api/recipes/${encodeURIComponent(recipe.id)}/preferences`,
+        jsonMutation('PUT', change),
+      );
+      setPreferences(response.preferences);
+      if (done) setNotice({ tone: 'success', message: done });
+    } catch (error: unknown) {
+      setNotice({
+        tone: 'error',
+        message: failureMessage(error, 'That could not be saved. Try again.'),
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+  const hiddenUntil =
+    preferences.notNowUntil && notNowActive(preferences.notNowUntil, new Date())
+      ? preferences.notNowUntil
+      : null;
+
   return (
     <RecipePage
       back={RECIPES_BACK_LINK}
@@ -117,11 +152,47 @@ export function RecipeDetail() {
         </Text>
       </Stack>
 
+      {hiddenUntil && (
+        <Group data-testid="recipe-not-now" gap="sm" mb="lg">
+          <Text fz="sm">
+            Hidden from suggestions until {instantDayLabel(hiddenUntil)}.
+          </Text>
+          <Button
+            disabled={saving}
+            onClick={() =>
+              void changePreference(
+                { notNow: false },
+                `“${recipe.title}” can be suggested again.`,
+              )
+            }
+            size="sm"
+            variant="default"
+          >
+            Show in suggestions
+          </Button>
+        </Group>
+      )}
+
       <RecipeBody idPrefix="recipe" recipe={recipe} />
 
       <Group gap="sm" mt="xl">
         <Button onClick={() => setPlanning(true)} ref={planTrigger}>
           Add to plan
+        </Button>
+        {/* One name in both states, so the pressed state is what changes. */}
+        <Button
+          aria-label="Mark as favourite"
+          aria-pressed={preferences.favourite}
+          disabled={saving}
+          leftSection={
+            <span aria-hidden="true">{preferences.favourite ? '★' : '☆'}</span>
+          }
+          onClick={() =>
+            void changePreference({ favourite: !preferences.favourite })
+          }
+          variant={preferences.favourite ? 'light' : 'default'}
+        >
+          {preferences.favourite ? 'Favourite' : 'Mark as favourite'}
         </Button>
         <Button
           component={Link}

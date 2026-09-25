@@ -767,3 +767,109 @@ describe('meal plan migration', () => {
     expect(remaining.results).toEqual([{ household_id: otherId }]);
   });
 });
+
+describe('recipe preference migration', () => {
+  beforeEach(applyMigrations);
+
+  const seedHousehold = async (): Promise<string> => {
+    const now = new Date().toISOString();
+    const id = crypto.randomUUID();
+    await testEnv.DB.prepare(
+      `INSERT INTO households (id, name, created_at, updated_at)
+       VALUES (?, 'Preference Family', ?, ?)`,
+    )
+      .bind(id, now, now)
+      .run();
+    return id;
+  };
+
+  const insertPreference = (
+    householdId: string,
+    recipeId: string,
+    favourite: number,
+    notNowUntil: string | null,
+  ): Promise<unknown> =>
+    testEnv.DB.prepare(
+      `INSERT INTO recipe_preferences (
+         recipe_id, household_id, favourite, not_now_until, updated_at
+       ) VALUES (?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        recipeId,
+        householdId,
+        favourite,
+        notNowUntil,
+        new Date().toISOString(),
+      )
+      .run();
+
+  it('applies 0005 on top of the existing schema without altering it', async () => {
+    const tables = await testEnv.DB.prepare(
+      `SELECT name FROM sqlite_master WHERE type = 'table'
+          AND name IN ('recipes', 'recipe_preferences')
+        ORDER BY name`,
+    ).all<{ name: string }>();
+    expect(tables.results.map(({ name }) => name)).toEqual([
+      'recipe_preferences',
+      'recipes',
+    ]);
+    const indexes = await testEnv.DB.prepare(
+      `SELECT name FROM sqlite_master
+        WHERE type = 'index' AND tbl_name = 'recipe_preferences'
+          AND name NOT LIKE 'sqlite_autoindex%'`,
+    ).all<{ name: string }>();
+    expect(indexes.results.map(({ name }) => name)).toEqual([
+      'recipe_preferences_household_idx',
+    ]);
+  });
+
+  it('accepts a favourite, a Not now instant, or both, once per recipe', async () => {
+    const householdId = await seedHousehold();
+    const first = await seedRecipe(householdId, 'Soup');
+    const second = await seedRecipe(householdId, 'Stew');
+    const third = await seedRecipe(householdId, 'Bake');
+    await insertPreference(householdId, first, 1, null);
+    await insertPreference(householdId, second, 0, '2026-10-01T12:00:00.000Z');
+    await insertPreference(householdId, third, 1, '2026-10-01T12:00:00.000Z');
+    await expect(insertPreference(householdId, first, 1, null)).rejects.toThrow(
+      /UNIQUE|PRIMARY/iu,
+    );
+  });
+
+  it.each([
+    ['a favourite that is not 0 or 1', 2, null],
+    ['a row that holds no preference', 0, null],
+    ['a date without a time', 0, '2026-10-01'],
+    ['text that is not a time', 0, 'next week'],
+    ['an instant without milliseconds', 0, '2026-10-01T12:00:00Z'],
+    ['an impossible instant', 0, '2026-02-30T12:00:00.000Z'],
+  ])('rejects %s', async (_name, favourite, notNowUntil) => {
+    const householdId = await seedHousehold();
+    const recipeId = await seedRecipe(householdId, 'Soup');
+    await expect(
+      insertPreference(householdId, recipeId, favourite, notNowUntil),
+    ).rejects.toThrow(/CHECK/iu);
+  });
+
+  it('cascades from both the recipe and the household', async () => {
+    const householdId = await seedHousehold();
+    const otherId = await seedHousehold();
+    const soup = await seedRecipe(householdId, 'Soup');
+    const stew = await seedRecipe(householdId, 'Stew');
+    const theirs = await seedRecipe(otherId, 'Theirs');
+    await insertPreference(householdId, soup, 1, null);
+    await insertPreference(householdId, stew, 1, null);
+    await insertPreference(otherId, theirs, 1, null);
+
+    await testEnv.DB.prepare('DELETE FROM recipes WHERE id = ?')
+      .bind(soup)
+      .run();
+    await testEnv.DB.prepare('DELETE FROM households WHERE id = ?')
+      .bind(householdId)
+      .run();
+    const remaining = await testEnv.DB.prepare(
+      'SELECT recipe_id FROM recipe_preferences',
+    ).all<{ recipe_id: string }>();
+    expect(remaining.results).toEqual([{ recipe_id: theirs }]);
+  });
+});

@@ -45,7 +45,7 @@ export async function api<T>(
 }
 
 export const jsonMutation = (
-  method: 'POST' | 'PATCH' | 'DELETE',
+  method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   body?: unknown,
 ): RequestInit => ({
   method,

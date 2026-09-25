@@ -30,6 +30,7 @@ export const TABLES = [
   'meal_plan_entries',
   'pantry_items',
   'recipe_ingredients',
+  'recipe_preferences',
   'recipe_steps',
   'recipes',
 ];
@@ -53,6 +54,8 @@ export const installedCounts = (
   target_recipe_step_rows: 4,
   meal_plan_rows: 9,
   target_meal_plan_rows: 9,
+  recipe_preference_rows: 2,
+  target_recipe_preference_rows: 2,
   ...overrides,
 });
 
@@ -73,6 +76,8 @@ export const zeroCounts = (): HouseholdCounts => ({
   target_recipe_step_rows: 0,
   meal_plan_rows: 0,
   target_meal_plan_rows: 0,
+  recipe_preference_rows: 0,
+  target_recipe_preference_rows: 0,
 });
 
 export interface RecordedCall {

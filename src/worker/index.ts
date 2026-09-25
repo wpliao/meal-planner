@@ -36,6 +36,11 @@ import {
   type MealSuggestionsResponse,
 } from '../shared/meal-suggestions';
 import {
+  validateRecipePreferenceChange,
+  type RecipeDetailResponse,
+  type RecipePreferencesResponse,
+} from '../shared/recipe-preferences';
+import {
   validateCreateRecipe,
   validateRecipeVersion,
   validateUpdateRecipe,
@@ -71,6 +76,10 @@ import {
   updateMealPlanEntry,
 } from './data/meal-plan-repository';
 import { readSuggestionInput } from './data/meal-suggestion-repository';
+import {
+  getRecipePreferences,
+  setRecipePreference,
+} from './data/recipe-preference-repository';
 import {
   createPantryItem,
   deletePantryItem,
@@ -112,6 +121,9 @@ const PANTRY_ITEM_PATH =
   /^\/api\/pantry\/items\/([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/iu;
 const RECIPE_PATH =
   /^\/api\/recipes\/([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/iu;
+
+const RECIPE_PREFERENCES_PATH =
+  /^\/api\/recipes\/([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/preferences$/iu;
 
 const RECIPE_IMPORT_PATH = '/api/recipes/import-preview';
 const MEAL_PLAN_PATH = '/api/meal-plan';
@@ -600,6 +612,7 @@ const handleRecipe = async (
   env: AppEnv,
   recipeId: string,
   identityProvider: IdentityProvider,
+  clock: Clock,
 ): Promise<Response> => {
   if (request.method === 'GET') {
     const member = await requireMemberForRequest(
@@ -611,7 +624,15 @@ const handleRecipe = async (
     if (!recipe) {
       throw new ApiError(404, 'not_found', 'That recipe no longer exists.');
     }
-    const body: RecipeResponse = { recipe };
+    const body: RecipeDetailResponse = {
+      recipe,
+      preferences: await getRecipePreferences(
+        env.DB,
+        member.householdId,
+        recipe.id,
+        clock(),
+      ),
+    };
     return json(body);
   }
 
@@ -649,6 +670,37 @@ const handleRecipe = async (
   }
 
   throw new ApiError(404, 'not_found', 'Not found.');
+};
+
+/**
+ * `PUT /api/recipes/{id}/preferences`: sets or clears the household's
+ * favourite or "Not now" for one of its recipes (the #78 design). The recipe
+ * itself and its version are never changed.
+ */
+const handleRecipePreferences = async (
+  request: Request,
+  env: AppEnv,
+  recipeId: string,
+  identityProvider: IdentityProvider,
+  clock: Clock,
+): Promise<Response> => {
+  if (request.method !== 'PUT') {
+    throw new ApiError(404, 'not_found', 'Not found.');
+  }
+  requireMutationHeaders(request);
+  const member = await requireMemberForRequest(request, env, identityProvider);
+  const change = validateRecipePreferenceChange(await readJsonObject(request));
+  if (!change.ok) throw invalidRequest(change.message);
+  const body: RecipePreferencesResponse = {
+    preferences: await setRecipePreference(
+      env.DB,
+      member.householdId,
+      recipeId.toLowerCase(),
+      change.value,
+      clock(),
+    ),
+  };
+  return json(body);
 };
 
 // Every active member shares the plan; owner role is not required. Household
@@ -692,7 +744,7 @@ const handleMealSuggestions = async (
   );
   const body: MealSuggestionsResponse = {
     suggestions: rankMealSuggestions(
-      await readSuggestionInput(env.DB, member.householdId, date),
+      await readSuggestionInput(env.DB, member.householdId, date, clock()),
     ),
   };
   return json(body);
@@ -847,7 +899,18 @@ const route = async (
 
   const recipeMatch = RECIPE_PATH.exec(url.pathname);
   if (recipeMatch) {
-    return handleRecipe(request, env, recipeMatch[1], identityProvider);
+    return handleRecipe(request, env, recipeMatch[1], identityProvider, clock);
+  }
+
+  const preferencesMatch = RECIPE_PREFERENCES_PATH.exec(url.pathname);
+  if (preferencesMatch) {
+    return handleRecipePreferences(
+      request,
+      env,
+      preferencesMatch[1],
+      identityProvider,
+      clock,
+    );
   }
 
   if (url.pathname === MEAL_PLAN_PATH) {

@@ -168,6 +168,39 @@ decommission procedure counts the table. As with the pantry and recipes,
 deletion from the live table does not imply erasure from D1 Time Travel
 history.
 
+## Phase 5 recipe preference model
+
+[Feature #78](features/0078-recipe-preferences.md) stores the household's
+preferences about its recipes, created by
+`migrations/0005_create_recipe_preferences.sql`. The migration is additive:
+it creates one table and one index and alters nothing that exists.
+
+```text
+households (1) ──< recipe_preferences (0..1) >── (1) recipes
+                     household_id → households.id   ON DELETE CASCADE
+                     recipe_id    → recipes.id      ON DELETE CASCADE (primary key)
+```
+
+A row holds `favourite` (0 or 1), `not_now_until` (the ISO instant when "Not
+now" ends, or `NULL`), and `updated_at`. It exists only while it holds a
+preference: a `CHECK` requires `favourite = 1` or an end instant, and a second
+`CHECK` requires the instant to be in the exact form
+`strftime('%Y-%m-%dT%H:%M:%fZ')` produces, compared with `IS` so that a
+malformed value, for which `strftime()` returns `NULL`, is refused. The
+preferences belong to the household, like the pantry and the plan; the table
+records no member identity. They are household state about a recipe, not
+recipe content, so a change never touches the recipe row or its version.
+
+A foreign key cannot require the recipe's household to match the row's, so
+the Worker writes rows only through an `INSERT … SELECT` from `recipes` by both
+ID and household. Clearing the last preference deletes the row. "Not now"
+lasts exactly 7 × 24 hours from the Worker's clock. An ended "Not now" is
+ignored on every read, and every preference write removes the household's
+ended entries in the same batch. Deleting a recipe or the household deletes
+its rows; the #32 decommission procedure counts the table. As elsewhere,
+deletion from the live table does not imply erasure from D1 Time Travel
+history.
+
 ## Durable principles
 
 - D1 is authoritative for structured application data.

@@ -86,7 +86,7 @@ const recordingEnv = (): {
 };
 
 const HOUSEHOLD_TABLES =
-  /pantry_items|recipes|recipe_ingredients|meal_plan_entries/u;
+  /pantry_items|recipes|recipe_ingredients|meal_plan_entries|recipe_preferences/u;
 
 describe('meal suggestions API', () => {
   let household: string;
@@ -137,6 +137,7 @@ describe('meal suggestions API', () => {
           },
           recent: '2026-09-21',
           lastPlanned: '2026-09-21',
+          favourite: false,
         },
         {
           recipeId: teriyaki,
@@ -147,6 +148,7 @@ describe('meal suggestions API', () => {
           },
           recent: null,
           lastPlanned: null,
+          favourite: false,
         },
         {
           recipeId: bread,
@@ -154,6 +156,7 @@ describe('meal suggestions API', () => {
           pantry: { held: [], needed: [] },
           recent: null,
           lastPlanned: null,
+          favourite: false,
         },
         {
           recipeId: soup,
@@ -161,6 +164,7 @@ describe('meal suggestions API', () => {
           pantry: { held: [], needed: [] },
           recent: null,
           lastPlanned: '2026-08-20',
+          favourite: false,
         },
       ]);
     });
@@ -180,6 +184,7 @@ describe('meal suggestions API', () => {
         expect.objectContaining({
           recent: '2026-10-08',
           lastPlanned: '2026-06-30',
+          favourite: false,
         }),
       ]);
       expect(await suggestOk('2026-09-23')).toEqual([
@@ -189,6 +194,7 @@ describe('meal suggestions API', () => {
         expect.objectContaining({
           recent: '2026-10-09',
           lastPlanned: '2026-10-08',
+          favourite: false,
         }),
       ]);
     });
@@ -221,6 +227,7 @@ describe('meal suggestions API', () => {
           pantry: { held: [], needed: [] },
           recent: null,
           lastPlanned: null,
+          favourite: false,
         },
       ]);
     });
@@ -256,6 +263,7 @@ describe('meal suggestions API', () => {
           pantry: { held: [], needed: [] },
           recent: null,
           lastPlanned: null,
+          favourite: false,
         },
       ]);
     });
@@ -293,6 +301,7 @@ describe('meal suggestions API', () => {
           pantry: { held: [], needed: [] },
           recent: null,
           lastPlanned: null,
+          favourite: false,
         },
       ]);
 
@@ -319,6 +328,7 @@ describe('meal suggestions API', () => {
           },
           recent: TODAY,
           lastPlanned: null,
+          favourite: false,
         },
       ]);
     });
@@ -333,11 +343,15 @@ describe('meal suggestions API', () => {
       await seedMealPlanEntry(household, { date: TODAY, recipeId: theirs });
       const mine = await seedRecipe(household, 'Risotto');
 
-      expect(await readSuggestionInput(testEnv.DB, household, TODAY)).toEqual({
+      expect(
+        await readSuggestionInput(testEnv.DB, household, TODAY, NOW),
+      ).toEqual({
         date: TODAY,
         pantry: [],
         recipes: [{ id: mine, title: 'Risotto', ingredients: ['1 cup rice'] }],
         planned: [],
+        preferences: [],
+        now: NOW,
       });
     });
   });
@@ -426,13 +440,13 @@ describe('meal suggestions API', () => {
       expect(response.status).toBe(403);
     });
 
-    it('reads the pantry, recipes, lines, and plan in one batch', async () => {
+    it('reads the pantry, recipes, lines, plan, and preferences in one batch', async () => {
       const { env, statements, batches } = recordingEnv();
       expect((await suggest(`date=${TODAY}`, env)).status).toBe(200);
       expect(
         statements.filter((sql) => HOUSEHOLD_TABLES.test(sql)),
-      ).toHaveLength(4);
-      expect(batches).toEqual([4]);
+      ).toHaveLength(5);
+      expect(batches).toEqual([5]);
     });
 
     it("never reads another household's ingredient lines", async () => {

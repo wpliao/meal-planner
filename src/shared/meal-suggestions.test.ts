@@ -16,6 +16,7 @@ import {
 import type { PantryStatus } from './pantry';
 
 const DATE = '2026-09-24';
+const NOW = new Date(`${DATE}T12:00:00.000Z`);
 
 const item = (
   name: string,
@@ -38,7 +39,15 @@ const recipe = (
 
 const rank = (over: Partial<MealSuggestionInput>, limit?: number) =>
   rankMealSuggestions(
-    { date: DATE, pantry: [], recipes: [], planned: [], ...over },
+    {
+      date: DATE,
+      pantry: [],
+      recipes: [],
+      planned: [],
+      preferences: [],
+      now: NOW,
+      ...over,
+    },
     limit,
   );
 
@@ -160,6 +169,7 @@ describe('ranking', () => {
       pantry: { held: [], needed: [] },
       recent: null,
       lastPlanned: null,
+      favourite: false,
     });
   });
 
@@ -321,6 +331,63 @@ describe('ranking', () => {
     ).toEqual(['B planned in July', 'A planned next week']);
   });
 
+  it('ranks favourites after recency and before the last planned date', () => {
+    const plain = recipe('A plain, never planned');
+    const favourite = recipe('B favourite, planned in June');
+    const recentFavourite = recipe('C favourite, planned yesterday');
+    const matched = recipe('D plain, uses the pantry', ['rice']);
+    const result = rank({
+      pantry: [item('rice')],
+      recipes: [plain, favourite, recentFavourite, matched],
+      planned: [
+        ...plannedOn(favourite, -90),
+        ...plannedOn(recentFavourite, -1),
+      ],
+      preferences: [
+        { recipeId: favourite.id, favourite: true, notNowUntil: null },
+        { recipeId: recentFavourite.id, favourite: true, notNowUntil: null },
+      ],
+    });
+    expect(result.map(({ title }) => title)).toEqual([
+      'D plain, uses the pantry',
+      'B favourite, planned in June',
+      'A plain, never planned',
+      'C favourite, planned yesterday',
+    ]);
+    expect(result.map(({ favourite: flag }) => flag)).toEqual([
+      false,
+      true,
+      false,
+      true,
+    ]);
+  });
+
+  it('leaves out recipes under Not now before taking the first five', () => {
+    const recipes = Array.from({ length: 7 }, (_unused, index) =>
+      recipe(`Recipe ${index}`),
+    );
+    const until = (offset: number) =>
+      new Date(NOW.getTime() + offset).toISOString();
+    expect(
+      titles({
+        recipes,
+        preferences: [
+          { recipeId: recipes[0].id, favourite: false, notNowUntil: until(1) },
+          {
+            recipeId: recipes[1].id,
+            favourite: true,
+            notNowUntil: until(60_000),
+          },
+          // Ended exactly now, or earlier: no effect.
+          { recipeId: recipes[2].id, favourite: false, notNowUntil: until(0) },
+          { recipeId: recipes[3].id, favourite: false, notNowUntil: until(-1) },
+          // Unknown recipes are ignored.
+          { recipeId: 'gone', favourite: true, notNowUntil: until(1) },
+        ],
+      }),
+    ).toEqual(['Recipe 2', 'Recipe 3', 'Recipe 4', 'Recipe 5', 'Recipe 6']);
+  });
+
   it('ranks pantry matches above recency', () => {
     const planned = recipe('A planned yesterday', ['rice', 'egg', 'garlic']);
     const fresh = recipe('B never planned', ['rice', 'egg']);
@@ -415,7 +482,6 @@ describe('code point order', () => {
 });
 
 describe('suggestion query', () => {
-  const NOW = new Date(`${DATE}T12:00:00.000Z`);
   const query = (value: string) =>
     validateSuggestionQuery(new URLSearchParams(value), NOW);
 

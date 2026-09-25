@@ -25,6 +25,12 @@ interface PlannedRow {
   plan_date: string;
 }
 
+interface PreferenceRow {
+  recipe_id: string;
+  favourite: number;
+  not_now_until: string | null;
+}
+
 /**
  * Recipe entries still linked to one of the household's recipes. The join
  * repeats the household on both sides, so a recipe of another household can
@@ -39,8 +45,8 @@ const LINKED_ENTRIES = `meal_plan_entries AS entry
 
 /**
  * Everything the ranking reads for one meal date, in one batch, so the
- * pantry, the recipes, and the plan come from one consistent state (the #73
- * design). Nothing is written.
+ * pantry, the recipes, the plan, and the household's recipe preferences come
+ * from one consistent state (the #73 and #78 designs). Nothing is written.
  *
  * The plan is aggregated in SQL: each recipe's latest date before the meal,
  * plus every date it is planned within the recent window. That is all the
@@ -50,8 +56,9 @@ export const readSuggestionInput = async (
   db: D1Database,
   householdId: string,
   date: string,
+  now: Date,
 ): Promise<MealSuggestionInput> => {
-  const [pantry, recipes, ingredients, planned] = await db.batch([
+  const [pantry, recipes, ingredients, planned, preferences] = await db.batch([
     db
       .prepare(
         `SELECT display_name, status FROM pantry_items WHERE household_id = ?`,
@@ -84,6 +91,13 @@ export const readSuggestionInput = async (
         addPlanDays(date, -MEAL_SUGGESTION_RECENT_DAYS),
         addPlanDays(date, MEAL_SUGGESTION_RECENT_DAYS),
       ),
+    db
+      .prepare(
+        `SELECT recipe_id, favourite, not_now_until
+           FROM recipe_preferences
+          WHERE household_id = ?`,
+      )
+      .bind(householdId),
   ]);
 
   const lines = new Map<string, string[]>();
@@ -108,5 +122,11 @@ export const readSuggestionInput = async (
       recipeId: row.recipe_id,
       date: row.plan_date,
     })),
+    preferences: (preferences.results as PreferenceRow[]).map((row) => ({
+      recipeId: row.recipe_id,
+      favourite: row.favourite === 1,
+      notNowUntil: row.not_now_until,
+    })),
+    now,
   };
 };
