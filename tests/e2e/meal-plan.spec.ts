@@ -637,17 +637,43 @@ const localOffsetMinutes = (timeZone: string, at: number): number => {
   return match[1] === '-' ? -minutes : minutes;
 };
 
-/** The instant that is `hh:mm` local time on `date` in `timeZone`. */
+/**
+ * The instant that is `hh:mm` local time on `date` in `timeZone`. The offset is
+ * read at a first estimate and then again at the result, because a
+ * daylight-saving change between the two moves it. 00:05 on the Sunday New
+ * Zealand's clocks go forward is still at +12, though that day's UTC midnight
+ * is already at +13; reading the offset once put the clock at 23:05 on the
+ * Saturday, and a production deploy on 2026-09-25 failed on it.
+ */
 const localInstant = (
   timeZone: string,
   date: string,
   hours: number,
   minutes: number,
 ) => {
-  const guess =
+  const wallClock =
     Date.parse(`${date}T00:00:00Z`) + (hours * 60 + minutes) * 60_000;
-  return guess - localOffsetMinutes(timeZone, guess) * 60_000;
+  const estimate = wallClock - localOffsetMinutes(timeZone, wallClock) * 60_000;
+  return wallClock - localOffsetMinutes(timeZone, estimate) * 60_000;
 };
+
+test('the local clock helper holds across daylight-saving changes', () => {
+  for (const [timeZone, date, hours, minutes, expected] of [
+    // New Zealand moves forward at 02:00 on 2026-09-27.
+    ['Pacific/Auckland', '2026-09-27', 0, 5, '2026-09-26T12:05:00.000Z'],
+    ['Pacific/Auckland', '2026-09-28', 0, 5, '2026-09-27T11:05:00.000Z'],
+    // New Zealand moves back at 03:00 on 2027-04-04.
+    ['Pacific/Auckland', '2027-04-04', 0, 5, '2027-04-03T11:05:00.000Z'],
+    // Los Angeles moves back at 02:00 on 2026-11-01.
+    ['America/Los_Angeles', '2026-10-31', 23, 55, '2026-11-01T06:55:00.000Z'],
+    ['America/Los_Angeles', '2026-11-01', 23, 55, '2026-11-02T07:55:00.000Z'],
+  ] as const) {
+    expect(
+      new Date(localInstant(timeZone, date, hours, minutes)).toISOString(),
+      `${hours}:${minutes} on ${date} in ${timeZone}`,
+    ).toBe(expected);
+  }
+});
 
 for (const { timeZone, hours, minutes, meal } of [
   // Just after midnight in Auckland: UTC is still on the previous day.
