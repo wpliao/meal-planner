@@ -5,7 +5,7 @@
 - Issue: [#56](https://github.com/wpliao/meal-planner/issues/56)
 - Product owner: Repository owner
 - Last updated: 2026-09-25
-- Pull requests: [#63 — design proposal](https://github.com/wpliao/meal-planner/pull/63); [#68 — implementation](https://github.com/wpliao/meal-planner/pull/68); [#69 — time-zone test fix that unblocked the production deploy](https://github.com/wpliao/meal-planner/pull/69); [#PRn — release record](https://github.com/wpliao/meal-planner/pull/PRn)
+- Pull requests: [#63 — design proposal](https://github.com/wpliao/meal-planner/pull/63); [#68 — implementation](https://github.com/wpliao/meal-planner/pull/68); [#69 — time-zone test fix that unblocked the production deploy](https://github.com/wpliao/meal-planner/pull/69); [#70 — release record](https://github.com/wpliao/meal-planner/pull/70)
 
 ## Problem and outcome
 
