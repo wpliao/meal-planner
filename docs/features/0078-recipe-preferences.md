@@ -5,7 +5,7 @@
 - Issue: [#78](https://github.com/wpliao/meal-planner/issues/78)
 - Product owner: Repository owner
 - Last updated: 2026-09-25
-- Pull requests: [#PR1 — design proposal](https://github.com/wpliao/meal-planner/pull/PR1)
+- Pull requests: [#79 — design proposal](https://github.com/wpliao/meal-planner/pull/79)
 
 ## Problem and outcome
 
@@ -383,9 +383,9 @@ recommended option.
 
 ## Decision and change log
 
-| Date       | Change                                                                                                                                      | Reason                                                                                              | Evidence                                                                                                               |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| 2026-09-25 | Initial design proposal; status `Designing`; four decisions resolved by the owner before the design and three open. Authored by Claude Code | Second Phase 5 feature, and the follow-up the #73 design named. The owner chose F1–F4 on 2026-09-25 | [Issue #78](https://github.com/wpliao/meal-planner/issues/78); [#PR1](https://github.com/wpliao/meal-planner/pull/PR1) |
+| Date       | Change                                                                                                                                      | Reason                                                                                              | Evidence                                                                                                             |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-25 | Initial design proposal; status `Designing`; four decisions resolved by the owner before the design and three open. Authored by Claude Code | Second Phase 5 feature, and the follow-up the #73 design named. The owner chose F1–F4 on 2026-09-25 | [Issue #78](https://github.com/wpliao/meal-planner/issues/78); [#79](https://github.com/wpliao/meal-planner/pull/79) |
 
 ## Release record
 
