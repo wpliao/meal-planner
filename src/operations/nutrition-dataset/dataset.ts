@@ -106,22 +106,22 @@ export const parseDataset = (text: string): NutritionDataset => {
     unknown
   >;
   if (typeof version !== 'string' || version === '') {
-    throw new Error('The nutrition dataset has no version.');
+    throw new TypeError('The nutrition dataset has no version.');
   }
   if (
     !Array.isArray(sources) ||
     !Array.isArray(foods) ||
     !Array.isArray(portions)
   ) {
-    throw new Error(
+    throw new TypeError(
       'The nutrition dataset is missing sources, foods, or portions.',
     );
   }
   const badFood = foods.findIndex((row) => !isFood(row));
-  if (badFood !== -1) throw new Error(`Food row ${badFood} is malformed.`);
+  if (badFood !== -1) throw new TypeError(`Food row ${badFood} is malformed.`);
   const badPortion = portions.findIndex((row) => !isPortion(row));
   if (badPortion !== -1) {
-    throw new Error(`Portion row ${badPortion} is malformed.`);
+    throw new TypeError(`Portion row ${badPortion} is malformed.`);
   }
   return {
     version,
