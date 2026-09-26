@@ -59,8 +59,8 @@ consumption path exists in Phase 2; `created_source` is always `manual`.
 [Feature #31](features/0031-recipe-library.md) adds a household-owned recipe
 library, created by `migrations/0003_create_recipes.sql`. The migration is
 additive: it creates three tables and one index and alters nothing that
-exists. It is committed and applied locally and in tests; it has not been
-applied to any remote environment.
+exists. Remote environments apply it through the protected deployment
+workflow; development and production both have it.
 
 ```text
 households (1) ──< recipes (*) ──< recipe_ingredients (*)
@@ -112,8 +112,8 @@ tables does not imply erasure from D1 Time Travel history.
 [Feature #49](features/0049-meal-planning.md) adds a shared household meal
 plan, created by `migrations/0004_create_meal_plan_entries.sql`. The migration
 is additive: it creates one table and two indexes and alters nothing that
-exists. It is committed and applied locally and in tests; it has not been
-applied to any remote environment.
+exists. Remote environments apply it through the protected deployment
+workflow; development and production both have it.
 
 ```text
 households (1) ──< meal_plan_entries (*) >── (0..1) recipes
@@ -173,7 +173,9 @@ history.
 [Feature #78](features/0078-recipe-preferences.md) stores the household's
 preferences about its recipes, created by
 `migrations/0005_create_recipe_preferences.sql`. The migration is additive:
-it creates one table and one index and alters nothing that exists.
+it creates one table and one index and alters nothing that exists. Remote
+environments apply it through the protected deployment workflow;
+development and production both have it (2026-09-25).
 
 ```text
 households (1) ──< recipe_preferences (0..1) >── (1) recipes
