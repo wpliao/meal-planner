@@ -10,6 +10,48 @@
 
 Wrangler bindings are non-inheritable, so `wrangler.jsonc` repeats variables,
 D1, and R2 for each named environment. This makes accidental sharing visible.
+The `AI` binding and gateway/model variables exist only in the two named
+environments. Local has no AI binding or Gemini secret and always uses the
+deterministic fake.
+
+## AI Gateway setup for recipe nutrition
+
+Do these steps in a phone browser for **development first**, then repeat with
+separate production resources before the approved production release:
+
+1. In the [Cloudflare dashboard](https://dash.cloudflare.com/), select the
+   correct account. Open **AI > AI Gateway > Create Gateway**. Create
+   `family-meal-planner-development` or `family-meal-planner-production`,
+   matching `AI_GATEWAY_ID` in `wrangler.jsonc`. In that gateway's **Settings**,
+   turn **Authenticated Gateway** on. Turn **Request logging** off; keep
+   analytics. Do not enable stored provider keys or unified billing.
+2. In the gateway's Settings, tap **Create authentication token** with
+   **AI Gateway Run** permission and copy it to a password manager. The token
+   is shown only once. Use a separate token for each environment. The token
+   is account-scoped, so keep its access limited. Workers AI's binding is
+   preauthenticated; this token is used for the Gemini gateway request.
+3. In [Google AI Studio API keys](https://aistudio.google.com/app/apikey),
+   select or create a Google Cloud project **without billing**, then create a
+   Gemini API key. Use a different no-billing project and key for production.
+   Do not paste either key into GitHub, an issue, a PR, or chat. The configured
+   free-tier model is `gemini-3.5-flash-lite`.
+4. In Cloudflare, copy the account ID from the account overview. Open
+   **Workers & Pages > family-meal-planner-development > Settings > Variables
+   and Secrets**. Add these as encrypted **Secret** bindings:
+   `AI_GATEWAY_ACCOUNT_ID` (the account ID), `AI_GATEWAY_TOKEN` (step 2), and
+   `GEMINI_API_KEY` (step 3). Repeat for the production Worker only when its
+   rollout is approved. These are optional at deployment: Workers AI works
+   alone until all three Gemini values are set. Never add them as `VITE_*`
+   variables or plaintext bindings.
+
+The dashboard can add Worker secrets after the first deployment. The
+development Worker must be deployed from merged `main` before its new `AI`
+binding and gateway variables exist. For validation, set `WORKERS_AI_MODEL`
+to `off` in the development Worker's variables to force Gemini, then restore
+`@cf/meta/llama-3.3-70b-instruct-fp8-fast`. Set `GEMINI_FALLBACK=off` as
+well to check the unavailable path, then restore `on`. Review each dashboard
+change's resulting Worker version; never make these changes in production
+without the owner's explicit approval.
 
 ## Local
 

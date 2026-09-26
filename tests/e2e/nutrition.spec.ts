@@ -65,6 +65,10 @@ const chooseFood = async (
   food: RegExp,
 ) => {
   const lineCard = card(dialog, line);
+  const change = lineCard.getByRole('button', {
+    name: `Change food for ${line}`,
+  });
+  if (await change.isVisible()) await change.click();
   await lineCard.getByRole('textbox', { name: 'Search foods' }).fill(query);
   await lineCard.getByRole('button', { name: food }).click();
   await expect(lineCard.getByRole('textbox', { name: 'Amount' })).toBeFocused();
@@ -99,8 +103,12 @@ test('a member works out a recipe’s nutrition and checks a changed line', asyn
   const dialog = await openedDialog(page);
   const save = dialog.getByRole('button', { name: 'Save matches' });
   await expect(
-    dialog.getByText('3 left: choose a food and amount, or “Don’t count”.'),
+    dialog.getByText('Suggested by AI.', { exact: false }),
   ).toBeVisible();
+  await expect(
+    card(dialog, lines[0]).getByText('Soy sauce made from soy (tamari)'),
+  ).toBeVisible();
+  await expect(nutrition.getByTestId('nutrition-panel')).toHaveCount(0);
 
   const soy = await chooseFood(
     dialog,

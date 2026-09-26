@@ -238,7 +238,10 @@ describe('Recipe nutrition', () => {
       ],
       needsCheck: 1,
     };
-    mockFetch(() => detail(changed));
+    const fetchMock = mockFetch(
+      () => detail(changed),
+      () => jsonResponse({ recipeVersion: 1, provider: null, proposals: [] }),
+    );
     renderRecipes([detailPath]);
     expect(await screen.findByTestId('nutrition-changed')).toHaveTextContent(
       '1 ingredient changed since nutrition was checked. It isn’t counted.',
@@ -246,6 +249,10 @@ describe('Recipe nutrition', () => {
     const dialog = await openReview('Check changed lines');
     expect(within(dialog).getAllByTestId('review-line')).toHaveLength(1);
     expect(card(dialog, '600 g chicken')).toBeInTheDocument();
+    expect(sent(fetchMock, 1).body).toEqual({
+      recipeVersion: 1,
+      positions: [2],
+    });
     expect(
       within(dialog).getByText('1 other ingredient is already checked.', {
         exact: false,
@@ -254,6 +261,93 @@ describe('Recipe nutrition', () => {
   });
 
   describe('checking the matches', () => {
+    it('prefills AI proposals, while saving still requires a separate tap', async () => {
+      const fetchMock = mockFetch(
+        () => detail(NOT_WORKED_OUT),
+        () =>
+          jsonResponse({
+            recipeVersion: 1,
+            provider: 'fake',
+            proposals: [
+              {
+                position: 1,
+                fdcId: SOY.fdcId,
+                food: SOY,
+                quantity: 2,
+                unit: 'tbsp',
+              },
+            ],
+          }),
+      );
+      renderRecipes([detailPath]);
+      const dialog = await openReview('Work out nutrition');
+      expect(
+        within(card(dialog, LINES[0])).getByText(SOY.name),
+      ).toBeInTheDocument();
+      expect(
+        within(card(dialog, LINES[0])).getByTestId('review-grams'),
+      ).toHaveTextContent('= 36.5 g');
+      expect(
+        within(dialog).getByText('Suggested by AI.', { exact: false }),
+      ).toBeInTheDocument();
+      expect(sent(fetchMock, 1)).toEqual({
+        url: `${nutritionUrl}/proposals`,
+        method: 'POST',
+        body: { recipeVersion: 1, positions: [1, 2] },
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('shows the unavailable path and retries without saving', async () => {
+      const fetchMock = mockFetch(
+        () => detail(NOT_WORKED_OUT),
+        () => jsonResponse({ recipeVersion: 1, provider: null, proposals: [] }),
+        () =>
+          jsonResponse({
+            recipeVersion: 1,
+            provider: 'fake',
+            proposals: [
+              {
+                position: 1,
+                fdcId: SOY.fdcId,
+                food: SOY,
+                quantity: 2,
+                unit: 'tbsp',
+              },
+            ],
+          }),
+      );
+      renderRecipes([detailPath]);
+      const dialog = await openReview('Work out nutrition');
+      expect(
+        within(dialog).getByTestId('nutrition-ai-unavailable'),
+      ).toHaveTextContent(
+        "AI matching isn't available right now. You can choose foods yourself, or try again later.",
+      );
+      fireEvent.click(
+        within(card(dialog, LINES[1])).getByRole('checkbox', {
+          name: 'Don’t count',
+        }),
+      );
+      fireEvent.click(
+        within(dialog).getByRole('button', { name: 'Try again' }),
+      );
+      await waitFor(() =>
+        expect(
+          within(card(dialog, LINES[0])).getByText(SOY.name),
+        ).toBeInTheDocument(),
+      );
+      expect(
+        within(card(dialog, LINES[1])).getByRole('checkbox', {
+          name: 'Don’t count',
+        }),
+      ).toBeChecked();
+      expect(
+        within(dialog).queryByTestId('nutrition-ai-unavailable'),
+      ).not.toBeInTheDocument();
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    });
+
     const searchFor = (dialog: HTMLElement, legend: string, query: string) => {
       fireEvent.change(
         within(card(dialog, legend)).getByRole('textbox', {
@@ -271,6 +365,7 @@ describe('Recipe nutrition', () => {
       };
       const fetchMock = mockFetch(
         () => detail(NOT_WORKED_OUT),
+        () => jsonResponse({ recipeVersion: 1, provider: null, proposals: [] }),
         () => jsonResponse({ foods: [SOY] }),
         () => jsonResponse({ nutrition: saved }),
       );
@@ -282,7 +377,7 @@ describe('Recipe nutrition', () => {
       );
       // Save stays enabled; with lines left it points to the first of them.
       fireEvent.click(save);
-      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
       expect(
         within(card(dialog, LINES[0])).getByRole('textbox', {
           name: 'Search foods',
@@ -320,8 +415,8 @@ describe('Recipe nutrition', () => {
       expect(await screen.findByText('Nutrition saved.')).toBeInTheDocument();
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       expect(screen.getByRole('heading', { name: 'Nutrition' })).toHaveFocus();
-      expect(sent(fetchMock, 1).url).toBe('/api/nutrition/foods?q=soy%20sauce');
-      expect(sent(fetchMock, 2)).toEqual({
+      expect(sent(fetchMock, 2).url).toBe('/api/nutrition/foods?q=soy%20sauce');
+      expect(sent(fetchMock, 3)).toEqual({
         url: nutritionUrl,
         method: 'PUT',
         body: {
@@ -344,6 +439,7 @@ describe('Recipe nutrition', () => {
     it('offers only the units a food can use, and explains an amount it cannot', async () => {
       mockFetch(
         () => detail(NOT_WORKED_OUT),
+        () => jsonResponse({ recipeVersion: 1, provider: null, proposals: [] }),
         () => jsonResponse({ foods: [CHICKEN] }),
       );
       renderRecipes([detailPath]);
@@ -412,6 +508,7 @@ describe('Recipe nutrition', () => {
     it('says when search is not available', async () => {
       mockFetch(
         () => detail(NOT_WORKED_OUT),
+        () => jsonResponse({ recipeVersion: 1, provider: null, proposals: [] }),
         () => jsonResponse({ error: { code: 'x', message: 'x' } }, 503),
       );
       renderRecipes([detailPath]);

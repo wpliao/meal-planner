@@ -1,16 +1,18 @@
-import { api } from './api';
+import { api, jsonMutation } from './api';
 import {
   kilocalories,
   MAX_MATCH_GRAMS,
   MAX_MATCH_QUANTITY,
   toGrams,
   type FoodChoice,
+  type IngredientProposal,
   type MatchUnit,
   type NutrientKey,
   type NutritionLine,
   type NutritionMatchInput,
   type RecipeNutrition,
   type RecipeNutritionResponse,
+  type NutritionProposalsResponse,
 } from '../shared/nutrition';
 
 /** Reads a recipe's nutrition on its own, after a save was refused. */
@@ -22,6 +24,26 @@ export const fetchNutrition = async (
       `/api/recipes/${encodeURIComponent(recipeId)}/nutrition`,
     )
   ).nutrition;
+
+export const fetchProposals = async (
+  recipeId: string,
+  recipeVersion: number,
+  positions: number[],
+): Promise<NutritionProposalsResponse> => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 70_000);
+  try {
+    return await api<NutritionProposalsResponse>(
+      `/api/recipes/${encodeURIComponent(recipeId)}/nutrition/proposals`,
+      {
+        ...jsonMutation('POST', { recipeVersion, positions }),
+        signal: controller.signal,
+      },
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+};
 
 // ---------------------------------------------------------------------------
 // Display
@@ -85,6 +107,23 @@ export const reviewLines = (
       unit: line.match?.unit ?? 'g',
       dontCount: line.state === 'not_counted',
     }));
+
+/** Only proposals for current review lines are used; the review still confirms them. */
+export const withProposals = (
+  lines: ReviewLine[],
+  proposals: readonly IngredientProposal[],
+): ReviewLine[] =>
+  lines.map((line) => {
+    const proposal = proposals.find((item) => item.position === line.position);
+    if (!proposal?.food || !proposal.quantity || !proposal.unit) return line;
+    return {
+      ...line,
+      food: proposal.food,
+      quantity: String(proposal.quantity),
+      unit: proposal.unit,
+      dontCount: false,
+    };
+  });
 
 /**
  * A decimal amount as typed ("1.5" or "1,5"), above 0 and at most the

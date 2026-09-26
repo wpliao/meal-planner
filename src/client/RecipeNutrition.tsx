@@ -11,11 +11,15 @@ import {
   VisuallyHidden,
 } from '@mantine/core';
 import { useRef, useState } from 'react';
+import { ApiRequestError } from './api';
 import { Link } from 'react-router-dom';
 import { NutritionReview } from './NutritionReview';
 import {
   DATA_TYPE_NAMES,
   formatNutrient,
+  fetchProposals,
+  reviewLines,
+  needsCheck,
   type ReviewMode,
 } from './nutrition-client';
 import { touchLink } from './recipe-client';
@@ -25,6 +29,7 @@ import {
   type NutrientAmount,
   type NutrientKey,
   type RecipeNutrition,
+  type IngredientProposal,
 } from '../shared/nutrition';
 
 const plural = (count: number, one: string, many: string) =>
@@ -227,7 +232,7 @@ function NutritionSummary({
   onReview,
 }: Readonly<{
   nutrition: RecipeNutrition;
-  onReview: (mode: ReviewMode) => void;
+  onReview: (mode: ReviewMode, propose: boolean) => void;
 }>) {
   const notCounted = nutrition.lines.filter(
     (line) => line.state === 'not_counted',
@@ -237,7 +242,7 @@ function NutritionSummary({
       {nutrition.needsCheck > 0 && (
         <ChangedNotice
           count={nutrition.needsCheck}
-          onCheck={() => onReview('changed')}
+          onCheck={() => onReview('changed', true)}
         />
       )}
       {nutrition.totals ? (
@@ -275,7 +280,7 @@ function NutritionSummary({
       </Text>
       <Sources nutrition={nutrition} />
       <Group>
-        <Button onClick={() => onReview('all')} variant="default">
+        <Button onClick={() => onReview('all', false)} variant="default">
           Edit matches
         </Button>
       </Group>
@@ -303,14 +308,56 @@ export function RecipeNutritionSection({
   onRecipeChanged,
 }: Readonly<RecipeNutritionSectionProps>) {
   const [review, setReview] = useState<ReviewMode | null>(null);
+  const [proposals, setProposals] = useState<IngredientProposal[]>([]);
+  const [unavailable, setUnavailable] = useState(false);
+  const [working, setWorking] = useState(false);
   const [status, setStatus] = useState('');
   const heading = useRef<HTMLHeadingElement>(null);
   const trigger = useRef<HTMLElement | null>(null);
 
-  const open = (mode: ReviewMode) => {
+  const open = async (mode: ReviewMode, propose: boolean) => {
     trigger.current = document.activeElement as HTMLElement | null;
     setStatus('');
-    setReview(mode);
+    if (!propose) {
+      setProposals([]);
+      setUnavailable(false);
+      setReview(mode);
+      return;
+    }
+    setWorking(true);
+    setStatus('Matching ingredients… This can take up to 30 seconds.');
+    const positions = reviewLines(nutrition, mode)
+      .filter((line) =>
+        needsCheck(
+          nutrition.lines.find((item) => item.position === line.position)!,
+        ),
+      )
+      .map((line) => line.position);
+    try {
+      const answer = await fetchProposals(
+        recipeId,
+        nutrition.recipeVersion,
+        positions,
+      );
+      setProposals(answer.proposals ?? []);
+      setUnavailable(answer.provider === null);
+      setReview(mode);
+      setStatus('');
+    } catch (error) {
+      if (error instanceof ApiRequestError && error.status === 409) {
+        onRecipeChanged();
+        setStatus(
+          'This recipe was changed by someone else. Review its current ingredients and try again.',
+        );
+      } else {
+        setProposals([]);
+        setUnavailable(true);
+        setReview(mode);
+        setStatus('');
+      }
+    } finally {
+      setWorking(false);
+    }
   };
 
   const close = () => {
@@ -346,16 +393,25 @@ export function RecipeNutritionSection({
         {status}
       </Text>
       {nutrition.checked ? (
-        <NutritionSummary nutrition={nutrition} onReview={open} />
+        <NutritionSummary
+          nutrition={nutrition}
+          onReview={(mode, propose) => {
+            void open(mode, propose);
+          }}
+        />
       ) : (
         <Stack align="flex-start" gap="xs">
           <Text>Nutrition hasn’t been worked out for this recipe.</Text>
-          <Button onClick={() => open('all')}>Work out nutrition</Button>
+          <Button loading={working} onClick={() => void open('all', true)}>
+            Work out nutrition
+          </Button>
         </Stack>
       )}
       {review && (
         <NutritionReview
           mode={review}
+          initialProposals={proposals}
+          initialUnavailable={unavailable}
           nutrition={nutrition}
           onClose={close}
           onRecipeChanged={onRecipeChanged}

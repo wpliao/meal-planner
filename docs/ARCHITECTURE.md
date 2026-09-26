@@ -21,12 +21,15 @@ Worker routes /api/*  +  Static Assets routes
           +---- R2 (binary, future)
 ```
 
-Phase 1 adds a trusted family boundary before product data is introduced. The
-Worker validates Cloudflare Access application JWTs (or uses a deterministic
-local identity adapter), maps the verified identity to a D1 household member,
-and exposes session/bootstrap/member-management APIs. R2 remains reserved for
-future binary objects; no recipe, pantry, meal-plan, or upload workflow is in
-scope yet.
+The Worker validates Cloudflare Access application JWTs (or uses a deterministic
+local identity adapter) and rechecks active D1 membership on protected requests.
+D1 now holds household, pantry, recipe, meal-plan, and confirmed nutrition data,
+plus shared USDA reference foods. R2 remains reserved for future binary objects.
+Recipe nutrition proposals use a Worker-side provider interface: Workers AI runs
+through the environment's AI Gateway first, then Gemini through that gateway
+when enabled. Local development uses a deterministic fake. Proposals are
+ephemeral; confirmed matches and USDA data alone determine nutrition totals
+([ADR 0010](DECISIONS/0010-ai-provider-boundary.md)).
 
 ## Code boundaries
 
@@ -44,10 +47,12 @@ scope yet.
 - Cloudflare Access is the perimeter authentication barrier. The Worker is the
   application authorization boundary: it verifies the signed Access assertion,
   then re-queries active D1 membership for every protected request.
-- D1 will store structured family, pantry, recipe, plan, and nutrition references.
+- D1 stores structured family, pantry, recipe, plan, and nutrition references.
 - R2 will store original/derived images with metadata and lifecycle policy in D1.
-- AI calls will originate from the Worker, pass through AI Gateway, use an adapter
-  boundary, and return suggestions rather than authoritative nutrition facts.
+- AI calls originate from the Worker, pass through environment-specific AI
+  Gateways, use `src/worker/ai` adapters, and return suggestions rather than
+  authoritative nutrition facts. Local calls use a fake provider with no live
+  binding or key.
 
 ## Reliability and observability
 
