@@ -41,7 +41,9 @@ application behavior is a placeholder screen and health endpoint.
 6. Structured nutrition: calculate values from authoritative, cited data and
    explicit quantities rather than model-generated estimates.
 7. Bounded AI assistance: add provider-neutral suggestion or transformation
-   workflows through AI Gateway with human confirmation.
+   workflows through AI Gateway with human confirmation. Its provider
+   boundary arrives early, with the first Phase 6 feature
+   ([#84](features/0084-recipe-nutrition.md)), for ingredient matching only.
 8. Photo ingestion: propose pantry updates from images and require review before
    changing structured records.
 9. PWA and operations: add offline behavior only where consistency rules are
