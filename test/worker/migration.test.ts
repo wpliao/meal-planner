@@ -873,3 +873,204 @@ describe('recipe preference migration', () => {
     expect(remaining.results).toEqual([{ recipe_id: theirs }]);
   });
 });
+
+describe('recipe nutrition migration', () => {
+  beforeEach(applyMigrations);
+
+  const seedHousehold = async (): Promise<string> => {
+    const now = new Date().toISOString();
+    const id = crypto.randomUUID();
+    await testEnv.DB.prepare(
+      `INSERT INTO households (id, name, created_at, updated_at)
+       VALUES (?, 'Nutrition Family', ?, ?)`,
+    )
+      .bind(id, now, now)
+      .run();
+    return id;
+  };
+
+  interface MatchValues {
+    position?: number;
+    lineText?: string;
+    fdcId?: number | null;
+    quantity?: number | null;
+    unit?: string | null;
+    grams?: number | null;
+    confirmedAt?: string;
+  }
+
+  const insertMatch = (
+    householdId: string,
+    recipeId: string,
+    values: MatchValues = {},
+  ): Promise<unknown> =>
+    testEnv.DB.prepare(
+      `INSERT INTO recipe_ingredient_matches (
+         recipe_id, position, household_id, line_text, fdc_id, quantity,
+         unit, grams, confirmed_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        recipeId,
+        values.position ?? 1,
+        householdId,
+        values.lineText ?? '2 eggs',
+        values.fdcId === undefined ? 171287 : values.fdcId,
+        values.quantity === undefined ? 2 : values.quantity,
+        values.unit === undefined ? 'portion:1' : values.unit,
+        values.grams === undefined ? 100 : values.grams,
+        values.confirmedAt ?? '2026-09-26T08:00:00.000Z',
+      )
+      .run();
+
+  it('applies 0006 on top of the existing schema, adding only a nullable servings column to recipes', async () => {
+    const columns = await testEnv.DB.prepare(
+      'SELECT name, "notnull" FROM pragma_table_info(\'recipes\')',
+    ).all<{ name: string; notnull: number }>();
+    expect(columns.results.at(-1)).toEqual({ name: 'servings', notnull: 0 });
+    const tables = await testEnv.DB.prepare(
+      `SELECT name FROM sqlite_master
+        WHERE type = 'table'
+          AND (name LIKE 'nutrition%' OR name = 'recipe_ingredient_matches')
+        ORDER BY name`,
+    ).all<{ name: string }>();
+    expect(tables.results.map(({ name }) => name)).toEqual([
+      'nutrition_dataset',
+      'nutrition_food_portions',
+      'nutrition_foods',
+      'nutrition_foods_fts',
+      'nutrition_foods_fts_config',
+      'nutrition_foods_fts_data',
+      'nutrition_foods_fts_docsize',
+      'nutrition_foods_fts_idx',
+      'recipe_ingredient_matches',
+    ]);
+    const matchColumns = await testEnv.DB.prepare(
+      "SELECT name FROM pragma_table_info('recipe_ingredient_matches')",
+    ).all<{ name: string }>();
+    // No member identity is stored with a match.
+    expect(matchColumns.results.map(({ name }) => name)).toEqual([
+      'recipe_id',
+      'position',
+      'household_id',
+      'line_text',
+      'fdc_id',
+      'quantity',
+      'unit',
+      'grams',
+      'confirmed_at',
+    ]);
+  });
+
+  it('bounds servings to 1–50 or NULL', async () => {
+    const householdId = await seedHousehold();
+    const recipeId = await seedRecipe(householdId, 'Soup');
+    const setServings = (value: unknown) =>
+      testEnv.DB.prepare('UPDATE recipes SET servings = ? WHERE id = ?')
+        .bind(value, recipeId)
+        .run();
+    for (const valid of [1, 50, null]) await setServings(valid);
+    for (const invalid of [0, 51, -1]) {
+      await expect(setServings(invalid), String(invalid)).rejects.toThrow(
+        /CHECK/iu,
+      );
+    }
+    await expect(setServings('four')).rejects.toThrow(/cannot store|CHECK/iu);
+  });
+
+  it('accepts a counted match or a "Don\'t count" match, once per line', async () => {
+    const householdId = await seedHousehold();
+    const recipeId = await seedRecipe(householdId, 'Soup');
+    await insertMatch(householdId, recipeId);
+    await insertMatch(householdId, recipeId, {
+      position: 2,
+      fdcId: null,
+      quantity: null,
+      unit: null,
+      grams: null,
+    });
+    await expect(insertMatch(householdId, recipeId)).rejects.toThrow(
+      /UNIQUE|PRIMARY/iu,
+    );
+  });
+
+  it.each<[string, MatchValues]>([
+    ['a food without an amount', { quantity: null }],
+    ['a food without a unit', { unit: null }],
+    ['a food without grams', { grams: null }],
+    ['an amount without a food', { fdcId: null }],
+    ['a zero quantity', { quantity: 0 }],
+    ['a quantity over 10,000', { quantity: 10_001 }],
+    ['grams over 10,000', { grams: 10_001 }],
+    ['zero grams', { grams: 0 }],
+    ['an empty unit', { unit: '' }],
+    ['position 0', { position: 0 }],
+    ['position 101', { position: 101 }],
+    ['an empty line', { lineText: '' }],
+    ['a malformed confirmation time', { confirmedAt: 'yesterday' }],
+    ['a date without a time', { confirmedAt: '2026-09-26' }],
+  ])('refuses %s', async (_name, values) => {
+    const householdId = await seedHousehold();
+    const recipeId = await seedRecipe(householdId, 'Soup');
+    await expect(insertMatch(householdId, recipeId, values)).rejects.toThrow(
+      /CHECK/iu,
+    );
+  });
+
+  it('cascades matches from both the recipe and the household', async () => {
+    const householdId = await seedHousehold();
+    const otherId = await seedHousehold();
+    const soup = await seedRecipe(householdId, 'Soup');
+    const stew = await seedRecipe(householdId, 'Stew');
+    const theirs = await seedRecipe(otherId, 'Theirs');
+    await insertMatch(householdId, soup);
+    await insertMatch(householdId, stew);
+    await insertMatch(otherId, theirs);
+
+    await testEnv.DB.prepare('DELETE FROM recipes WHERE id = ?')
+      .bind(soup)
+      .run();
+    await testEnv.DB.prepare('DELETE FROM households WHERE id = ?')
+      .bind(householdId)
+      .run();
+    const remaining = await testEnv.DB.prepare(
+      'SELECT recipe_id FROM recipe_ingredient_matches',
+    ).all<{ recipe_id: string }>();
+    expect(remaining.results).toEqual([{ recipe_id: theirs }]);
+  });
+
+  it('bounds the reference data and cascades portions from their food', async () => {
+    const food = (fdcId: number, dataType = 'sr_legacy') =>
+      testEnv.DB.prepare(
+        `INSERT INTO nutrition_foods (fdc_id, name, data_type, category, release)
+         VALUES (?, 'Test food', ?, 'Tests', '2018-04')`,
+      )
+        .bind(fdcId, dataType)
+        .run();
+    await food(1);
+    await expect(food(2, 'branded')).rejects.toThrow(/CHECK/iu);
+    const portion = (amount: number, gramWeight: number) =>
+      testEnv.DB.prepare(
+        `INSERT INTO nutrition_food_portions (fdc_id, seq, amount, label, gram_weight)
+         VALUES (1, ?, ?, 'cup', ?)`,
+      )
+        .bind(amount * 10 + gramWeight, amount, gramWeight)
+        .run();
+    await portion(1, 240);
+    await expect(portion(0, 240)).rejects.toThrow(/CHECK/iu);
+    await expect(portion(1, 0)).rejects.toThrow(/CHECK/iu);
+    await testEnv.DB.prepare('DELETE FROM nutrition_foods').run();
+    const left = await testEnv.DB.prepare(
+      'SELECT COUNT(*) AS portions FROM nutrition_food_portions',
+    ).first<{ portions: number }>();
+    expect(left?.portions).toBe(0);
+    await expect(
+      testEnv.DB.prepare(
+        `INSERT INTO nutrition_dataset (id, version, sha256, food_count, portion_count, loaded_at)
+         VALUES (2, 'v', ?, 0, 0, 'now')`,
+      )
+        .bind('a'.repeat(64))
+        .run(),
+    ).rejects.toThrow(/CHECK/iu);
+  });
+});

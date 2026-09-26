@@ -203,6 +203,56 @@ its rows; the #32 decommission procedure counts the table. As elsewhere,
 deletion from the live table does not imply erasure from D1 Time Travel
 history.
 
+## Phase 6 nutrition model
+
+[Feature #84](features/0084-recipe-nutrition.md) adds a servings count to
+recipes, a read-only copy of USDA FoodData Central, and the household's
+confirmed ingredient matches, all in
+`migrations/0006_add_recipe_nutrition.sql`. The migration is additive: one
+nullable column and new tables, and nothing existing is rewritten.
+
+```text
+households (1) ──< recipe_ingredient_matches (0..1 per line) >── (1) recipes
+                     household_id → households.id   ON DELETE CASCADE
+                     recipe_id    → recipes.id      ON DELETE CASCADE
+                     fdc_id       ~ nutrition_foods.fdc_id (no foreign key)
+
+nutrition_dataset (1 row)   nutrition_foods (1) ──< nutrition_food_portions (*)
+                            nutrition_foods_fts (FTS5 index over food names)
+```
+
+- `recipes.servings` is a whole number from 1 to 50, or `NULL` until a member
+  sets it. It is recipe content, so changing it bumps the recipe's version.
+- **Reference data** ([ADR 0009](DECISIONS/0009-nutrition-reference-data.md)):
+  `nutrition_foods` holds each USDA food's FDC ID, name, data type
+  (`foundation` or `sr_legacy`), category, release, the eight label nutrients
+  per 100 g exactly as USDA reports them (`NULL` where USDA reports no value,
+  never zero), and the portion that gives its density.
+  `nutrition_food_portions` holds USDA's household measures and their gram
+  weights. `nutrition_foods_fts` is an external-content FTS5 index over the
+  names, and `nutrition_dataset` records the loaded file's version and
+  SHA-256. These tables are global and hold no household data. Members cannot
+  change them: `scripts/nutrition-dataset-load.ts` replaces them from the
+  committed `data/nutrition/usda-fdc.json` during Deploy, only when the file
+  changed, writing the version row last so an interrupted load is repeated.
+- **Matches** are household data: one row per ingredient line, keyed by
+  recipe and line position, holding the line's text when it was confirmed,
+  and either a food, a quantity, a unit, and the grams the Worker calculated
+  from USDA portions, or all four `NULL` for "Don't count". `CHECK`s bound
+  each value and test every column with `IS NOT NULL` first, so a `NULL`
+  can't pass a comparison. The Worker writes rows only through an
+  `INSERT … SELECT` from `recipes` by ID and household, guarded by the recipe
+  version and every submitted line's current text, so a save changes all of
+  its lines or none. A match counts only while its line still reads exactly
+  as confirmed; the next save deletes the recipe's stale rows. No member
+  identity is stored, and a match never changes the recipe or its version.
+- **Retention:** matches cascade from their recipe and their household, and
+  the household decommission procedure counts them. D1 counts a match once
+  when the household delete cascades to it through both parents (measured in
+  the Workers runtime). As with the other tables, deletion from the live table
+  does not imply erasure from D1 Time Travel history. At most 100 rows per
+  recipe, so at most 50,000 per household.
+
 ## Durable principles
 
 - D1 is authoritative for structured application data.

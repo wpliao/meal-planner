@@ -33,6 +33,17 @@ existing table, and the household decommission procedure counts it. Rolling
 back the Worker leaves the table unread; retiring it needs a forward
 migration.
 
+Migration `0006_add_recipe_nutrition.sql` adds recipe nutrition for
+[feature #84](../docs/features/0084-recipe-nutrition.md): a nullable
+`recipes.servings` column; the read-only USDA reference tables
+(`nutrition_dataset`, `nutrition_foods`, `nutrition_food_portions`, and the
+FTS5 index `nutrition_foods_fts` with its shadow tables), which Deploy fills
+with `scripts/nutrition-dataset-load.ts` after migrations; and the household's
+`recipe_ingredient_matches`, cascading from both the recipe and the household
+and counted by the household decommission procedure. It is additive. Rolling
+back the Worker leaves the new column and tables unread; retiring them needs a
+forward migration.
+
 Migrations are immutable and ordered. Test each migration against a fresh local
 D1 database, apply it to the development D1 database before any production
 rollout, and obtain explicit production approval before applying it to

@@ -18,6 +18,7 @@ const saved: Recipe = {
   notes: null,
   ingredients: ['rice'],
   steps: ['cook'],
+  servings: null,
   source: { kind: 'manual' },
   version: 2,
   createdAt: '2026-09-21T00:00:00.000Z',
@@ -94,6 +95,7 @@ describe('recipe client helpers', () => {
       notes: null,
       ingredients: ['rice'],
       steps: ['cook'],
+      servings: null,
     };
     expect(changedFields(same, saved)).toEqual([]);
     expect(
@@ -103,10 +105,11 @@ describe('recipe client helpers', () => {
           notes: 'n',
           ingredients: ['rice', 'salt'],
           steps: ['boil'],
+          servings: 4,
         },
         saved,
       ),
-    ).toEqual(['title', 'ingredients', 'steps', 'notes']);
+    ).toEqual(['title', 'ingredients', 'steps', 'notes', 'servings']);
   });
 
   it('validates and normalizes a complete form with the shared rules', () => {
@@ -116,6 +119,7 @@ describe('recipe client helpers', () => {
         ingredients: ['', ' rice '],
         steps: ['cook', ''],
         notes: '   ',
+        servings: ' 4 ',
       }),
     ).toEqual({
       ok: true,
@@ -124,9 +128,41 @@ describe('recipe client helpers', () => {
         notes: null,
         ingredients: ['rice'],
         steps: ['cook'],
+        servings: 4,
       },
     });
   });
+
+  it.each([
+    ['', null],
+    ['1', 1],
+    ['50', 50],
+  ])('reads servings %j as %s', (typed, servings) => {
+    const result = validateRecipeForm({
+      title: 'Rice',
+      ingredients: ['rice'],
+      steps: ['cook'],
+      notes: '',
+      servings: typed,
+    });
+    expect(result.ok && result.content.servings).toBe(servings);
+  });
+
+  it.each(['0', '51', '2.5', 'four', '-1', '1e1'])(
+    'refuses servings of %j with the shared message',
+    (typed) => {
+      const result = validateRecipeForm({
+        title: 'Rice',
+        ingredients: ['rice'],
+        steps: ['cook'],
+        notes: '',
+        servings: typed,
+      });
+      expect(!result.ok && result.errors.servings).toBe(
+        'Servings must be a whole number from 1 to 50.',
+      );
+    },
+  );
 
   it('reports a too-long ingredient on the visible line', () => {
     const result = validateRecipeForm({
@@ -134,6 +170,7 @@ describe('recipe client helpers', () => {
       ingredients: ['', 'x'.repeat(301)],
       steps: ['cook'],
       notes: '',
+      servings: '',
     });
     expect(result).toEqual({
       ok: false,

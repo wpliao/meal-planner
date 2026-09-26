@@ -30,6 +30,7 @@ const preview = (
     title: 'Oyakodon',
     ingredients: ['2 servings cooked rice', '½ onion', '4 large eggs'],
     steps: ['Slice the onion.', 'Simmer and cover.'],
+    servings: null,
   },
   source: {
     submittedUrl: OYAKODON,

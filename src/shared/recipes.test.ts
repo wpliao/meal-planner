@@ -316,8 +316,13 @@ describe('recipe request validation', () => {
         notes: 'Hot.',
         ingredients: ['water'],
         steps: ['Boil.'],
+        servings: null,
         source: { kind: 'manual' },
       },
+    });
+    expect(validateCreateRecipe({ ...valid, servings: 4 })).toMatchObject({
+      ok: true,
+      value: { servings: 4 },
     });
   });
 
@@ -393,9 +398,15 @@ describe('import draft truncation', () => {
         title: ' Soup ',
         ingredients: ['water', ''],
         steps: ['Boil.'],
+        servings: 4,
       }),
     ).toEqual({
-      draft: { title: 'Soup', ingredients: ['water'], steps: ['Boil.'] },
+      draft: {
+        title: 'Soup',
+        ingredients: ['water'],
+        steps: ['Boil.'],
+        servings: 4,
+      },
       notices: [],
     });
   });
@@ -412,6 +423,7 @@ describe('import draft truncation', () => {
         'z'.repeat(RECIPE_STEP_MAX_LENGTH + 1),
         'dropped',
       ],
+      servings: null,
     });
 
     expect(recipeTextLength(result.draft.title)).toBe(RECIPE_TITLE_MAX_LENGTH);

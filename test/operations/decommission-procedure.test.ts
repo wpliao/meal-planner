@@ -306,6 +306,10 @@ describe('household decommission procedure', () => {
         'recipe preferences outside the target household',
         { counts: installedCounts({ recipe_preference_rows: 3 }) },
       ],
+      [
+        'ingredient matches outside the target household',
+        { counts: installedCounts({ ingredient_match_rows: 7 }) },
+      ],
     ])('stops on %s with D1 untouched', async (_, state) => {
       const fake = withState(state);
       const { exitCode, records } = await run(fake);
@@ -617,8 +621,9 @@ describe('household decommission procedure', () => {
     it.each([
       ['only the household row', [1, 1]],
       // 1 household + 3 members + 5 pantry + 2 recipes + 7 ingredients +
-      // 4 steps + 9 meal-plan entries + 2 recipe preferences
-      ['the household and its cascaded rows', [1, 33]],
+      // 4 steps + 9 meal-plan entries + 2 recipe preferences + 6 ingredient
+      // matches
+      ['the household and its cascaded rows', [1, 39]],
     ])('accepts a batch that reports %s', async (_, changes) => {
       const { exitCode, records } = await run(
         withState({ batchChanges: changes }),
@@ -635,9 +640,10 @@ describe('household decommission procedure', () => {
       ['a partial cascade count', [1, 2]],
       ['a cascade count without the recipe rows', [1, 20]],
       ['a cascade count without the meal-plan rows', [1, 24]],
-      ['a cascade count without the recipe preferences', [1, 31]],
-      ['an extra row', [1, 34]],
-      ['two pointer rows', [2, 33]],
+      ['a cascade count without the recipe preferences', [1, 37]],
+      ['a cascade count without the ingredient matches', [1, 33]],
+      ['an extra row', [1, 40]],
+      ['two pointer rows', [2, 39]],
     ])('rejects a batch that reports %s', async (_, changes) => {
       const { exitCode, records } = await run(
         withState({ batchChanges: changes }),
@@ -747,6 +753,10 @@ describe('household decommission procedure', () => {
       [
         'remaining recipe preferences',
         { recipe_preference_rows: 1, target_recipe_preference_rows: 1 },
+      ],
+      [
+        'remaining ingredient matches',
+        { ingredient_match_rows: 1, target_ingredient_match_rows: 1 },
       ],
     ])('fails when verification finds %s', async (_, remaining) => {
       const fake = withState({

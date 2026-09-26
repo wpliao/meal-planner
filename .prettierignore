@@ -8,3 +8,6 @@ test-results
 .wrangler
 pnpm-lock.yaml
 worker-configuration.d.ts
+# Written by scripts/nutrition-dataset-build.ts, one row per line for review.
+data/nutrition/*.json
+test/fixtures/nutrition-dataset.json

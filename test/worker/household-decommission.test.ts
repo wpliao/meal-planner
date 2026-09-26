@@ -25,6 +25,7 @@ import {
   bootstrapOwner,
   fetchWorker,
   mutationInit,
+  seedIngredientMatch,
   seedMealPlanEntry,
   seedOtherHousehold,
   seedPantryItem,
@@ -53,8 +54,9 @@ const countsFor = async (householdId: string): Promise<HouseholdCounts> => {
 
 /**
  * Bootstraps the installed household through the real API, with pantry rows,
- * a recipe that has lines and a preference, and plan entries: two that name
- * the recipe and one free-text entry.
+ * a recipe that has lines, a preference, and two ingredient matches (one
+ * counted, one "Don't count"), and plan entries: two that name the recipe and
+ * one free-text entry.
  */
 const installHousehold = async (): Promise<string> => {
   const response = await bootstrapOwner();
@@ -70,6 +72,8 @@ const installHousehold = async (): Promise<string> => {
   await seedRecipePreference(householdId, recipeId, {
     notNowUntil: '2026-10-01T12:00:00.000Z',
   });
+  await seedIngredientMatch(householdId, recipeId, 1, '1 cup rice', 168877);
+  await seedIngredientMatch(householdId, recipeId, 2, '2 eggs', null);
   await seedMealPlanEntry(householdId, { date: '2026-09-24', recipeId });
   await seedMealPlanEntry(householdId, {
     date: '2026-09-25',
@@ -101,7 +105,8 @@ const allCounts = () =>
          (SELECT COUNT(*) FROM recipe_ingredients) AS ingredients,
          (SELECT COUNT(*) FROM recipe_steps) AS steps,
          (SELECT COUNT(*) FROM meal_plan_entries) AS entries,
-         (SELECT COUNT(*) FROM recipe_preferences) AS preferences`,
+         (SELECT COUNT(*) FROM recipe_preferences) AS preferences,
+         (SELECT COUNT(*) FROM recipe_ingredient_matches) AS matches`,
     )
     .first<Record<string, number>>();
 
@@ -145,6 +150,8 @@ describe('household decommission statements', () => {
       target_meal_plan_rows: 3,
       recipe_preference_rows: 1,
       target_recipe_preference_rows: 1,
+      ingredient_match_rows: 2,
+      target_ingredient_match_rows: 2,
     });
     expect(await countsFor(other.householdId)).toMatchObject({
       target_installation_rows: 0,
@@ -156,6 +163,7 @@ describe('household decommission statements', () => {
       target_recipe_step_rows: 0,
       target_meal_plan_rows: 0,
       target_recipe_preference_rows: 0,
+      target_ingredient_match_rows: 0,
     });
   });
 
@@ -191,16 +199,18 @@ describe('household decommission statements', () => {
       recipeId: otherRecipe,
     });
     await seedRecipePreference(other.householdId, otherRecipe);
+    await seedIngredientMatch(other.householdId, otherRecipe, 1, 'Water');
 
     const preflight = await countsFor(householdId);
     const results = await runBatch(householdId);
 
     // The Workers-runtime engine includes every cascaded row: 1 household,
     // 2 members, 2 pantry items, 1 recipe, 2 ingredients, 1 step, 3 plan
-    // entries, and 1 recipe preference. The preference cascades from both its
-    // household and its recipe and is counted once.
+    // entries, 1 recipe preference, and 2 ingredient matches. The preference
+    // and the matches cascade from both their household and their recipe
+    // and are each counted once.
     const [cascadeInclusive] = acceptableDeletionChanges(preflight);
-    expect(cascadeInclusive).toEqual([1, 13]);
+    expect(cascadeInclusive).toEqual([1, 15]);
     expect(results.map(({ meta }) => meta.changes)).toEqual(cascadeInclusive);
     expect(await countsFor(householdId)).toEqual({
       installation_rows: 0,
@@ -221,6 +231,8 @@ describe('household decommission statements', () => {
       target_meal_plan_rows: 0,
       recipe_preference_rows: 1,
       target_recipe_preference_rows: 0,
+      ingredient_match_rows: 1,
+      target_ingredient_match_rows: 0,
     });
     expect(await countsFor(other.householdId)).toMatchObject({
       target_household_rows: 1,
@@ -231,6 +243,7 @@ describe('household decommission statements', () => {
       target_recipe_step_rows: 1,
       target_meal_plan_rows: 1,
       target_recipe_preference_rows: 1,
+      target_ingredient_match_rows: 1,
     });
     // The other household's entry still names its own recipe.
     const survivor = await db()
@@ -254,12 +267,12 @@ describe('household decommission statements', () => {
     const results = await runBatch(householdId);
 
     // Measured: 1 household + 2 members + 2 pantry + 2 recipes +
-    // 3 ingredients + 2 steps + 6 entries + 1 preference. The five entries
-    // that named a recipe are not counted a second time for ON DELETE SET
-    // NULL, because the cascade deletes the entries before it deletes the
-    // recipes.
-    expect(results.map(({ meta }) => meta.changes)).toEqual([1, 19]);
-    expect(acceptableDeletionChanges(preflight)[0]).toEqual([1, 19]);
+    // 3 ingredients + 2 steps + 6 entries + 1 preference + 2 matches. The
+    // five entries that named a recipe are not counted a second time for ON
+    // DELETE SET NULL, because the cascade deletes the entries before it
+    // deletes the recipes.
+    expect(results.map(({ meta }) => meta.changes)).toEqual([1, 21]);
+    expect(acceptableDeletionChanges(preflight)[0]).toEqual([1, 21]);
     expect(await countsFor(householdId)).toMatchObject({
       target_household_rows: 0,
       meal_plan_rows: 0,
@@ -297,6 +310,24 @@ describe('household decommission statements', () => {
     expect(await countsFor(householdId)).toMatchObject({
       target_recipe_rows: 1,
       target_recipe_preference_rows: 1,
+    });
+  });
+
+  it('counts ingredient matches deleted with their recipe', async () => {
+    const householdId = await installHousehold();
+    const recipeId = await seedRecipe(householdId, 'Soup');
+    await seedIngredientMatch(householdId, recipeId, 1, 'Water', null);
+
+    const result = await db()
+      .prepare('DELETE FROM recipes WHERE id = ?')
+      .bind(recipeId)
+      .run();
+
+    // 1 recipe + 1 ingredient + 1 step + 1 match.
+    expect(result.meta.changes).toBe(4);
+    expect(await countsFor(householdId)).toMatchObject({
+      target_recipe_rows: 1,
+      target_ingredient_match_rows: 2,
     });
   });
 
@@ -401,6 +432,7 @@ describe('household decommission statements', () => {
       steps: 0,
       entries: 0,
       preferences: 0,
+      matches: 0,
     });
 
     // The Worker itself would offer setup again to the configured bootstrap
@@ -497,6 +529,7 @@ describe('household decommission procedure against the real schema', () => {
       steps: 0,
       entries: 0,
       preferences: 0,
+      matches: 0,
     });
     expect(lines.join('\n')).not.toMatch(
       /@example\.test|Liao Family|rice|eggs|Fry|Eat out|2026-09-2/u,

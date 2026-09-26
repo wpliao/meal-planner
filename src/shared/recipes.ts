@@ -23,6 +23,10 @@ export const RECIPE_SOURCE_PAGE_TITLE_MAX_LENGTH = 200;
 /** Bounds list size and storage cost for one household, like the pantry. */
 export const RECIPE_LIMIT = 500;
 
+/** Servings a recipe may record (#84); unset is allowed. */
+export const RECIPE_SERVINGS_MIN = 1;
+export const RECIPE_SERVINGS_MAX = 50;
+
 /**
  * Reviewed exact-host allowlist from the accepted #31 design. Hostnames are
  * matched exactly after WHATWG URL parsing; there is no suffix matching.
@@ -80,6 +84,8 @@ export interface Recipe {
   ingredients: string[];
   /** Ordered plain-text steps. */
   steps: string[];
+  /** How many servings the recipe makes, or null when not set. */
+  servings: number | null;
   source: RecipeSource;
   version: number;
   createdAt: string;
@@ -109,6 +115,8 @@ export interface CreateRecipeRequest {
   notes?: string | null;
   ingredients: string[];
   steps: string[];
+  /** Omitted means not set. */
+  servings?: number | null;
   /** Omitted means manual entry. */
   source?: RecipeSourceInput;
 }
@@ -124,6 +132,7 @@ export interface UpdateRecipeRequest {
   notes?: string | null;
   ingredients?: string[];
   steps?: string[];
+  servings?: number | null;
 }
 
 export interface DeleteRecipeRequest {
@@ -146,6 +155,7 @@ export type RecipeField =
   | 'notes'
   | 'ingredients'
   | 'steps'
+  | 'servings'
   | 'source'
   | 'version';
 
@@ -163,6 +173,7 @@ export interface RecipeContent {
   notes: string | null;
   ingredients: string[];
   steps: string[];
+  servings: number | null;
 }
 
 export type ValidRecipeSource =
@@ -185,6 +196,7 @@ export interface ValidUpdateRecipe {
   notes?: string | null;
   ingredients?: string[];
   steps?: string[];
+  servings?: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -379,6 +391,20 @@ export const validateRecipeSteps = (value: unknown): FieldResult<string[]> =>
     RECIPE_STEP_MAX_LENGTH,
   );
 
+/** Servings: a whole number from 1 to 50, or null (or absent) for not set. */
+export const validateRecipeServings = (
+  value: unknown,
+): FieldResult<number | null> => {
+  if (value === undefined || value === null) return { ok: true, value: null };
+  return Number.isInteger(value) &&
+    (value as number) >= RECIPE_SERVINGS_MIN &&
+    (value as number) <= RECIPE_SERVINGS_MAX
+    ? { ok: true, value: value as number }
+    : fail(
+        `Servings must be a whole number from ${RECIPE_SERVINGS_MIN} to ${RECIPE_SERVINGS_MAX}.`,
+      );
+};
+
 export const validateRecipeVersion = (value: unknown): FieldResult<number> =>
   typeof value === 'number' && Number.isSafeInteger(value) && value >= 1
     ? { ok: true, value }
@@ -485,6 +511,7 @@ const CREATE_FIELDS = new Set([
   'notes',
   'ingredients',
   'steps',
+  'servings',
   'source',
 ]);
 const UPDATE_FIELDS = new Set([
@@ -493,6 +520,7 @@ const UPDATE_FIELDS = new Set([
   'notes',
   'ingredients',
   'steps',
+  'servings',
 ]);
 
 const collect = <T>(
@@ -541,6 +569,11 @@ export const validateCreateRecipe = (
     validateRecipeIngredients(input.ingredients),
   );
   const steps = collect(errors, 'steps', validateRecipeSteps(input.steps));
+  const servings = collect(
+    errors,
+    'servings',
+    validateRecipeServings(input.servings),
+  );
   const source = collect(errors, 'source', validateRecipeSource(input.source));
 
   if (
@@ -549,11 +582,15 @@ export const validateCreateRecipe = (
     notes === undefined ||
     ingredients === undefined ||
     steps === undefined ||
+    servings === undefined ||
     source === undefined
   ) {
     return { ok: false, errors };
   }
-  return { ok: true, value: { title, notes, ingredients, steps, source } };
+  return {
+    ok: true,
+    value: { title, notes, ingredients, steps, servings, source },
+  };
 };
 
 /** Validates an update: version plus at least one editable field. */
@@ -586,7 +623,7 @@ export const validateUpdateRecipe = (
         {
           field: 'request',
           message:
-            'Provide version and at least one of title, notes, ingredients, or steps.',
+            'Provide version and at least one of title, notes, ingredients, steps, or servings.',
         },
       ],
     };
@@ -615,6 +652,13 @@ export const validateUpdateRecipe = (
   if (Object.hasOwn(input, 'steps')) {
     change.steps = collect(errors, 'steps', validateRecipeSteps(input.steps));
   }
+  if (Object.hasOwn(input, 'servings')) {
+    change.servings = collect(
+      errors,
+      'servings',
+      validateRecipeServings(input.servings),
+    );
+  }
 
   return errors.length > 0
     ? { ok: false, errors }
@@ -641,6 +685,8 @@ export interface RecipeDraft {
   title: string;
   ingredients: string[];
   steps: string[];
+  /** From the page's recipe yield, when it gives a servings count (#84). */
+  servings: number | null;
 }
 
 const truncateLines = (
@@ -686,6 +732,7 @@ export const truncateRecipeDraft = (
   return {
     draft: {
       title,
+      servings: draft.servings,
       ingredients: truncateLines(
         draft.ingredients,
         RECIPE_INGREDIENTS_MAX,

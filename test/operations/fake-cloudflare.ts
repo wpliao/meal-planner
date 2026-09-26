@@ -28,7 +28,16 @@ export const TABLES = [
   'household_members',
   'households',
   'meal_plan_entries',
+  'nutrition_dataset',
+  'nutrition_food_portions',
+  'nutrition_foods',
+  'nutrition_foods_fts',
+  'nutrition_foods_fts_config',
+  'nutrition_foods_fts_data',
+  'nutrition_foods_fts_docsize',
+  'nutrition_foods_fts_idx',
   'pantry_items',
+  'recipe_ingredient_matches',
   'recipe_ingredients',
   'recipe_preferences',
   'recipe_steps',
@@ -56,6 +65,8 @@ export const installedCounts = (
   target_meal_plan_rows: 9,
   recipe_preference_rows: 2,
   target_recipe_preference_rows: 2,
+  ingredient_match_rows: 6,
+  target_ingredient_match_rows: 6,
   ...overrides,
 });
 
@@ -78,6 +89,8 @@ export const zeroCounts = (): HouseholdCounts => ({
   target_meal_plan_rows: 0,
   recipe_preference_rows: 0,
   target_recipe_preference_rows: 0,
+  ingredient_match_rows: 0,
+  target_ingredient_match_rows: 0,
 });
 
 export interface RecordedCall {

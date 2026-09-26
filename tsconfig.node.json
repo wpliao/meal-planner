@@ -7,6 +7,9 @@
     "moduleResolution": "Bundler",
     "strict": true,
     "skipLibCheck": true,
+    // vitest.worker.config.ts builds the nutrition fixture with the operator
+    // loader, whose imports carry explicit .ts extensions.
+    "allowImportingTsExtensions": true,
     "noEmit": true,
     "types": ["node"]
   },
@@ -14,6 +17,9 @@
     "vite.config.ts",
     "vitest.config.ts",
     "vitest.worker.config.ts",
-    "playwright.config.ts"
+    "playwright.config.ts",
+    "src/operations/nutrition-dataset/dataset.ts",
+    "src/operations/nutrition-dataset/statements.ts",
+    "src/shared/nutrition.ts"
   ]
 }

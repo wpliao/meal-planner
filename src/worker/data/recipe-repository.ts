@@ -13,6 +13,7 @@ interface RecipeRow {
   id: string;
   title: string;
   notes: string | null;
+  servings: number | null;
   version: number;
   source_kind: RecipeSourceKind;
   source_submitted_url: string | null;
@@ -41,7 +42,7 @@ interface LineRow {
 
 type LineTable = 'recipe_ingredients' | 'recipe_steps';
 
-const RECIPE_COLUMNS = `id, title, notes, version, source_kind,
+const RECIPE_COLUMNS = `id, title, notes, servings, version, source_kind,
   source_submitted_url, source_resolved_url, source_host, source_page_title,
   source_imported_at, created_at, updated_at`;
 
@@ -80,6 +81,7 @@ const toRecipe = (
   notes: row.notes,
   ingredients: ingredients.map((line) => line.text),
   steps: steps.map((line) => line.text),
+  servings: row.servings,
   source: toSource(row),
   version: row.version,
   createdAt: row.created_at,
@@ -210,11 +212,12 @@ export const createRecipe = async (
     db
       .prepare(
         `INSERT INTO recipes (
-           id, household_id, title, notes, version, write_token, source_kind,
-           source_submitted_url, source_resolved_url, source_host,
-           source_page_title, source_imported_at, created_at, updated_at
+           id, household_id, title, notes, servings, version, write_token,
+           source_kind, source_submitted_url, source_resolved_url,
+           source_host, source_page_title, source_imported_at, created_at,
+           updated_at
          )
-         SELECT ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?
+         SELECT ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?
           WHERE (SELECT COUNT(*) FROM recipes WHERE household_id = ?)
                 < ${RECIPE_LIMIT}`,
       )
@@ -223,6 +226,7 @@ export const createRecipe = async (
         householdId,
         input.title,
         input.notes,
+        input.servings,
         writeToken,
         input.source.kind,
         website?.submittedUrl ?? null,
@@ -252,6 +256,7 @@ export const createRecipe = async (
     notes: input.notes,
     ingredients: [...input.ingredients],
     steps: [...input.steps],
+    servings: input.servings,
     source: website
       ? {
           kind: 'website',
@@ -293,6 +298,7 @@ export const updateRecipe = async (
   const writeToken = crypto.randomUUID();
   const now = new Date().toISOString();
   const hasNotes = Object.hasOwn(change, 'notes');
+  const hasServings = Object.hasOwn(change, 'servings');
 
   const statements: D1PreparedStatement[] = [
     db
@@ -300,6 +306,7 @@ export const updateRecipe = async (
         `UPDATE recipes
             SET title = COALESCE(?, title),
                 notes = CASE WHEN ? = 1 THEN ? ELSE notes END,
+                servings = CASE WHEN ? = 1 THEN ? ELSE servings END,
                 version = version + 1,
                 write_token = ?,
                 updated_at = ?
@@ -311,6 +318,8 @@ export const updateRecipe = async (
         change.title ?? null,
         hasNotes ? 1 : 0,
         change.notes ?? null,
+        hasServings ? 1 : 0,
+        change.servings ?? null,
         writeToken,
         now,
         householdId,

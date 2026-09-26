@@ -157,9 +157,12 @@ The run then performs, and logs one JSON line per step:
    migrations equal `migrations/`, that the table inventory is exactly the
    tables the procedure accounts for, and count-only checks that exactly one
    household exists, the installation pointer names the reviewed household,
-   and no member, pantry, recipe, ingredient, step, meal-plan, or recipe
-   preference row belongs to another household. It records the
-   counts and a Time Travel bookmark.
+   and no member, pantry, recipe, ingredient, step, meal-plan, recipe
+   preference, or ingredient match row belongs to another household. It
+   records the counts and a Time Travel bookmark. The USDA nutrition
+   reference tables (`nutrition_*`, including the full-text index and its
+   shadow tables) are in the inventory but hold no household data, so they
+   are not counted and the deletion leaves them.
 3. **close-access** (read-only): the checks described below.
 4. **delete**: one D1 REST request containing the two parameterized
    statements. It is sent once and never retried.
@@ -226,21 +229,21 @@ Specific cases:
   `allow`, `bypass`, or `non_identity` (Service Auth) policy from the
   application, including reusable policies attached to it, and re-dispatch.
 - **Unexpected affected-row counts.** The household delete may report either
-  `1` or `1 + members + pantry rows + recipes + ingredient lines + step lines + meal-plan entries + recipe preferences`,
+  `1` or `1 + members + pantry rows + recipes + ingredient lines + step lines + meal-plan entries + recipe preferences + ingredient matches`,
   depending on whether cascaded rows are
   counted; anything else fails. Record the reported numbers. A meal-plan
   entry that names a recipe is counted once: the household delete removes the
   entries before the recipes, so the recipes' `ON DELETE SET NULL` has no
-  entry left to update. A recipe preference cascades from both its household
-  and its recipe and is also counted once, as a Workers-runtime test
-  measures.
+  entry left to update. A recipe preference and an ingredient match each
+  cascade from both their household and their recipe and are also counted
+  once, as a Workers-runtime test measures.
 
 #### Pointer gone, household still present
 
 This is the outcome a non-atomic REST batch would leave: the first statement
 committed and the second did not. A delete-stage failure reports D1
 `unknown`, or preflight on a later run reports zero installation rows while
-the household, members, pantry, recipe, meal-plan, or recipe preference rows remain (it fails with "does not hold
+the household, members, pantry, recipe, meal-plan, recipe preference, or ingredient match rows remain (it fails with "does not hold
 exactly one installed household").
 
 - Keep Access denying and the Worker route disabled. With the pointer gone,
