@@ -47,6 +47,20 @@ do not block Wrangler deployment but cause identity-dependent APIs to fail close
 at runtime; configure them before dispatch as described in
 [environments](ENVIRONMENTS.md#phase-1-worker-configuration).
 
+### Nutrition reference data
+
+After migrations and before publishing, Deploy runs
+`scripts/nutrition-dataset-load.ts --remote`, which loads the committed
+`data/nutrition/usda-fdc.json` into the environment's D1 only when the
+database doesn't already record that file's SHA-256
+([ADR 0009](DECISIONS/0009-nutrition-reference-data.md)). It deletes the
+version row first and writes it last, then checks the full-text index and the
+counts; any failure stops the deploy before the Worker is published, and the
+next deploy loads again. A load writes about 20,000 rows, within the free
+plan's 100,000 a day. To change the dataset, run
+`node scripts/nutrition-dataset-build.ts` in the Dev Container, review the
+diff, and record the new version in the owning feature's decision log.
+
 ### Reusing CI's verification
 
 Development deploys only from `main`, and every push to `main` runs the full

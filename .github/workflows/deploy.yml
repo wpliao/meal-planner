@@ -81,6 +81,14 @@ jobs:
         run: pnpm wrangler d1 migrations apply DB --remote
         env:
           CLOUDFLARE_ENV: development
+      # The committed USDA reference data (ADR 0009), loaded only when the
+      # database doesn't already hold this exact file. It verifies itself and
+      # fails the deploy, before the Worker is published, if the load is
+      # incomplete.
+      - name: Load development nutrition reference data
+        run: node scripts/nutrition-dataset-load.ts --remote
+        env:
+          CLOUDFLARE_ENV: development
       - name: Deploy development
         run: pnpm wrangler deploy
         env:
@@ -129,6 +137,14 @@ jobs:
           CLOUDFLARE_ENV: production
       - name: Apply production D1 migrations
         run: pnpm wrangler d1 migrations apply DB --remote
+        env:
+          CLOUDFLARE_ENV: production
+      # The committed USDA reference data (ADR 0009), loaded only when the
+      # database doesn't already hold this exact file. It verifies itself and
+      # fails the deploy, before the Worker is published, if the load is
+      # incomplete.
+      - name: Load production nutrition reference data
+        run: node scripts/nutrition-dataset-load.ts --remote
         env:
           CLOUDFLARE_ENV: production
       - name: Deploy production

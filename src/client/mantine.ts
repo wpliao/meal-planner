@@ -39,6 +39,7 @@ import '@mantine/core/styles/Text.css';
 import '@mantine/core/styles/Anchor.css';
 import '@mantine/core/styles/Combobox.css';
 import '@mantine/core/styles/InlineInput.css';
+import '@mantine/core/styles/Checkbox.css';
 import '@mantine/core/styles/Badge.css';
 import '@mantine/core/styles/Button.css';
 import '@mantine/core/styles/Card.css';

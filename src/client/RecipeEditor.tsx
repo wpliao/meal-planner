@@ -35,6 +35,8 @@ import {
   RECIPE_INGREDIENT_MAX_LENGTH,
   RECIPE_INGREDIENTS_MAX,
   RECIPE_NOTES_MAX_LENGTH,
+  RECIPE_SERVINGS_MAX,
+  RECIPE_SERVINGS_MIN,
   RECIPE_STEP_MAX_LENGTH,
   RECIPE_STEPS_MAX,
   RECIPE_TITLE_MAX_LENGTH,
@@ -328,6 +330,9 @@ export function RecipeEditor({
   );
   const [steps, setSteps] = useState<Line[]>(() => toLines(initialDraft.steps));
   const [notes, setNotes] = useState(initialDraft.notes ?? '');
+  const [servings, setServings] = useState(
+    initialDraft.servings == null ? '' : String(initialDraft.servings),
+  );
   const [errors, setErrors] = useState<RecipeFormErrors>(NO_ERRORS);
   const [attempt, setAttempt] = useState(0);
   const formRef = useRef<HTMLFormElement>(null);
@@ -352,6 +357,7 @@ export function RecipeEditor({
       ingredients: ingredients.map((line) => line.text),
       steps: steps.map((line) => line.text),
       notes,
+      servings,
     });
     if (!result.ok) {
       setErrors(result.errors);
@@ -364,6 +370,7 @@ export function RecipeEditor({
 
   const problems = [
     errors.title,
+    errors.servings,
     errors.ingredients,
     ...Object.values(errors.ingredientLines),
     errors.steps,
@@ -425,6 +432,16 @@ export function RecipeEditor({
           label="Title"
           onChange={(event) => setTitle(event.currentTarget.value)}
           value={title}
+        />
+
+        <TextInput
+          description={`Optional, ${RECIPE_SERVINGS_MIN} to ${RECIPE_SERVINGS_MAX}. Nutrition is shown per serving.`}
+          error={errors.servings}
+          inputMode="numeric"
+          label="Servings"
+          onChange={(event) => setServings(event.currentTarget.value)}
+          styles={{ input: { maxWidth: '8rem' } }}
+          value={servings}
         />
 
         <LineList

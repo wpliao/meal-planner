@@ -98,10 +98,13 @@ export function RecipeBody({
   recipe,
   headingOrder = 2,
   idPrefix,
+  afterIngredients,
 }: Readonly<{
   recipe: Pick<Recipe, 'ingredients' | 'steps' | 'notes'>;
   headingOrder?: TitleOrder;
   idPrefix: string;
+  /** Shown between the ingredients and the steps, such as nutrition. */
+  afterIngredients?: ReactNode;
 }>) {
   return (
     <Stack gap="lg">
@@ -117,6 +120,7 @@ export function RecipeBody({
           ))}
         </List>
       </section>
+      {afterIngredients}
       <section aria-labelledby={`${idPrefix}-steps`}>
         <Title id={`${idPrefix}-steps`} mb="xs" order={headingOrder}>
           Steps

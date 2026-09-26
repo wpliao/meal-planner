@@ -15,5 +15,10 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["src/operations", "scripts/*.ts", "test/operations"]
+  "include": [
+    "src/operations",
+    "src/shared/nutrition.ts",
+    "scripts/*.ts",
+    "test/operations"
+  ]
 }

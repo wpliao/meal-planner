@@ -9,4 +9,6 @@ if [[ "${1:-}" == "--" ]]; then
 fi
 
 CI=true pnpm exec wrangler d1 migrations apply DB --local
+# The full USDA dataset; skipped when this exact file is already loaded.
+node scripts/nutrition-dataset-load.ts --local
 exec pnpm exec vite --host 0.0.0.0 "$@"

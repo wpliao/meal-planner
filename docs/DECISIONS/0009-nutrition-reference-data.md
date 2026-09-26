@@ -50,7 +50,7 @@ numbers:
 | Fat, total    | Total lipid (fat) (204)                                                                                                 |
 | Saturated fat | Fatty acids, total saturated (606)                                                                                      |
 | Carbohydrate  | Carbohydrate, by difference (205)                                                                                       |
-| Sugars        | Sugars, total including NLEA (269); else Sugars, total (269.3)                                                          |
+| Sugars        | Sugars, Total (269; “Total Sugars” in Foundation Foods); else Sugars, Total NLEA (269.3)                                |
 | Dietary fibre | Fiber, total dietary (291)                                                                                              |
 | Sodium        | Sodium, Na (307)                                                                                                        |
 
@@ -92,3 +92,6 @@ export` can't export FTS5 virtual tables. The project's recovery uses D1
 ## Status
 
 Accepted on 2026-09-26 with the #84 design.
+
+Corrected on 2026-09-26, at implementation: the sugar row named USDA's
+nutrients wrongly. The decision is unchanged; see the #84 decision log.

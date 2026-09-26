@@ -36,6 +36,12 @@ import {
   type MealSuggestionsResponse,
 } from '../shared/meal-suggestions';
 import {
+  foodSearchQuery,
+  validateSaveNutritionMatches,
+  type FoodSearchResponse,
+  type RecipeNutritionResponse,
+} from '../shared/nutrition';
+import {
   validateRecipePreferenceChange,
   type RecipeDetailResponse,
   type RecipePreferencesResponse,
@@ -76,6 +82,11 @@ import {
   updateMealPlanEntry,
 } from './data/meal-plan-repository';
 import { readSuggestionInput } from './data/meal-suggestion-repository';
+import {
+  readRecipeNutrition,
+  saveRecipeMatches,
+  searchFoods,
+} from './data/nutrition-repository';
 import {
   getRecipePreferences,
   setRecipePreference,
@@ -124,6 +135,10 @@ const RECIPE_PATH =
 
 const RECIPE_PREFERENCES_PATH =
   /^\/api\/recipes\/([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/preferences$/iu;
+
+const RECIPE_NUTRITION_PATH =
+  /^\/api\/recipes\/([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/nutrition$/iu;
+const NUTRITION_FOODS_PATH = '/api/nutrition/foods';
 
 const RECIPE_IMPORT_PATH = '/api/recipes/import-preview';
 const MEAL_PLAN_PATH = '/api/meal-plan';
@@ -624,6 +639,14 @@ const handleRecipe = async (
     if (!recipe) {
       throw new ApiError(404, 'not_found', 'That recipe no longer exists.');
     }
+    const nutrition = await readRecipeNutrition(
+      env.DB,
+      member.householdId,
+      recipe.id,
+    );
+    if (!nutrition) {
+      throw new ApiError(404, 'not_found', 'That recipe no longer exists.');
+    }
     const body: RecipeDetailResponse = {
       recipe,
       preferences: await getRecipePreferences(
@@ -632,6 +655,7 @@ const handleRecipe = async (
         recipe.id,
         clock(),
       ),
+      nutrition,
     };
     return json(body);
   }
@@ -701,6 +725,84 @@ const handleRecipePreferences = async (
     ),
   };
   return json(body);
+};
+
+/**
+ * `GET /api/nutrition/foods?q=`: searches the bundled USDA foods (the #84
+ * design). The foods are reference data, but the route is member-only like
+ * every other API route.
+ */
+const handleFoodSearch = async (
+  request: Request,
+  env: AppEnv,
+  identityProvider: IdentityProvider,
+): Promise<Response> => {
+  if (request.method !== 'GET') {
+    throw new ApiError(404, 'not_found', 'Not found.');
+  }
+  await requireMemberForRequest(request, env, identityProvider);
+  const query = foodSearchQuery(new URL(request.url).searchParams.get('q'));
+  if (query === null) {
+    throw invalidRequest('Search with 2 to 60 letters or numbers.');
+  }
+  const body: FoodSearchResponse = { foods: await searchFoods(env.DB, query) };
+  return json(body);
+};
+
+/**
+ * `GET` and `PUT /api/recipes/{id}/nutrition`: the recipe's nutrition, and
+ * saving a member's confirmed matches. Every value is calculated by the
+ * Worker from USDA data; a save never changes the recipe or its version.
+ */
+const handleRecipeNutrition = async (
+  request: Request,
+  env: AppEnv,
+  recipeId: string,
+  identityProvider: IdentityProvider,
+  clock: Clock,
+): Promise<Response> => {
+  if (request.method === 'GET') {
+    const member = await requireMemberForRequest(
+      request,
+      env,
+      identityProvider,
+    );
+    const nutrition = await readRecipeNutrition(
+      env.DB,
+      member.householdId,
+      recipeId.toLowerCase(),
+    );
+    if (!nutrition) {
+      throw new ApiError(404, 'not_found', 'That recipe no longer exists.');
+    }
+    const body: RecipeNutritionResponse = { nutrition };
+    return json(body);
+  }
+
+  if (request.method === 'PUT') {
+    requireMutationHeaders(request);
+    const member = await requireMemberForRequest(
+      request,
+      env,
+      identityProvider,
+    );
+    const save = validateSaveNutritionMatches(
+      await readJsonObject(request, RECIPE_MAX_JSON_BYTES),
+    );
+    if (!save.ok) throw invalidRequest(save.message);
+    const body: RecipeNutritionResponse = {
+      nutrition: await saveRecipeMatches(
+        env.DB,
+        member.householdId,
+        recipeId.toLowerCase(),
+        save.value,
+        clock(),
+      ),
+    };
+    return json(body);
+  }
+
+  throw new ApiError(404, 'not_found', 'Not found.');
 };
 
 // Every active member shares the plan; owner role is not required. Household
@@ -911,6 +1013,21 @@ const route = async (
       identityProvider,
       clock,
     );
+  }
+
+  const nutritionMatch = RECIPE_NUTRITION_PATH.exec(url.pathname);
+  if (nutritionMatch) {
+    return handleRecipeNutrition(
+      request,
+      env,
+      nutritionMatch[1],
+      identityProvider,
+      clock,
+    );
+  }
+
+  if (url.pathname === NUTRITION_FOODS_PATH) {
+    return handleFoodSearch(request, env, identityProvider);
   }
 
   if (url.pathname === MEAL_PLAN_PATH) {

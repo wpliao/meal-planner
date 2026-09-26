@@ -8,6 +8,7 @@ import {
   RECIPE_STEP_MAX_LENGTH,
   validateRecipeIngredients,
   validateRecipeNotes,
+  validateRecipeServings,
   validateRecipeSteps,
   validateRecipeTitle,
   type Recipe,
@@ -28,6 +29,7 @@ import {
   type RecipeDetailResponse,
   type RecipePreferences,
 } from '../shared/recipe-preferences';
+import type { RecipeNutrition } from '../shared/nutrition';
 
 /**
  * What the recipe form starts from: empty for a new recipe, the saved recipe
@@ -38,6 +40,7 @@ export interface RecipeEditorDraft {
   ingredients: readonly string[];
   steps: readonly string[];
   notes?: string | null;
+  servings?: number | null;
 }
 
 export type WebsiteSourceInput = Extract<
@@ -60,6 +63,7 @@ export const EMPTY_RECIPE_DRAFT: RecipeEditorDraft = {
   ingredients: [''],
   steps: [''],
   notes: '',
+  servings: null,
 };
 
 export const draftFromRecipe = (recipe: Recipe): RecipeEditorDraft => ({
@@ -67,6 +71,7 @@ export const draftFromRecipe = (recipe: Recipe): RecipeEditorDraft => ({
   ingredients: recipe.ingredients,
   steps: recipe.steps,
   notes: recipe.notes ?? '',
+  servings: recipe.servings,
 });
 
 /** Keeps a text link at least as tall as the touch-target floor. */
@@ -124,14 +129,18 @@ export const useRecipe = (id: string) => {
   const [preferences, setPreferences] = useState<RecipePreferences>(
     NO_RECIPE_PREFERENCES,
   );
+  // And its nutrition (#84); null when the response carries none.
+  const [nutrition, setNutrition] = useState<RecipeNutrition | null>(null);
 
   const load = useCallback(async () => {
     setState({ kind: 'loading' });
     try {
       const response = await api<
-        RecipeResponse & Partial<Pick<RecipeDetailResponse, 'preferences'>>
+        RecipeResponse &
+          Partial<Pick<RecipeDetailResponse, 'preferences' | 'nutrition'>>
       >(`/api/recipes/${encodeURIComponent(id)}`);
       setPreferences(response.preferences ?? NO_RECIPE_PREFERENCES);
+      setNutrition(response.nutrition ?? null);
       setState({ kind: 'ready', recipe: response.recipe });
     } catch (error: unknown) {
       setState({ kind: isNotFound(error) ? 'not-found' : 'unavailable' });
@@ -142,7 +151,15 @@ export const useRecipe = (id: string) => {
     queueMicrotask(() => void load());
   }, [load]);
 
-  return { state, setState, load, preferences, setPreferences };
+  return {
+    state,
+    setState,
+    load,
+    preferences,
+    setPreferences,
+    nutrition,
+    setNutrition,
+  };
 };
 
 // ---------------------------------------------------------------------------
@@ -261,6 +278,7 @@ export const draftFromPreview = (
   ingredients: preview.draft.ingredients,
   steps: preview.draft.steps,
   notes: '',
+  servings: preview.draft.servings,
 });
 
 /**
@@ -311,6 +329,7 @@ export const changedFields = (
     changed.push('ingredients');
   if (!same(draft.steps, current.steps)) changed.push('steps');
   if ((draft.notes ?? null) !== (current.notes ?? null)) changed.push('notes');
+  if (draft.servings !== current.servings) changed.push('servings');
   return changed;
 };
 
@@ -322,11 +341,14 @@ export interface RecipeFormValues {
   ingredients: readonly string[];
   steps: readonly string[];
   notes: string;
+  /** As typed; empty means not set. */
+  servings: string;
 }
 
 export interface RecipeFormErrors {
   title?: string;
   notes?: string;
+  servings?: string;
   ingredients?: string;
   steps?: string;
   /** Per visible line, keyed by its position in the form. */
@@ -368,6 +390,14 @@ export const validateRecipeForm = (
   const notes = validateRecipeNotes(values.notes);
   const ingredients = validateRecipeIngredients(values.ingredients);
   const steps = validateRecipeSteps(values.steps);
+  const typedServings = values.servings.trim();
+  // A whole number as typed; anything else reaches the shared check as text,
+  // which refuses it with the same message the Worker gives.
+  const servings = validateRecipeServings(
+    /^\d{1,3}$/u.test(typedServings)
+      ? Number(typedServings)
+      : typedServings || null,
+  );
 
   const errors: RecipeFormErrors = {
     ingredientLines: lineErrors(
@@ -379,6 +409,7 @@ export const validateRecipeForm = (
   };
   if (!title.ok) errors.title = title.message;
   if (!notes.ok) errors.notes = notes.message;
+  if (!servings.ok) errors.servings = servings.message;
   // A too-long line is already reported on that line.
   if (!ingredients.ok && Object.keys(errors.ingredientLines).length === 0) {
     errors.ingredients = ingredients.message;
@@ -387,7 +418,7 @@ export const validateRecipeForm = (
     errors.steps = steps.message;
   }
 
-  if (title.ok && notes.ok && ingredients.ok && steps.ok) {
+  if (title.ok && notes.ok && ingredients.ok && steps.ok && servings.ok) {
     return {
       ok: true,
       content: {
@@ -395,6 +426,7 @@ export const validateRecipeForm = (
         notes: notes.value,
         ingredients: ingredients.value,
         steps: steps.value,
+        servings: servings.value,
       },
     };
   }

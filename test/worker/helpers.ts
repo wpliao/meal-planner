@@ -5,13 +5,17 @@ import {
   type D1Migration,
 } from 'cloudflare:test';
 
-type TestEnv = Env & { TEST_MIGRATIONS: D1Migration[] };
+type TestEnv = Env & {
+  TEST_MIGRATIONS: D1Migration[];
+  TEST_NUTRITION_STATEMENTS: string[];
+};
 
 export const testEnv = env as TestEnv;
 
 export const applyMigrations = async (): Promise<void> => {
   await applyD1Migrations(testEnv.DB, testEnv.TEST_MIGRATIONS);
   await testEnv.DB.batch([
+    testEnv.DB.prepare('DELETE FROM recipe_ingredient_matches'),
     testEnv.DB.prepare('DELETE FROM recipe_preferences'),
     testEnv.DB.prepare('DELETE FROM meal_plan_entries'),
     testEnv.DB.prepare('DELETE FROM recipe_steps'),
@@ -22,6 +26,20 @@ export const applyMigrations = async (): Promise<void> => {
     testEnv.DB.prepare('DELETE FROM household_members'),
     testEnv.DB.prepare('DELETE FROM households'),
   ]);
+};
+
+/**
+ * Loads the nutrition fixture (test/fixtures/nutrition-dataset.json) with the
+ * SQL the Deploy load step runs, then checks the name index with FTS5's
+ * integrity check, as the loader does.
+ */
+export const loadNutritionFixture = async (): Promise<void> => {
+  for (const sql of testEnv.TEST_NUTRITION_STATEMENTS) {
+    await testEnv.DB.prepare(sql).run();
+  }
+  await testEnv.DB.prepare(
+    "INSERT INTO nutrition_foods_fts (nutrition_foods_fts, rank) VALUES ('integrity-check', 1)",
+  ).run();
 };
 
 /**
@@ -164,6 +182,38 @@ export const seedRecipePreference = async (
       householdId,
       (preference.favourite ?? true) ? 1 : 0,
       preference.notNowUntil ?? null,
+      new Date().toISOString(),
+    )
+    .run();
+};
+
+/**
+ * Inserts a saved ingredient match directly: a food and amount, or "Don't
+ * count" when `fdcId` is null. The food need not exist, as in production.
+ */
+export const seedIngredientMatch = async (
+  householdId: string,
+  recipeId: string,
+  position: number,
+  lineText: string,
+  fdcId: number | null = 171287,
+): Promise<void> => {
+  const counted = fdcId !== null;
+  await testEnv.DB.prepare(
+    `INSERT INTO recipe_ingredient_matches (
+       recipe_id, position, household_id, line_text, fdc_id, quantity, unit,
+       grams, confirmed_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(
+      recipeId,
+      position,
+      householdId,
+      lineText,
+      fdcId,
+      counted ? 2 : null,
+      counted ? 'portion:1' : null,
+      counted ? 100 : null,
       new Date().toISOString(),
     )
     .run();

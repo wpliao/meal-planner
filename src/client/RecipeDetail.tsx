@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, jsonMutation } from './api';
 import { AddToPlanDialog } from './MealPlanDialogs';
+import { RecipeNutritionSection } from './RecipeNutrition';
 import { instantDayLabel } from './meal-plan-client';
 import {
   notNowActive,
@@ -30,7 +31,15 @@ import {
 export function RecipeDetail() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
-  const { state, setState, load, preferences, setPreferences } = useRecipe(id);
+  const {
+    state,
+    setState,
+    load,
+    preferences,
+    setPreferences,
+    nutrition,
+    setNutrition,
+  } = useRecipe(id);
   const [notice, setNotice] = useRecipeFlash();
   const [confirming, setConfirming] = useState(false);
   const [planning, setPlanning] = useState(false);
@@ -147,6 +156,11 @@ export function RecipeDetail() {
             Entered by hand
           </Text>
         )}
+        {recipe.servings !== null && (
+          <Text c="dimmed" fz="sm">
+            Serves {recipe.servings}
+          </Text>
+        )}
         <Text c="dimmed" fz="sm">
           Last changed {new Date(recipe.updatedAt).toLocaleDateString()}
         </Text>
@@ -173,7 +187,20 @@ export function RecipeDetail() {
         </Group>
       )}
 
-      <RecipeBody idPrefix="recipe" recipe={recipe} />
+      <RecipeBody
+        afterIngredients={
+          nutrition && (
+            <RecipeNutritionSection
+              nutrition={nutrition}
+              onRecipeChanged={() => void load()}
+              onSaved={setNutrition}
+              recipeId={recipe.id}
+            />
+          )
+        }
+        idPrefix="recipe"
+        recipe={recipe}
+      />
 
       <Group gap="sm" mt="xl">
         <Button onClick={() => setPlanning(true)} ref={planTrigger}>

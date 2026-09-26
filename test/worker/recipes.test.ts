@@ -118,6 +118,7 @@ describe('recipe API', () => {
         'id',
         'ingredients',
         'notes',
+        'servings',
         'source',
         'steps',
         'title',
@@ -493,7 +494,7 @@ describe('recipe API', () => {
       ['client-supplied household_id', { ...manual, household_id: 'h' }],
       ['client-supplied version', { ...manual, version: 9 }],
       ['client-supplied timestamps', { ...manual, createdAt: 'x' }],
-      ['unknown field', { ...manual, servings: 4 }],
+      ['unknown field', { ...manual, rating: 4 }],
     ])('rejects %s on create', async (_label, body) => {
       const response = await create(body);
       expect(response.status).toBe(400);

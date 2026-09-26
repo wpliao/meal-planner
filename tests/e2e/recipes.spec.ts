@@ -13,8 +13,12 @@ import { openedDialog } from './dialog';
 const openRecipes = async (page: Page) => {
   await page.goto('/recipes');
 
+  // Wait for the session to answer: first-run setup or the library. A check
+  // that doesn't wait can run before either renders and skip setup.
   const setup = page.getByRole('heading', { name: 'Set up your family space' });
-  if (await setup.isVisible().catch(() => false)) {
+  const library = page.getByRole('heading', { level: 1, name: 'Recipes' });
+  await expect(setup.or(library)).toBeVisible();
+  if (await setup.isVisible()) {
     await page.getByLabel('Family space name').fill('E2E Family');
     await page.getByRole('button', { name: 'Create family space' }).click();
     const confirmation = await openedDialog(page);

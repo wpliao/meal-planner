@@ -8,6 +8,7 @@
  * touches the recipe or its version.
  */
 
+import type { RecipeNutrition } from './nutrition';
 import type { Recipe } from './recipes';
 
 /** How long "Not now" leaves a recipe out of suggestions. */
@@ -26,10 +27,14 @@ export const NO_RECIPE_PREFERENCES: Readonly<RecipePreferences> = {
   notNowUntil: null,
 };
 
-/** `GET /api/recipes/{id}`: the recipe and the household's preferences. */
+/**
+ * `GET /api/recipes/{id}`: the recipe, the household's preferences, and the
+ * recipe's nutrition (#84).
+ */
 export interface RecipeDetailResponse {
   recipe: Recipe;
   preferences: RecipePreferences;
+  nutrition: RecipeNutrition;
 }
 
 export interface RecipePreferencesResponse {

@@ -286,8 +286,34 @@ describe('Creating a recipe', () => {
         notes: 'Soak first.',
         ingredients: ['2 cups water', '1 cup rice'],
         steps: ['Cook the rice.'],
+        servings: null,
       },
     });
+  });
+
+  it('saves servings, and explains servings it cannot accept', async () => {
+    const created = recipe({ title: 'Rice', servings: 4 });
+    const fetchMock = mockFetch(
+      () => jsonResponse({ recipe: created }, 201),
+      () => jsonResponse({ recipe: created }),
+    );
+    renderRecipes(['/recipes/new']);
+
+    fillMinimalRecipe();
+    type('Servings', '60');
+    click('Save recipe');
+    expect(
+      await screen.findAllByText(
+        'Servings must be a whole number from 1 to 50.',
+      ),
+    ).not.toHaveLength(0);
+    expect(screen.getByRole('textbox', { name: 'Servings' })).toHaveFocus();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    type('Servings', '4');
+    click('Save recipe');
+    await screen.findByText('“Rice” was saved to the family recipes.');
+    expect(sent(fetchMock, 0).body).toMatchObject({ servings: 4 });
   });
 
   it('keeps everything typed when the server refuses the save', async () => {
@@ -413,6 +439,7 @@ describe('Reviewing an imported draft', () => {
       notes: null,
       ingredients: ['1 cup rice'],
       steps: ['Cook.'],
+      servings: null,
       source: importContext.source,
     });
   });
@@ -475,6 +502,7 @@ describe('Editing a recipe', () => {
         notes: null,
         ingredients: current.ingredients,
         steps: current.steps,
+        servings: null,
       },
     });
   });

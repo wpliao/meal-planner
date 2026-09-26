@@ -41,6 +41,7 @@ tests/e2e/            Playwright browser tests
 docs/                 Product and engineering documentation
 docs/features/        Versioned feature designs and traceability records
 migrations/           Ordered, immutable D1 migrations
+data/                 Committed reference data, such as the USDA nutrition dataset
 scripts/              Cross-environment repository scripts
 .github/workflows/    CI and manually gated deployments
 .devcontainer/        Reproducible development environment

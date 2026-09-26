@@ -26,8 +26,10 @@ export const DELETE_INSTALLATION_POINTER_SQL = `DELETE FROM app_installation
 
 /**
  * Removes the reviewed household, which cascades to its members, pantry
- * rows, meal-plan entries, recipe preferences, and recipes, and from each
- * recipe to its ingredient and step lines and its preferences. It only matches while no installation pointer remains, so it deletes
+ * rows, meal-plan entries, recipe preferences, ingredient matches, and
+ * recipes, and from each recipe to its ingredient and step lines, its
+ * preferences, and its ingredient matches. It only matches while no
+ * installation pointer remains, so it deletes
  * nothing when the first statement matched no row because the pointer names a
  * different household. On its own, the `ON DELETE RESTRICT` foreign key also
  * blocks deleting a household that the pointer still references.
@@ -70,7 +72,9 @@ export const HOUSEHOLD_COUNTS_SQL = `SELECT
   (SELECT COUNT(*) FROM meal_plan_entries) AS meal_plan_rows,
   (SELECT COUNT(*) FROM meal_plan_entries WHERE household_id = ?1) AS target_meal_plan_rows,
   (SELECT COUNT(*) FROM recipe_preferences) AS recipe_preference_rows,
-  (SELECT COUNT(*) FROM recipe_preferences WHERE household_id = ?1) AS target_recipe_preference_rows`;
+  (SELECT COUNT(*) FROM recipe_preferences WHERE household_id = ?1) AS target_recipe_preference_rows,
+  (SELECT COUNT(*) FROM recipe_ingredient_matches) AS ingredient_match_rows,
+  (SELECT COUNT(*) FROM recipe_ingredient_matches WHERE household_id = ?1) AS target_ingredient_match_rows`;
 
 export const householdCountsStatement = (
   householdId: string,
@@ -95,6 +99,8 @@ export const COUNT_FIELDS = [
   'target_meal_plan_rows',
   'recipe_preference_rows',
   'target_recipe_preference_rows',
+  'ingredient_match_rows',
+  'target_ingredient_match_rows',
 ] as const;
 
 export type CountField = (typeof COUNT_FIELDS)[number];
@@ -115,8 +121,9 @@ export type HouseholdCounts = Record<CountField, number>;
  * no entry left to update; a Workers-runtime test measures exactly this. (A
  * recipe deleted on its own does count each entry it sets to null.)
  *
- * A recipe preference cascades from both its household and its recipe, and
- * is still counted once, as one deleted row; the same test measures this.
+ * A recipe preference and an ingredient match each cascade from both their
+ * household and their recipe, and are still counted once, as one deleted
+ * row; the same test measures this.
  */
 export const acceptableDeletionChanges = (
   counts: HouseholdCounts,
@@ -130,7 +137,8 @@ export const acceptableDeletionChanges = (
       counts.target_recipe_ingredient_rows +
       counts.target_recipe_step_rows +
       counts.target_meal_plan_rows +
-      counts.target_recipe_preference_rows,
+      counts.target_recipe_preference_rows +
+      counts.target_ingredient_match_rows,
   ],
   [1, 1],
 ];
@@ -154,6 +162,10 @@ export const TABLE_INVENTORY_SQL = `SELECT name FROM sqlite_master
  * adds a table makes the preflight refuse until this list and the counts
  * above are extended to cover it. The Workers-runtime
  * tests compare this list with the real migrated schema.
+ *
+ * The `nutrition_*` tables, including the full-text index and its shadow
+ * tables, are global USDA reference data (ADR 0009). They hold no household
+ * data, so they are listed but not counted, and a deletion leaves them.
  */
 export const EXPECTED_TABLES: readonly string[] = [
   'app_installation',
@@ -161,7 +173,16 @@ export const EXPECTED_TABLES: readonly string[] = [
   'household_members',
   'households',
   'meal_plan_entries',
+  'nutrition_dataset',
+  'nutrition_food_portions',
+  'nutrition_foods',
+  'nutrition_foods_fts',
+  'nutrition_foods_fts_config',
+  'nutrition_foods_fts_data',
+  'nutrition_foods_fts_docsize',
+  'nutrition_foods_fts_idx',
   'pantry_items',
+  'recipe_ingredient_matches',
   'recipe_ingredients',
   'recipe_preferences',
   'recipe_steps',

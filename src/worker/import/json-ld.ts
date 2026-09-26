@@ -3,17 +3,24 @@
  *
  * Only schema.org `Recipe` objects are read, as the accepted #31 design
  * decided: no microdata, no heuristic scraping, no AI. Each script's text is
- * handed to `JSON.parse` and never evaluated, and only three properties are
- * looked at — `name`, `recipeIngredient`, and `recipeInstructions`. Yield,
- * times, images, ratings, nutrition, and author are ignored on purpose, so a
- * page cannot smuggle anything else into the family's library.
+ * handed to `JSON.parse` and never evaluated, and only four properties are
+ * looked at — `name`, `recipeIngredient`, `recipeInstructions`, and (for a
+ * servings count only, #84) `recipeYield`. Times, images, ratings,
+ * nutrition, and author are ignored on purpose, so a page cannot smuggle
+ * anything else into the family's library. A page's nutrition claims are
+ * never read: values come only from USDA data (ADR 0009).
  *
  * Everything that comes out is plain text: tags are stripped, entities are
  * decoded once, and `cleanRecipeLine` removes control characters and collapses
  * whitespace. The client renders it as text, never as markup.
  */
 
-import { cleanRecipeLine, type RecipeDraft } from '../../shared/recipes';
+import {
+  cleanRecipeLine,
+  RECIPE_SERVINGS_MAX,
+  RECIPE_SERVINGS_MIN,
+  type RecipeDraft,
+} from '../../shared/recipes';
 
 /**
  * A page is bounded to 2 MiB, so a hostile document could still hold a great
@@ -219,6 +226,29 @@ const collectSteps = (value: unknown, out: string[], depth = 0): void => {
   if (items !== undefined) collectSteps(items, out, depth + 1);
 };
 
+/**
+ * Servings from `recipeYield` (decision 6 of the #84 design): the first yield
+ * that begins with a whole number from 1 to 50 ("4", 4, "4 servings"), else
+ * null. "Serves 4" and "1.5 litres" give nothing.
+ */
+export const servingsFromYield = (value: unknown, depth = 0): number | null => {
+  if (depth > MAX_DEPTH) return null;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const servings = servingsFromYield(item, depth + 1);
+      if (servings !== null) return servings;
+    }
+    return null;
+  }
+  const text = typeof value === 'number' ? String(value) : firstString(value);
+  const match = text === null ? null : /^\s*(\d{1,3})(?![\d.,])/u.exec(text);
+  if (!match) return null;
+  const servings = Number(match[1]);
+  return servings >= RECIPE_SERVINGS_MIN && servings <= RECIPE_SERVINGS_MAX
+    ? servings
+    : null;
+};
+
 const plainLines = (values: readonly string[]): string[] =>
   values.map(htmlToPlainText).filter((line) => line.length > 0);
 
@@ -257,7 +287,12 @@ export const extractRecipeDraft = (
       if (title.length === 0 || ingredients.length === 0 || steps.length === 0)
         continue;
 
-      return { title, ingredients, steps };
+      return {
+        title,
+        ingredients,
+        steps,
+        servings: servingsFromYield(node.recipeYield),
+      };
     }
   }
   return null;

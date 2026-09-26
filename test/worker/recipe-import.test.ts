@@ -13,6 +13,7 @@ import {
   importRecipePreview,
   type ImportFetch,
 } from '../../src/worker/import/recipe-import';
+import { servingsFromYield } from '../../src/worker/import/json-ld';
 import { createWorker } from '../../src/worker/index';
 import {
   applyMigrations,
@@ -124,6 +125,8 @@ describe('recipe import adapter', () => {
           'Pour the beaten eggs over the chicken and cover.',
           'Serve over rice.',
         ],
+        // "2 donburi bowls" begins with a whole number (#84).
+        servings: 2,
       });
       expect(preview.notices).toEqual([]);
       expect(preview.source).toEqual({
@@ -134,7 +137,7 @@ describe('recipe import adapter', () => {
       });
     });
 
-    it('ignores yield, times, images, ratings, nutrition, and author', async () => {
+    it('ignores times, images, ratings, nutrition, and author, and keeps only a number from the yield', async () => {
       const preview = await importOk(oneOf(SIMPLE_RECIPE_PAGE));
       const everything = JSON.stringify(preview);
 
@@ -272,6 +275,7 @@ describe('recipe import adapter', () => {
         title: 'The real one',
         ingredients: ['1 cup rice'],
         steps: ['Cook the rice.'],
+        servings: null,
       });
     });
 
@@ -292,6 +296,31 @@ describe('recipe import adapter', () => {
       // Control characters are removed and whitespace runs collapse.
       expect(preview.draft.ingredients).toEqual(['1 cup rice']);
       expect(preview.draft.steps).toEqual(['Cook it.']);
+    });
+  });
+
+  describe('servings from the recipe yield', () => {
+    it.each<[unknown, number | null]>([
+      ['4', 4],
+      [4, 4],
+      ['4 servings', 4],
+      [' 6 people', 6],
+      ['4-6 servings', 4],
+      [['1 loaf', '12 slices'], 1],
+      [['a family', '8 portions'], 8],
+      [{ '@value': '3' }, 3],
+      ['50', 50],
+      ['Serves 4', null],
+      ['1.5 litres', null],
+      ['12,5', null],
+      ['0', null],
+      ['51 cookies', null],
+      ['1000', null],
+      [4.5, null],
+      [null, null],
+      [{}, null],
+    ])('reads %j as %s', (value, servings) => {
+      expect(servingsFromYield(value)).toBe(servings);
     });
   });
 

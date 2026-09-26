@@ -296,6 +296,7 @@ const RECIPE = {
     'Whisk the soy sauce and honey together.',
     'Marinate the chicken for 20 minutes, then grill until cooked through, brushing with the glaze.',
   ],
+  servings: 4,
   source: {
     kind: 'website',
     submittedUrl: 'https://www.justonecookbook.com/soy-chicken/',
@@ -307,6 +308,92 @@ const RECIPE = {
   version: 1,
   createdAt: '2026-01-15T00:00:00.000Z',
   updatedAt: '2026-01-15T00:00:00.000Z',
+};
+
+const SOY_SAUCE = {
+  fdcId: 174278,
+  name: 'Soy sauce made from soy (tamari)',
+  category: 'Legumes and Legume Products',
+  dataType: 'sr_legacy',
+  portions: [
+    { seq: 1, amount: 1, label: 'tbsp', gramWeight: 18 },
+    { seq: 2, amount: 1, label: 'tsp', gramWeight: 6 },
+  ],
+  volumeSeq: 1,
+};
+
+const HONEY = {
+  fdcId: 169640,
+  name: 'Honey',
+  category: 'Sweets',
+  dataType: 'sr_legacy',
+  portions: [{ seq: 1, amount: 1, label: 'tbsp', gramWeight: 21 }],
+  volumeSeq: 1,
+};
+
+const source = (food: typeof SOY_SAUCE) => ({
+  fdcId: food.fdcId,
+  name: food.name,
+  dataType: 'sr_legacy',
+  release: '2018-04',
+  url: `https://fdc.nal.usda.gov/food-details/${food.fdcId}/nutrients`,
+});
+
+/** Two lines counted, the chicken changed since the check (#84). */
+const NUTRITION = {
+  recipeVersion: 1,
+  servings: 4,
+  lines: [
+    {
+      position: 1,
+      text: RECIPE.ingredients[0],
+      state: 'counted',
+      match: {
+        food: SOY_SAUCE,
+        quantity: 2,
+        unit: 'tbsp',
+        unitLabel: 'tbsp',
+        grams: 36.5,
+      },
+    },
+    {
+      position: 2,
+      text: RECIPE.ingredients[1],
+      state: 'counted',
+      match: {
+        food: HONEY,
+        quantity: 1,
+        unit: 'tbsp',
+        unitLabel: 'tbsp',
+        grams: 21.3,
+      },
+    },
+    { position: 3, text: RECIPE.ingredients[2], state: 'changed', match: null },
+  ],
+  checked: true,
+  needsCheck: 1,
+  counted: 2,
+  totals: {
+    energyKj: { value: 358.9, missingFrom: [] },
+    proteinG: { value: 3.9, missingFrom: [] },
+    fatG: { value: 0.04, missingFrom: [] },
+    saturatedFatG: { value: 0.004, missingFrom: [] },
+    carbohydrateG: { value: 19.6, missingFrom: [] },
+    sugarsG: { value: 18.1, missingFrom: [] },
+    fibreG: { value: 0.3, missingFrom: ['Honey'] },
+    sodiumMg: { value: 2040.7, missingFrom: [] },
+  },
+  perServing: {
+    energyKj: 89.7,
+    proteinG: 0.98,
+    fatG: 0.01,
+    saturatedFatG: 0.001,
+    carbohydrateG: 4.9,
+    sugarsG: 4.5,
+    fibreG: 0.08,
+    sodiumMg: 510.2,
+  },
+  sources: [source(SOY_SAUCE), source(HONEY)],
 };
 
 const RECIPES = {
@@ -348,6 +435,7 @@ const stubRecipes = async (page: Page, path: string, heading: string) => {
           favourite: true,
           notNowUntil: '2099-01-02T12:00:00.000Z',
         },
+        nutrition: NUTRITION,
       }),
     }),
   );
@@ -389,6 +477,14 @@ test('recipe detail', async ({ page }) => {
   await expect(recipePanel(page)).toHaveScreenshot('recipe-detail.png');
 });
 
+test('recipe nutrition review', async ({ page }) => {
+  await stubRecipes(page, `/recipes/${RECIPE_ID}`, RECIPE.title);
+  await page.getByRole('button', { name: 'Edit matches' }).click();
+  const review = await openedDialog(page);
+  await expect(review.getByTestId('review-line')).toHaveCount(3);
+  await expect(review).toHaveScreenshot('recipe-nutrition-review.png');
+});
+
 test('recipe editor', async ({ page }) => {
   await stubRecipes(
     page,
@@ -411,6 +507,10 @@ test('recipe screens meet WCAG AA contrast, including field errors', async ({
   await expect(
     page.getByRole('heading', { level: 1, name: RECIPE.title }),
   ).toBeVisible();
+  await page.getByText('Sources (2)').click();
+  await assertTextContrast(page);
+  await page.getByRole('button', { name: 'Edit matches' }).click();
+  await openedDialog(page);
   await assertTextContrast(page);
 
   await page.goto('/recipes/new');
@@ -442,6 +542,21 @@ test('every Mantine component on the recipe screens has its stylesheet', async (
   const deletion = await openedDialog(page);
   await assertEveryMantineClassIsStyled(page);
   await deletion.getByRole('button', { name: 'Cancel' }).click();
+
+  await page.route('**/api/nutrition/foods*', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ foods: [SOY_SAUCE, HONEY] }),
+    }),
+  );
+  await page.getByRole('button', { name: 'Check changed lines' }).click();
+  const review = await openedDialog(page);
+  await review.getByRole('textbox', { name: 'Search foods' }).fill('soy');
+  await expect(
+    review.getByRole('button', { name: /^Soy sauce made from soy/u }),
+  ).toBeVisible();
+  await assertEveryMantineClassIsStyled(page);
+  await review.getByRole('button', { name: 'Cancel' }).click();
 
   await page.goto('/recipes/new');
   await page.getByRole('button', { name: 'Save recipe' }).click();
