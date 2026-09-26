@@ -99,7 +99,7 @@ const isPortion = (row: unknown): row is DatasetPortion =>
 export const parseDataset = (text: string): NutritionDataset => {
   const value: unknown = JSON.parse(text);
   if (value === null || typeof value !== 'object') {
-    throw new Error('The nutrition dataset is not an object.');
+    throw new TypeError('The nutrition dataset is not an object.');
   }
   const { version, sources, foods, portions } = value as Record<
     string,

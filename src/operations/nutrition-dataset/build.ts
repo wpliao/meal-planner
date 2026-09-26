@@ -178,7 +178,8 @@ const readPortions = (
     const amount = Number(row.amount);
     const gramWeight = Number(row.gram_weight);
     const label = portionLabel(row, units);
-    if (!(amount > 0) || !(gramWeight > 0) || label === '') continue;
+    const positive = (value: number) => Number.isFinite(value) && value > 0;
+    if (!positive(amount) || !positive(gramWeight) || label === '') continue;
     const list = byFood.get(row.fdc_id) ?? [];
     list.push({
       order: Number(row.id),
@@ -200,9 +201,25 @@ const numberPortions = (rows: PortionRow[]): PortionRow[] =>
       a.order - b.order,
   );
 
-/** A volume label with nothing else, such as "tbsp" or "fl oz". */
-const PLAIN_VOLUME =
-  /^(?:cups?|tbsp|tablespoons?|tsp|teaspoons?|fl\.? ?oz|ml|millilit(?:er|re)s?)$/u;
+/** Volume labels with nothing else, such as "tbsp" or "fl oz". */
+const PLAIN_VOLUMES: ReadonlySet<string> = new Set([
+  'cup',
+  'cups',
+  'tbsp',
+  'tablespoon',
+  'tablespoons',
+  'tsp',
+  'teaspoon',
+  'teaspoons',
+  'fl oz',
+  'fl. oz',
+  'floz',
+  'ml',
+  'milliliter',
+  'milliliters',
+  'millilitre',
+  'millilitres',
+]);
 
 /**
  * The portion that gives a food its density: the first plain volume measure
@@ -211,7 +228,7 @@ const PLAIN_VOLUME =
  */
 const volumeSeq = (rows: readonly PortionRow[]): number | null => {
   const labels = rows.map((row) => row.label.trim().toLowerCase());
-  const plain = labels.findIndex((label) => PLAIN_VOLUME.test(label));
+  const plain = labels.findIndex((label) => PLAIN_VOLUMES.has(label));
   if (plain !== -1) return plain + 1;
   const any = labels.findIndex((label) => usVolumeMillilitres(label) !== null);
   return any === -1 ? null : any + 1;

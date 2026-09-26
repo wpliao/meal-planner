@@ -40,12 +40,20 @@ describe('CSV', () => {
     ]);
   });
 
+  it('reads a trailing comma as a last, empty field', () => {
+    expect(parseCsv('a,b\n1,')).toEqual([{ a: '1', b: '' }]);
+  });
+
   it('refuses a row whose field count differs from the header', () => {
     expect(() => parseCsv('a,b\n1,2,3\n')).toThrow(/3 fields/u);
   });
 
   it('refuses text that ends inside a quote', () => {
     expect(() => parseCsv('a\n"open\n')).toThrow(/quoted/u);
+  });
+
+  it('refuses text after a closing quote', () => {
+    expect(() => parseCsv('a,b\n"x"y,1\n')).toThrow(/after a closing quote/u);
   });
 });
 

@@ -87,7 +87,11 @@ const openPlan = async (page: Page, path: string) => {
   await expect(
     page.getByRole('heading', { level: 1, name: 'Plan' }),
   ).toBeVisible();
-  await expect(page.getByTestId('plan-days')).toBeVisible();
+  // The week arrives from the API after the heading, still part of the
+  // first render, so it gets the same page-load budget.
+  await expect(page.getByTestId('plan-days')).toBeVisible({
+    timeout: FIRST_RENDER_TIMEOUT,
+  });
 };
 
 const day = (page: Page, date: string) =>

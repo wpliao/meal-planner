@@ -104,10 +104,15 @@ function FoodSearch({
       <Text aria-live="polite" c="dimmed" component="output" fz="sm">
         {status}
       </Text>
-      <Stack gap={4} id={listId} role="list">
+      <Stack
+        component="ul"
+        gap={4}
+        id={listId}
+        style={{ listStyle: 'none', margin: 0, padding: 0 }}
+      >
         {shown?.kind === 'done' &&
           shown.foods.map((food) => (
-            <div key={food.fdcId} role="listitem">
+            <li key={food.fdcId}>
               <UnstyledButton
                 onClick={() => onChoose(food)}
                 style={RESULT_STYLE}
@@ -117,7 +122,7 @@ function FoodSearch({
                   {food.category}
                 </Text>
               </UnstyledButton>
-            </div>
+            </li>
           ))}
       </Stack>
       {onKeep && (
