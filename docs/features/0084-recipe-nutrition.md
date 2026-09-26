@@ -1,6 +1,6 @@
 # Feature: Recipe nutrition with AI-proposed ingredient matches
 
-- Status: Designing
+- Status: Accepted
 - Phase: 6 — structured nutrition (with the Phase 7 AI provider boundary)
 - Issue: [#84](https://github.com/wpliao/meal-planner/issues/84)
 - Product owner: Repository owner
@@ -34,12 +34,13 @@ This is the first Phase 6 feature. It also brings forward the foundation of
 Phase 7: a provider-neutral AI boundary through Cloudflare AI Gateway, whose
 only use here is ingredient matching. The owner settled ten choices on
 2026-09-26, before this design, recorded under
-[Resolved design decisions](#resolved-design-decisions). Nine questions are
-left open under [Open design decisions](#open-design-decisions), each with a
-recommendation. Two ADRs are proposed with this design:
+[Resolved design decisions](#resolved-design-decisions). The owner then
+chose the recommended option for each of the nine questions the design left
+open, and [accepted the design](https://github.com/wpliao/meal-planner/pull/85#issuecomment-5843856770)
+on 2026-09-26, with its two ADRs:
 [0009](../DECISIONS/0009-nutrition-reference-data.md) for the reference data
 and [0010](../DECISIONS/0010-ai-provider-boundary.md) for the AI boundary.
-Acceptance would authorize implementation only, not deploying or changing
+Acceptance authorizes implementation only, not deploying or changing
 production, which keep their existing approval gates.
 
 ## User scenarios
@@ -144,7 +145,7 @@ These stable identifiers mirror [issue #84](https://github.com/wpliao/meal-plann
 **Recipe form** (`AC-01`). A **Servings** field follows the title: an
 optional whole number from 1 to 50, labelled "Servings (optional)". A
 servings change is recipe content, so it bumps the recipe's version like any
-other edit. See [open decision 6](#open-design-decisions) for imports.
+other edit. See [decision 6](#resolved-design-decisions) for imports.
 
 **Recipe page, Nutrition section** (`AC-05`). The section sits after the
 ingredients and before the steps. Its states:
@@ -174,7 +175,7 @@ ingredients and before the steps. Its states:
   count only current matches.
 - **No servings:** only the **Whole recipe** column, with "Add servings to see
   values per serving" linking to **Edit recipe**.
-- **Missing values:** see [open decision 5](#open-design-decisions).
+- **Missing values:** see [decision 5](#resolved-design-decisions).
 
 **Review list** (`AC-04`, `AC-06`), a full-screen modal on a phone and a
 large modal on desktop, titled "Check the matches":
@@ -255,7 +256,7 @@ numbers feed each row is fixed in `NUTRIENTS` and in ADR 0009.
 `1 medium`. Mass units convert directly. Volume units and portions convert
 through the food's USDA portion gram weights. A volume unit the food has no
 volume portion for can't be converted, and the member enters grams instead.
-See [open decision 4](#open-design-decisions).
+See [decision 4](#resolved-design-decisions).
 
 ### AI proposals (`AC-03`, `AC-06`, `AC-07`)
 
@@ -274,7 +275,7 @@ It has three implementations:
   Gemini secret, so local runs and tests can never call a real service.
 
 A proposal request runs these steps; see
-[open decision 3](#open-design-decisions):
+[decision 3](#resolved-design-decisions):
 
 1. **Read** the lines to propose, from the recipe by ID and household.
 2. **Normalize (AI call 1):** for each line, the model returns a USDA-style
@@ -308,7 +309,7 @@ websites are untrusted: the instruction tells the model to treat them as data,
 and the validation above bounds what an injected instruction could achieve to
 a wrong proposal, which the member reviews.
 
-**Models.** See [open decision 8](#open-design-decisions). The model names
+**Models.** See [decision 8](#resolved-design-decisions). The model names
 are Worker variables, so a model can be changed by configuration and a
 recorded decision, without code.
 
@@ -345,7 +346,7 @@ until the recipe is deleted. There is at most one row per line, so at most
 
 **Reference data.** The four `nutrition_*` tables are global, read-only
 reference data, not household data. See
-[open decisions 1 and 2](#open-design-decisions) for how they are loaded and
+[decisions 1 and 2](#resolved-design-decisions) for how they are loaded and
 which foods they hold. Estimated size: about 7,000 foods and 15,000 portions,
 a few megabytes of D1 storage (500 MB per database on Workers Free), and
 about 30,000 rows written once per environment (100,000 a day allowed).
@@ -410,7 +411,7 @@ a forward migration would drop the tables if the feature were retired.
   Workers AI only.
 - **Logs:** the Worker logs only the provider, the outcome, the latency, and
   line counts. It never logs a title, line, prompt, answer, or key. See
-  [open decision 7](#open-design-decisions) for AI Gateway's own logs.
+  [decision 7](#resolved-design-decisions) for AI Gateway's own logs.
 - **Abuse:** a member could spend the day's free allowance. Both tiers are
   hard-capped at no cost, and the family is trusted, so there is no
   per-member rate limit. A request asks for at most 100 lines.
@@ -502,7 +503,7 @@ a forward migration would drop the tables if the feature were retired.
    create one AI Gateway per environment (for example
    `meal-planner-development` and `meal-planner-production`) with
    authentication on and logging set per
-   [open decision 7](#open-design-decisions); create an API token for each
+   [decision 7](#resolved-design-decisions); create an API token for each
    gateway; create a Gemini API key per environment in Google AI Studio, in a
    project without billing; and add `AI_GATEWAY_TOKEN` and `GEMINI_API_KEY` as
    secrets of each Worker. The implementation PR gives exact steps. Without
@@ -520,11 +521,13 @@ a forward migration would drop the tables if the feature were retired.
    variable to `off` and `GEMINI_FALLBACK` to `off`: proposals then answer
    unavailable and manual matching still works.
 
-## Open design decisions
+## Resolved design decisions
 
-Each has a recommendation, listed first.
+The design left these nine open, each with a recommendation. The owner chose
+the recommended option for every one on 2026-09-26
+([record](https://github.com/wpliao/meal-planner/pull/85#issuecomment-5843856770)).
 
-1. **Loading the reference data.** _Recommended:_ a build script downloads
+1. **Loading the reference data.** _Chosen:_ a build script downloads
    the pinned USDA releases, checks their SHA-256, filters them, and writes a
    compact, reviewable dataset file committed to the repository. A load step
    in the Deploy workflow runs after migrations and loads it only when
@@ -534,35 +537,35 @@ Each has a recommendation, listed first.
    thousands of statements); downloading from USDA during deploy, which ties
    a deploy to USDA's availability; a JSON file in R2, which can't be
    searched by index.
-2. **Which foods.** _Recommended:_ Foundation Foods and SR Legacy, leaving
+2. **Which foods.** _Chosen:_ Foundation Foods and SR Legacy, leaving
    out the categories a home recipe doesn't use: baby foods, fast foods,
    restaurant foods, and prepared meals, entrées, and side dishes. That is
    about 7,000 foods. Rejected: every Foundation and SR Legacy food (about
    8,200), which adds near-duplicates that make the AI's choice harder.
-3. **AI steps.** _Recommended:_ two calls per request (normalize, search,
+3. **AI steps.** _Chosen:_ two calls per request (normalize, search,
    choose), so that NZ names such as capsicum, courgette, and mince find
    USDA's names. Rejected: one call after a word search on the line alone,
    which misses those names; a hand-kept NZ-to-US synonym list.
-4. **How grams are decided.** _Recommended:_ AI picks a quantity and a unit,
+4. **How grams are decided.** _Chosen:_ AI picks a quantity and a unit,
    and the Worker converts it to grams with USDA's portion weights, so the
    review can show "2 tbsp = 36 g" and every gram is traceable. Rejected: AI
    returns grams directly, which puts arithmetic in the model and hides where
    a weight came from.
 5. **A food with no value for a nutrient** (some SR Legacy foods report no
-   sugars or fibre). _Recommended:_ the total counts the foods that have a
+   sugars or fibre). _Chosen:_ the total counts the foods that have a
    value, is shown with a marker, and a note names what is missing: "Sugars:
    no value for 2 foods (rice noodles, tamarind)". Rejected: count the gap as
    zero without saying so, which understates; hide the nutrient's row
    entirely, which hides what is known.
-6. **Servings on imported recipes.** _Recommended:_ the import preview fills
+6. **Servings on imported recipes.** _Chosen:_ the import preview fills
    **Servings** from the page's `recipeYield` when it begins with a whole
    number from 1 to 50, and the member can change it before saving. Rejected:
    always blank, so every imported recipe needs an extra edit.
 7. **AI Gateway's own request logs** hold prompts and answers, and so
-   recipe lines. _Recommended:_ turn logging off in both gateways and keep
+   recipe lines. _Chosen:_ turn logging off in both gateways and keep
    only analytics (counts, tokens, errors). Rejected: keep logs, with the
    shortest retention, for debugging proposals.
-8. **Models.** _Recommended:_ Workers AI `@cf/meta/llama-3.3-70b-instruct-fp8-fast`,
+8. **Models.** _Chosen:_ Workers AI `@cf/meta/llama-3.3-70b-instruct-fp8-fast`,
    which supports [JSON mode](https://developers.cloudflare.com/workers-ai/features/json-mode/),
    and the newest Gemini Flash-Lite model on the free tier, whose free
    request quota is the largest. Pin both names in configuration, and record
@@ -570,7 +573,7 @@ Each has a recommendation, listed first.
    `@cf/meta/llama-3.1-8b-instruct`, which uses fewer neurons but chooses
    worse; Gemini Flash, which chooses better but has a much smaller free
    quota.
-9. **Delivery.** _Recommended:_ two pull requests, one after the other, each
+9. **Delivery.** _Chosen:_ two pull requests, one after the other, each
    with the full gate and review. The first holds servings, the reference
    data and its load, the matches, manual matching, and the panel. It is
    usable without AI, and development can check the data load early. The
@@ -579,9 +582,8 @@ Each has a recommendation, listed first.
    Rejected: one pull request of several thousand lines plus the dataset,
    which is harder to review.
 
-## Resolved design decisions
-
-The owner chose these on 2026-09-26, before the design.
+The owner chose these on 2026-09-26, before the design
+([record](https://github.com/wpliao/meal-planner/issues/84#issuecomment-5843101922)).
 
 - **N1 — Next feature:** Phase 6 structured nutrition. Avoided ingredients and
   a shopping list are deferred as lower priority.
@@ -610,9 +612,11 @@ The owner chose these on 2026-09-26, before the design.
 
 ## Decision and change log
 
-| Date       | Change                                                                                                                                                                  | Reason                                                      | Evidence                                                                                                             |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| 2026-09-26 | Initial design proposal; status `Designing`; ten decisions resolved by the owner before the design, and nine open. ADRs 0009 and 0010 proposed. Authored by Claude Code | First Phase 6 feature. The owner chose N1–N10 on 2026-09-26 | [Issue #84](https://github.com/wpliao/meal-planner/issues/84); [#85](https://github.com/wpliao/meal-planner/pull/85) |
+| Date       | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Reason                                                                  | Evidence                                                                                                                                                                                                          |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-26 | Initial design proposal; status `Designing`; ten decisions resolved by the owner before the design, and nine open. ADRs 0009 and 0010 proposed. Authored by Claude Code                                                                                                                                                                                                                                                                                                                                                                                                             | First Phase 6 feature. The owner chose N1–N10 on 2026-09-26             | [Issue #84](https://github.com/wpliao/meal-planner/issues/84); [owner decisions](https://github.com/wpliao/meal-planner/issues/84#issuecomment-5843101922); [#85](https://github.com/wpliao/meal-planner/pull/85) |
+| 2026-09-26 | Resolve the nine open decisions with the recommended options: a committed dataset loaded by a versioned Deploy step; about 7,000 foods without baby, fast, restaurant, and prepared-meal categories; two AI calls per request; AI picks a quantity and unit and the Worker converts with USDA portion weights; missing nutrient values marked and named; imported servings from `recipeYield`; AI Gateway logs off; Workers AI `@cf/meta/llama-3.3-70b-instruct-fp8-fast` and the newest free Gemini Flash-Lite; two sequential implementation PRs. No acceptance criterion changes | The owner's answers in a Claude Code session, recorded on the design PR | [Owner decisions](https://github.com/wpliao/meal-planner/pull/85#issuecomment-5843856770)                                                                                                                         |
+| 2026-09-26 | Accept design; status `Accepted`; `AC-01`–`AC-09` stable; ADRs 0009 and 0010 `Accepted`. Recorded in the design PR, before it merged                                                                                                                                                                                                                                                                                                                                                                                                                                                | Product owner: "I accept the design"                                    | [Approval](https://github.com/wpliao/meal-planner/pull/85#issuecomment-5843856770)                                                                                                                                |
 
 ## Release record
 

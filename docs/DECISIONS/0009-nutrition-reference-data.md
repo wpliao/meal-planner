@@ -1,9 +1,10 @@
 # ADR 0009: Nutrition reference data from USDA FoodData Central
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-26
 - Feature: [Recipe nutrition](../features/0084-recipe-nutrition.md)
 - Issue: [#84](https://github.com/wpliao/meal-planner/issues/84)
+- Accepted by product owner: [PR comment](https://github.com/wpliao/meal-planner/pull/85#issuecomment-5843856770)
 
 ## Context
 
@@ -70,8 +71,9 @@ on any mismatch.
 - Development and production load the same dataset version, each into its
   own database ([ADR 0002](./0002-environment-isolation.md)).
 
-How the copy is built and loaded is decided in the #84 design (open decision
-1).
+The #84 design (decision 1) builds the copy with a script that checks the
+pinned releases' SHA-256, commits the filtered dataset file to the
+repository, and loads it with a versioned Deploy step after migrations.
 
 ## Consequences
 
@@ -89,5 +91,4 @@ export` can't export FTS5 virtual tables. The project's recovery uses D1
 
 ## Status
 
-Proposed with the #84 design. It becomes Accepted when the owner accepts that
-design.
+Accepted on 2026-09-26 with the #84 design.

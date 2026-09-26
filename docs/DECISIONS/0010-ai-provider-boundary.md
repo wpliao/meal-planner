@@ -1,9 +1,10 @@
 # ADR 0010: AI provider boundary through AI Gateway
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-26
 - Feature: [Recipe nutrition](../features/0084-recipe-nutrition.md)
 - Issue: [#84](https://github.com/wpliao/meal-planner/issues/84)
+- Accepted by product owner: [PR comment](https://github.com/wpliao/meal-planner/pull/85#issuecomment-5843856770)
 
 ## Context
 
@@ -69,5 +70,4 @@ deterministic and must not depend on paid or remote services.
 
 ## Status
 
-Proposed with the #84 design. It becomes Accepted when the owner accepts that
-design.
+Accepted on 2026-09-26 with the #84 design.
