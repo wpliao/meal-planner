@@ -29,8 +29,8 @@
 | ----------------- | ---------------------------------- | --------------------- |
 | <!-- AC-01 -->    | <!-- file and exact test/check --> | <!-- pass/pending --> |
 
-- `./scripts/verify.sh`: <!-- exact result -->
-- CI: <!-- link or pending -->
+- Local checks: <!-- exact commands and results; the full ./scripts/verify.sh when run -->
+- CI `Verify`: <!-- link or pending -->
 - Sonar Quality Gate: <!-- link or pending -->
 - Development validation: <!-- link/result or not yet required -->
 - Production release: <!-- link/result, pending explicit approval, or not applicable -->

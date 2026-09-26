@@ -18,6 +18,7 @@ const unique = (prefix: string) =>
   `${prefix} ${Math.random().toString(36).slice(2, 8)}`;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const FIRST_RENDER_TIMEOUT = 15_000;
 const WEEKDAYS = [
   'Monday',
   'Tuesday',
@@ -68,9 +69,12 @@ const pastWeek = (offset: number) => futureWeek(-offset);
 const openPlan = async (page: Page, path: string) => {
   await page.goto(path);
   // Wait until the session has answered: either the plan or first-run setup.
+  // A new browser context loads every module of the unbundled dev app with a
+  // cold cache, which took WebKit over 5 s under full-gate load, so the first
+  // render gets a page-load budget rather than the interaction default.
   const setup = page.getByRole('heading', { name: 'Set up your family space' });
   const plan = page.getByRole('heading', { level: 1, name: 'Plan' });
-  await expect(setup.or(plan)).toBeVisible();
+  await expect(setup.or(plan)).toBeVisible({ timeout: FIRST_RENDER_TIMEOUT });
   if (await setup.isVisible()) {
     await page.getByLabel('Family space name').fill('E2E Family');
     await page.getByRole('button', { name: 'Create family space' }).click();

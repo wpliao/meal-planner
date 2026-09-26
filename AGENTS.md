@@ -83,7 +83,9 @@ Use pnpm only. Do not hand-edit `pnpm-lock.yaml`.
 - `pnpm lint` / `pnpm format:check` / `pnpm typecheck`: static checks.
 - `pnpm test`: client/unit and Worker runtime tests.
 - `pnpm test:e2e`: Playwright browser tests.
-- `./scripts/verify.sh`: required complete local/CI quality gate.
+- `./scripts/verify.sh`: the complete quality gate. CI's required `Verify`
+  check runs the same steps as parallel jobs (`--no-e2e`, then one browser
+  project per job via `E2E_PROJECTS`).
 - `pnpm cf:typegen`: regenerate `worker-configuration.d.ts` after binding changes.
 
 ## Testing requirements
@@ -94,11 +96,19 @@ Workers runtime. Critical user journeys require Playwright. Tests must be
 deterministic, isolated, and independent of paid or remote services. Never delete,
 skip, or weaken a test merely to make CI pass.
 
-Before declaring work complete, run `./scripts/verify.sh`. Completion requires a
-successful build, typecheck, lint, format check, unit tests, relevant Worker
-integration tests, relevant E2E tests, successful CI, and (once configured) a
-passing Sonar Quality Gate. There must be no known unresolved high-severity
-security issue.
+CI's `Verify` check is the authoritative full gate. While working, run the
+checks and tests relevant to the change locally: lint, typecheck, the affected
+unit and Workers-runtime tests, and the affected Playwright specs. Run the full
+`./scripts/verify.sh` locally before opening a large implementation pull
+request, or whenever CI cannot run. Completion requires a successful build,
+typecheck, lint, format check, unit tests, relevant Worker integration tests,
+relevant E2E tests, a passing `Verify` check, and (once configured) a passing
+Sonar Quality Gate. There must be no known unresolved high-severity security
+issue.
+
+A pull request that changes only documentation Markdown (see
+`scripts/ci-scope.sh`) runs the format check alone in CI; run
+`pnpm format:check` locally. Pushes to `main` always run every check.
 
 ## Git workflow
 
@@ -109,7 +119,14 @@ security issue.
   preference alone is not a reason to rewrite another agent's implementation.
 - Use clear commits that explain intent. Reference the issue in the PR.
 - Do not force-push, merge, deploy, or modify production without explicit
-  authorization.
+  authorization. The owner merges design, code, tooling, and process pull
+  requests, usually by enabling auto-merge so the pull request merges itself
+  when `Verify` passes.
+- Standing authorization (owner, 2026-09-26, issue #86): an agent may merge a
+  pull request that only records a feature's development validation or
+  production release in documentation, once `Verify` passes.
+- Pull requests are squash-merged, and GitHub deletes the head branch on
+  merge.
 - PRs must describe behavior, design decisions, migration impact, security impact,
   verification evidence, and follow-up work.
 
@@ -141,8 +158,8 @@ security issue.
 ## Definition of done
 
 Work is done only when implementation, tests, documentation, migrations, and
-tooling are consistent; `./scripts/verify.sh` passes; the PR CI and enabled Sonar
-Quality Gate pass; security review has no unresolved high-severity finding; and
+tooling are consistent; the PR's `Verify` check and enabled Sonar Quality Gate
+pass; security review has no unresolved high-severity finding; and
 the PR explains manual configuration or deployment steps. For a product feature,
 all acceptance criteria must also be mapped to implementation and passing tests
 in its feature document, and the decision and release logs must be current. A

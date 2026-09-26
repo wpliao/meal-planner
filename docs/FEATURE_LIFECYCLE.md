@@ -23,6 +23,16 @@ Each feature has these linked records:
 5. The feature document records development acceptance, production release, and
    later changes.
 
+Pull requests per feature, normally two plus a record:
+
+1. The design pull request. It merges only once the design says `Accepted`.
+2. The implementation pull request. The design may split it into sequential
+   pull requests, each started from `main` after the previous one merges.
+3. One release-record pull request after production. It records development
+   validation and the production release together, and closes the issue.
+   Under the standing authorization in `AGENTS.md`, an agent may merge it once
+   `Verify` passes.
+
 The feature issue number is the stable feature identifier. Acceptance criteria
 inside the feature use stable identifiers such as `AC-01` and `AC-02`.
 
@@ -58,7 +68,9 @@ inside the feature use stable identifiers such as `AC-01` and `AC-02`.
 
 ### 4. Verify
 
-- Run `./scripts/verify.sh` and record the exact result.
+- Require the pull request's `Verify` check, CI's full gate, and record its
+  result. Run targeted checks locally while working, and the full
+  `./scripts/verify.sh` before opening a large implementation pull request.
 - Confirm every acceptance criterion maps to code and at least one appropriate
   test or an explicitly documented manual check.
 - Require passing PR CI and Sonar Quality Gate and no unresolved high-severity
@@ -70,7 +82,9 @@ inside the feature use stable identifiers such as `AC-01` and `AC-02`.
 
 - Deploy through the protected development workflow.
 - Exercise the primary user scenarios and failure states.
-- Record the deployment run and product-owner acceptance in the feature document.
+- Record the deployment run and product-owner acceptance as an agent-written
+  comment on the feature issue when validation happens. The release-record
+  pull request copies it into the feature document.
 - Return to Design or Implement if behavior changes; do not edit acceptance
   history to make a failed implementation appear correct.
 
