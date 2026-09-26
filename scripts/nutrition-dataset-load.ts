@@ -17,6 +17,7 @@ import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 
 import { loadNutritionDataset } from '../src/operations/nutrition-dataset/load.ts';
+import { wranglerRows } from '../src/operations/nutrition-dataset/wrangler-output.ts';
 
 const { values } = parseArgs({
   options: {
@@ -41,7 +42,8 @@ const target = values.remote
       ...(values['persist-to'] ? ['--persist-to', values['persist-to']] : []),
     ];
 
-const wrangler = (args: string[]): unknown => {
+/** Runs `wrangler d1 execute` and returns its standard output. */
+const wrangler = (args: string[]): string => {
   const result = spawnSync(
     'pnpm',
     [
@@ -63,20 +65,12 @@ const wrangler = (args: string[]): unknown => {
     },
   );
   if (result.status !== 0) {
-    // Wrangler's JSON error names the failing statement, not a secret.
+    // Wrangler's error names the failing statement, not a secret.
     throw new Error(
       `wrangler d1 execute failed: ${result.stdout}${result.stderr}`,
     );
   }
-  return JSON.parse(result.stdout) as unknown;
-};
-
-/** The rows of the last result Wrangler reports. */
-const lastRows = (output: unknown): Record<string, unknown>[] => {
-  const results = Array.isArray(output) ? output : [];
-  const last = results.at(-1) as
-    { results?: Record<string, unknown>[] } | undefined;
-  return last?.results ?? [];
+  return result.stdout;
 };
 
 const datasetText = readFileSync(values.dataset, 'utf8');
@@ -86,7 +80,10 @@ await loadNutritionDataset({
   datasetText,
   sha256: createHash('sha256').update(datasetText).digest('hex'),
   runner: {
-    command: (sql) => Promise.resolve(lastRows(wrangler(['--command', sql]))),
+    command: (sql) =>
+      Promise.resolve(wranglerRows(wrangler(['--command', sql]))),
+    // A remote file import prints progress text, not rows; its exit status
+    // is the result, and the load verifies the counts afterwards.
     file: (path) => {
       wrangler(['--file', path]);
       return Promise.resolve();

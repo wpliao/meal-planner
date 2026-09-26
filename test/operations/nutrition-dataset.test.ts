@@ -21,6 +21,7 @@ import {
   LOADED_VERSION_QUERY,
   VERIFY_QUERY,
 } from '../../src/operations/nutrition-dataset/statements.ts';
+import { wranglerRows } from '../../src/operations/nutrition-dataset/wrangler-output.ts';
 
 describe('CSV', () => {
   it('reads quoted fields with commas, quotes, and line breaks', () => {
@@ -496,5 +497,36 @@ describe('loading', () => {
     };
     await expect(run(runner)).rejects.toThrow(/corrupt/u);
     expect(calls).not.toContain(VERIFY_QUERY);
+  });
+});
+
+describe('wrangler output', () => {
+  const rows = [{ version: 'v1', sha256: 'abc' }];
+  const json = JSON.stringify(
+    [{ results: rows, success: true, meta: {} }],
+    null,
+    2,
+  );
+
+  it('reads the rows of the last result', () => {
+    expect(wranglerRows(json)).toEqual(rows);
+    expect(
+      wranglerRows(JSON.stringify([{ results: [] }, { results: rows }])),
+    ).toEqual(rows);
+  });
+
+  it('skips the progress lines a remote run prints before the JSON', () => {
+    expect(
+      wranglerRows(
+        `├ Checking if file needs uploading\n│\n├ 🌀 Uploading\n${json}\n`,
+      ),
+    ).toEqual(rows);
+  });
+
+  it('reads an empty result, and fails when there is no JSON at all', () => {
+    expect(wranglerRows('[{"results":[],"success":true}]')).toEqual([]);
+    expect(() => wranglerRows('├ Executing on remote database DB\n')).toThrow(
+      /no JSON result/u,
+    );
   });
 });
