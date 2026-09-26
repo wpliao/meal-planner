@@ -172,13 +172,31 @@ export const validateChoices = (
   return answers as unknown as Choice[];
 };
 
+const SEARCH_STOP_WORDS = new Set([
+  'g',
+  'kg',
+  'ml',
+  'l',
+  'tsp',
+  'tbsp',
+  'cup',
+  'cups',
+  'large',
+  'small',
+  'medium',
+  'of',
+  'and',
+  'to',
+  'taste',
+]);
+
 const searchWords = (text: string): string =>
-  text
-    .replace(
-      /\b(?:\d+(?:[.,]\d+)?|g|kg|ml|l|tsp|tbsp|cup|cups|large|small|medium|of|and|to|taste)\b/giu,
-      ' ',
+  (text.match(/[\p{L}\p{N}]+/gu) ?? [])
+    .filter(
+      (word) =>
+        !/^\d+$/u.test(word) && !SEARCH_STOP_WORDS.has(word.toLowerCase()),
     )
-    .trim();
+    .join(' ');
 
 const candidatesFor = async (
   db: D1Database,

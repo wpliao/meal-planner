@@ -13,6 +13,7 @@ import {
   unitsFor,
   usVolumeMillilitres,
   validateSaveNutritionMatches,
+  validateProposalRequest,
   type FoodMeasures,
   type NutrientValues,
   type NutritionFood,
@@ -51,6 +52,38 @@ const egg: FoodMeasures = {
 };
 
 const noVolume: FoodMeasures = { portions: [], volumeSeq: null };
+
+describe('proposal requests', () => {
+  it('accepts a recipe version with optional distinct line positions', () => {
+    expect(validateProposalRequest({ recipeVersion: 1 })).toEqual({
+      recipeVersion: 1,
+    });
+    expect(
+      validateProposalRequest({ recipeVersion: 4, positions: [1, 3] }),
+    ).toEqual({ recipeVersion: 4, positions: [1, 3] });
+    expect(
+      validateProposalRequest({ recipeVersion: 4, positions: [] }),
+    ).toEqual({ recipeVersion: 4, positions: [] });
+  });
+
+  it.each([
+    null,
+    [],
+    {},
+    { recipeVersion: 0 },
+    { recipeVersion: 1.5 },
+    { recipeVersion: Number.MAX_SAFE_INTEGER + 1 },
+    { recipeVersion: 1, extra: true },
+    { recipeVersion: 1, positions: '1' },
+    { recipeVersion: 1, positions: Array(101).fill(1) },
+    { recipeVersion: 1, positions: [0] },
+    { recipeVersion: 1, positions: [101] },
+    { recipeVersion: 1, positions: [1.5] },
+    { recipeVersion: 1, positions: [1, 1] },
+  ])('rejects an invalid body %#', (body) => {
+    expect(validateProposalRequest(body)).toBeNull();
+  });
+});
 
 describe('amounts', () => {
   it.each([

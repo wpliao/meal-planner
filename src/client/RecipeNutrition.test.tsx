@@ -348,6 +348,59 @@ describe('Recipe nutrition', () => {
       expect(fetchMock).toHaveBeenCalledTimes(3);
     });
 
+    it('asks for the current recipe when proposals race an edit', async () => {
+      const current = recipe({ ingredients: ['3 tbsp soy sauce'], version: 2 });
+      const fresh: RecipeNutrition = {
+        ...NOT_WORKED_OUT,
+        recipeVersion: 2,
+        lines: unchecked(['3 tbsp soy sauce']),
+      };
+      const fetchMock = mockFetch(
+        () => detail(NOT_WORKED_OUT),
+        () => staleVersion(current),
+        () => detail(fresh, current),
+      );
+      renderRecipes([detailPath]);
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Work out nutrition' }),
+      );
+      expect(
+        await screen.findByText(
+          'This recipe was changed by someone else. Review its current ingredients and try again.',
+        ),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('dialog', { name: 'Check the matches' }),
+      ).not.toBeInTheDocument();
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    });
+
+    it('refreshes the review when a retry finds a newer recipe', async () => {
+      const current = recipe({ ingredients: ['3 tbsp soy sauce'], version: 2 });
+      const fresh: RecipeNutrition = {
+        ...NOT_WORKED_OUT,
+        recipeVersion: 2,
+        lines: unchecked(['3 tbsp soy sauce']),
+      };
+      mockFetch(
+        () => detail(NOT_WORKED_OUT),
+        () => jsonResponse({ recipeVersion: 1, provider: null, proposals: [] }),
+        () => staleVersion(current),
+        () => jsonResponse({ nutrition: fresh }),
+      );
+      renderRecipes([detailPath]);
+      const dialog = await openReview('Work out nutrition');
+      fireEvent.click(
+        within(dialog).getByRole('button', { name: 'Try again' }),
+      );
+      expect(
+        await within(dialog).findByText(
+          'Someone changed this recipe while you were checking it. The list now shows its current ingredients.',
+        ),
+      ).toBeInTheDocument();
+      expect(card(dialog, '3 tbsp soy sauce')).toBeInTheDocument();
+    });
+
     const searchFor = (dialog: HTMLElement, legend: string, query: string) => {
       fireEvent.change(
         within(card(dialog, legend)).getByRole('textbox', {

@@ -38,11 +38,8 @@ export const runStructured = async <T>(
       if (timer !== undefined) clearTimeout(timer);
     }
     const value = result.ok ? validate(result.value) : null;
-    const outcome = result.ok
-      ? value === null
-        ? 'invalid'
-        : 'ok'
-      : result.failure;
+    let outcome = result.ok ? 'ok' : result.failure;
+    if (result.ok && value === null) outcome = 'invalid';
     console.info('ai_proposal', {
       provider: provider.name,
       outcome,

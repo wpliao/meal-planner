@@ -5,6 +5,19 @@ import {
   type AiProvider,
 } from './provider';
 
+const FAKE_UNITS = new Set(['g', 'kg', 'ml', 'l', 'tsp', 'tbsp', 'cup']);
+
+const fakeAmount = (text: string) => {
+  const amount = text.match(/[\d.]+/u)?.[0];
+  return amount ? Number(amount) : 1;
+};
+
+const fakeUnit = (text: string) =>
+  text
+    .split(/\s+/u)
+    .find((word) => FAKE_UNITS.has(word.toLowerCase()))
+    ?.toLowerCase() ?? 'g';
+
 /** Cloudflare's generated `Ai` type permits many models; this route uses JSON mode. */
 export const workersAiProvider = (
   ai: Ai | undefined,
@@ -132,11 +145,8 @@ export const fakeProvider = (): AiProvider => ({
                 '',
               )
               .trim(),
-            quantity: Number(line.text.match(/\d+(?:\.\d+)?/u)?.[0] ?? 1),
-            unit:
-              line.text
-                .match(/\b(tbsp|tsp|kg|g|ml|l|cup)\b/iu)?.[0]
-                ?.toLowerCase() ?? 'g',
+            quantity: fakeAmount(line.text),
+            unit: fakeUnit(line.text),
             notFood: /\b(?:salt|water)\b/iu.test(line.text),
           })),
         },

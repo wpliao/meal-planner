@@ -11,6 +11,7 @@ import {
   workersAiProvider,
 } from '../../src/worker/ai/providers';
 import type { AiProvider, AiResult } from '../../src/worker/ai/provider';
+import { classifyStatus, parseJson } from '../../src/worker/ai/provider';
 
 const request = {
   system: 'instruction',
@@ -199,6 +200,42 @@ describe('provider fallback', () => {
     expect(answer).toEqual({ provider: null, value: null });
     vi.restoreAllMocks();
   });
+
+  it('tries the next provider when the first throws', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const throwing: AiProvider = {
+      name: 'workers-ai',
+      complete: () => Promise.reject(new TypeError('provider failed')),
+    };
+    const answer = await runStructured(
+      [throwing, provider('gemini', { ok: true, value: good })],
+      request,
+      (value) => validateNormalized(value, line),
+      1,
+    );
+    expect(answer.provider).toBe('gemini');
+    vi.restoreAllMocks();
+  });
+});
+
+describe('provider response boundary', () => {
+  it('parses an object or JSON string, and refuses invalid content', () => {
+    expect(parseJson(good)).toEqual({ ok: true, value: good });
+    expect(parseJson(JSON.stringify(good))).toEqual({ ok: true, value: good });
+    expect(parseJson('not JSON')).toEqual({ ok: false, failure: 'invalid' });
+    expect(parseJson(null)).toEqual({ ok: false, failure: 'invalid' });
+    expect(parseJson('42')).toEqual({ ok: false, failure: 'invalid' });
+  });
+
+  it.each([
+    [429, 'quota'],
+    [402, 'quota'],
+    [408, 'timeout'],
+    [504, 'timeout'],
+    [500, 'error'],
+  ] as const)('classifies provider HTTP %s', (status, outcome) => {
+    expect(classifyStatus(status)).toBe(outcome);
+  });
 });
 
 describe('gateway adapters', () => {
@@ -280,5 +317,83 @@ describe('gateway adapters', () => {
       await adapter.complete(request, new AbortController().signal),
     ).toEqual({ ok: false, failure: 'unavailable' });
     expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('refuses an unconfigured Workers AI binding', async () => {
+    expect(
+      await workersAiProvider(undefined, 'off', 'development-gateway').complete(
+        request,
+        new AbortController().signal,
+      ),
+    ).toEqual({ ok: false, failure: 'unavailable' });
+  });
+
+  it('classifies a Workers AI quota error and rejects malformed JSON', async () => {
+    const quota = workersAiProvider(
+      { run: vi.fn().mockRejectedValue({ status: 429 }) } as unknown as Ai,
+      'model',
+      'development-gateway',
+    );
+    expect(await quota.complete(request, new AbortController().signal)).toEqual(
+      { ok: false, failure: 'quota' },
+    );
+    const malformed = workersAiProvider(
+      { run: vi.fn().mockResolvedValue({ response: '{' }) } as unknown as Ai,
+      'model',
+      'development-gateway',
+    );
+    expect(
+      await malformed.complete(request, new AbortController().signal),
+    ).toEqual({ ok: false, failure: 'invalid' });
+  });
+
+  it('classifies Gemini quota and malformed answers', async () => {
+    const quota = geminiProvider(
+      'account',
+      'gateway',
+      'model',
+      'fake-key',
+      'fake-token',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(new Response('', { status: 429 })),
+    );
+    expect(await quota.complete(request, new AbortController().signal)).toEqual(
+      { ok: false, failure: 'quota' },
+    );
+    const malformed = geminiProvider(
+      'account',
+      'gateway',
+      'model',
+      'fake-key',
+      'fake-token',
+      vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ candidates: [] }), { status: 200 }),
+        ),
+    );
+    expect(
+      await malformed.complete(request, new AbortController().signal),
+    ).toEqual({ ok: false, failure: 'invalid' });
+  });
+
+  it('classifies Gemini aborts and transport errors', async () => {
+    for (const [error, outcome] of [
+      [new DOMException('aborted', 'AbortError'), 'timeout'],
+      [new TypeError('offline'), 'error'],
+    ] as const) {
+      const adapter = geminiProvider(
+        'account',
+        'gateway',
+        'model',
+        'fake-key',
+        'fake-token',
+        vi.fn<typeof fetch>().mockRejectedValue(error),
+      );
+      expect(
+        await adapter.complete(request, new AbortController().signal),
+      ).toEqual({ ok: false, failure: outcome });
+    }
   });
 });
