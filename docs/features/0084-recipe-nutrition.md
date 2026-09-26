@@ -5,7 +5,7 @@
 - Issue: [#84](https://github.com/wpliao/meal-planner/issues/84)
 - Product owner: Repository owner
 - Last updated: 2026-09-26
-- Pull requests: [#PR1 — design proposal](https://github.com/wpliao/meal-planner/pull/PR1)
+- Pull requests: [#85 — design proposal](https://github.com/wpliao/meal-planner/pull/85)
 
 ## Problem and outcome
 
@@ -610,9 +610,9 @@ The owner chose these on 2026-09-26, before the design.
 
 ## Decision and change log
 
-| Date       | Change                                                                                                                                                                  | Reason                                                      | Evidence                                                                                                               |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| 2026-09-26 | Initial design proposal; status `Designing`; ten decisions resolved by the owner before the design, and nine open. ADRs 0009 and 0010 proposed. Authored by Claude Code | First Phase 6 feature. The owner chose N1–N10 on 2026-09-26 | [Issue #84](https://github.com/wpliao/meal-planner/issues/84); [#PR1](https://github.com/wpliao/meal-planner/pull/PR1) |
+| Date       | Change                                                                                                                                                                  | Reason                                                      | Evidence                                                                                                             |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| 2026-09-26 | Initial design proposal; status `Designing`; ten decisions resolved by the owner before the design, and nine open. ADRs 0009 and 0010 proposed. Authored by Claude Code | First Phase 6 feature. The owner chose N1–N10 on 2026-09-26 | [Issue #84](https://github.com/wpliao/meal-planner/issues/84); [#85](https://github.com/wpliao/meal-planner/pull/85) |
 
 ## Release record
 
