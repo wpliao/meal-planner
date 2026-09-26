@@ -8,7 +8,7 @@ import {
 const FAKE_UNITS = new Set(['g', 'kg', 'ml', 'l', 'tsp', 'tbsp', 'cup']);
 
 const fakeAmount = (text: string) => {
-  const amount = text.match(/[\d.]+/u)?.[0];
+  const amount = /[\d.]+/u.exec(text)?.[0];
   return amount ? Number(amount) : 1;
 };
 
