@@ -13,3 +13,5 @@ decisions.
 - [0006 — Component library for the family interface](./0006-component-library.md)
 - [0007 — Navigation and information architecture](./0007-navigation-and-information-architecture.md)
 - [0008 — Household transfer and decommissioning](./0008-household-decommissioning.md)
+- [0009 — Nutrition reference data from USDA FoodData Central](./0009-nutrition-reference-data.md) (Proposed)
+- [0010 — AI provider boundary through AI Gateway](./0010-ai-provider-boundary.md) (Proposed)
