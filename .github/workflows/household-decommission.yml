@@ -46,7 +46,7 @@ jobs:
   refuse-production:
     name: Refuse production
     if: inputs.environment == 'production'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Production is not eligible
@@ -57,7 +57,7 @@ jobs:
   validate-development-request:
     name: Validate development request
     if: inputs.environment == 'development'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Require main and the literal confirmation
@@ -78,7 +78,7 @@ jobs:
     name: Decommission development household
     if: inputs.environment == 'development' && github.ref == 'refs/heads/main'
     needs: validate-development-request
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: development
     steps:

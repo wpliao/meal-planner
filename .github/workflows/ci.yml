@@ -12,11 +12,72 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# The same checks as ./scripts/verify.sh, split into parallel jobs. `Verify`
+# is the one required status check: it passes only when every job it needs
+# passed. A pull request that changes only documentation Markdown runs the
+# format check alone; a push to main always runs everything, so Deploy can
+# reuse its result (scripts/ci-verified.sh).
 jobs:
-  verify:
-    name: Verify
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+  scope:
+    name: Scope
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      docs_only: ${{ steps.scope.outputs.docs_only }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Classify the change
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [[ "$EVENT_NAME" == pull_request ]]; then
+            git diff --name-only "$BASE_SHA...$HEAD_SHA" | tee /dev/stderr |
+              ./scripts/ci-scope.sh >>"$GITHUB_OUTPUT"
+          else
+            echo "docs_only=false" >>"$GITHUB_OUTPUT"
+          fi
+
+  docs:
+    name: Documentation format
+    needs: scope
+    if: needs.scope.outputs.docs_only == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.17.1
+          run_install: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check formatting
+        run: pnpm format:check
+
+  static:
+    name: Static checks, unit and Worker tests
+    needs: scope
+    if: needs.scope.outputs.docs_only != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     env:
       CI: true
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -38,21 +99,96 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
-      - name: Set up repository dependencies
-        run: pnpm run setup
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-      - name: Run repository verification
-        run: ./scripts/verify.sh
+      - name: Run repository verification without browser tests
+        run: ./scripts/verify.sh --no-e2e
+
+      - name: Analyze with SonarQube Cloud
+        if: env.SONAR_TOKEN != ''
+        uses: SonarSource/sonarqube-scan-action@v8
+
+  e2e:
+    name: Browser tests (${{ matrix.name }})
+    needs: scope
+    if: needs.scope.outputs.docs_only != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: chromium-desktop
+            browser: chromium
+            projects: chromium-desktop,asset-pipeline
+          - name: chromium-mobile
+            browser: chromium
+            projects: chromium-mobile
+          - name: webkit-desktop
+            browser: webkit
+            projects: webkit-desktop
+          - name: webkit-mobile
+            browser: webkit
+            projects: webkit-mobile
+    env:
+      CI: true
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.17.1
+          run_install: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install ${{ matrix.browser }}
+        run: pnpm exec playwright install --with-deps ${{ matrix.browser }}
+
+      - name: Run browser tests
+        run: pnpm test:e2e
+        env:
+          E2E_PROJECTS: ${{ matrix.projects }}
 
       - name: Upload Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.name }}
           path: playwright-report/
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Analyze with SonarQube Cloud
-        if: env.SONAR_TOKEN != ''
-        uses: SonarSource/sonarqube-scan-action@v8
+  verify:
+    name: Verify
+    needs: [scope, docs, static, e2e]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every needed job to pass
+        env:
+          DOCS_ONLY: ${{ needs.scope.outputs.docs_only }}
+          SCOPE: ${{ needs.scope.result }}
+          DOCS: ${{ needs.docs.result }}
+          STATIC: ${{ needs.static.result }}
+          E2E: ${{ needs.e2e.result }}
+        run: |
+          echo "scope=$SCOPE docs_only=$DOCS_ONLY docs=$DOCS static=$STATIC e2e=$E2E"
+          test "$SCOPE" = success
+          if [[ "$DOCS_ONLY" == true ]]; then
+            test "$DOCS" = success
+          else
+            test "$STATIC" = success
+            test "$E2E" = success
+          fi

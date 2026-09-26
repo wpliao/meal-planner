@@ -17,6 +17,8 @@ on:
 
 permissions:
   contents: read
+  # Read CI's result for the deployed commit (scripts/ci-verified.sh).
+  actions: read
 
 # Shared with household-decommission.yml: a deploy must never overlap a
 # household decommission of the same environment.
@@ -28,7 +30,7 @@ jobs:
   validate-production-intent:
     name: Validate production intent
     if: inputs.environment == 'production'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Require explicit confirmation
         env:
@@ -38,8 +40,8 @@ jobs:
   deploy-development:
     name: Deploy development
     if: inputs.environment == 'development'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     environment: development
     env:
       CI: true
@@ -55,8 +57,22 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
-      - run: pnpm run setup
-      - run: ./scripts/verify.sh
+      - run: pnpm install --frozen-lockfile
+      # CI's push run for this commit already ran every check; reuse it, or
+      # run the full gate here when it is missing, failed, or still running
+      # after 20 minutes.
+      - name: Reuse CI verification of this commit
+        id: ci
+        run: ./scripts/ci-verified.sh "$GITHUB_SHA"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_VERIFIED_TIMEOUT_SECONDS: 1200
+      - name: Install test browsers for the full gate
+        if: steps.ci.outputs.verified != 'true'
+        run: pnpm run setup:browsers
+      - name: Run the full gate
+        if: steps.ci.outputs.verified != 'true'
+        run: ./scripts/verify.sh
       - name: Build development configuration
         run: pnpm build
         env:
@@ -74,8 +90,8 @@ jobs:
     name: Deploy production
     if: inputs.environment == 'production'
     needs: validate-production-intent
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     environment: production
     env:
       CI: true
@@ -91,8 +107,22 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
-      - run: pnpm run setup
-      - run: ./scripts/verify.sh
+      - run: pnpm install --frozen-lockfile
+      # CI's push run for this commit already ran every check; reuse it, or
+      # run the full gate here when it is missing, failed, or still running
+      # after 20 minutes.
+      - name: Reuse CI verification of this commit
+        id: ci
+        run: ./scripts/ci-verified.sh "$GITHUB_SHA"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_VERIFIED_TIMEOUT_SECONDS: 1200
+      - name: Install test browsers for the full gate
+        if: steps.ci.outputs.verified != 'true'
+        run: pnpm run setup:browsers
+      - name: Run the full gate
+        if: steps.ci.outputs.verified != 'true'
+        run: ./scripts/verify.sh
       - name: Build production configuration
         run: pnpm build
         env:

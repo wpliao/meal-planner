@@ -112,8 +112,9 @@ needs no tool-specific copy.
 ## Verification requirement
 
 Delegation does not reduce the quality bar. The root agent must review all
-outputs and ensure that `./scripts/verify.sh`, relevant Worker and E2E tests,
-CI, and the Sonar Quality Gate (once configured) pass, with no unresolved
+outputs and ensure that the relevant Worker and E2E tests, CI's `Verify`
+check (the full gate, as in `./scripts/verify.sh`), and the Sonar Quality Gate
+(once configured) pass, with no unresolved
 high-severity security finding. Exact commands and results belong in the
 feature record or pull request according to
 [`docs/FEATURE_LIFECYCLE.md`](FEATURE_LIFECYCLE.md). The pull request handoff
