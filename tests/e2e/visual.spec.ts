@@ -809,6 +809,66 @@ const stubPlan = async (
   plan: { entries: unknown[] } = PLAN,
 ) => {
   await page.clock.setFixedTime(PLAN_NOW);
+  const week = path.slice('/plan/'.length);
+  type Entry = {
+    id: string;
+    date: string;
+    kind: string;
+    title: string;
+    recipeId?: string | null;
+    recipeRemoved?: boolean;
+  };
+  const entries = plan.entries as Entry[];
+  const keys = [
+    'energyKj',
+    'proteinG',
+    'fatG',
+    'saturatedFatG',
+    'carbohydrateG',
+    'sugarsG',
+    'fibreG',
+    'sodiumMg',
+  ];
+  const summary = (items: Entry[]) => {
+    const included = items.filter(
+      (entry) => entry.kind === 'recipe' && entry.recipeId === RECIPE_ID,
+    ).length;
+    return {
+      planned: items.length,
+      included,
+      nutrients: Object.fromEntries(
+        keys.map((key) => [
+          key,
+          {
+            value: included ? included * (key === 'energyKj' ? 200 : 10) : null,
+            partial: included !== items.length,
+          },
+        ]),
+      ),
+      gaps: items
+        .filter((entry) => entry.kind !== 'recipe' || entry.recipeRemoved)
+        .map((entry) => ({
+          entryId: entry.id,
+          date: entry.date,
+          title: entry.title,
+          recipeId: null,
+          reasons: [entry.kind === 'text' ? 'text_meal' : 'recipe_removed'],
+        })),
+    };
+  };
+  const days = Array.from({ length: 7 }, (_, offset) => {
+    const date = new Date(Date.parse(`${week}T00:00:00Z`) + offset * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    return { date, ...summary(entries.filter((entry) => entry.date === date)) };
+  });
+  const nutrition = { weekStart: week, days, week: summary(entries) };
+  await page.route('**/api/meal-plan/nutrition?*', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify(nutrition),
+    }),
+  );
   await page.route('**/api/meal-plan?*', (route) =>
     route.fulfill({
       contentType: 'application/json',
@@ -819,6 +879,9 @@ const stubPlan = async (
   await stubSuggestions(page);
   await stubRecipes(page, path, 'Plan');
   await expect(page.getByTestId('plan-entry')).toHaveCount(plan.entries.length);
+  await expect(page.getByTestId('plan-nutrition')).toContainText(
+    `${plan.entries.length} planned entries included`,
+  );
 };
 
 const planPanel = (page: Page) => page.getByTestId('plan-panel');

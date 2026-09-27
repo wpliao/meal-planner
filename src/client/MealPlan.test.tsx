@@ -20,6 +20,20 @@ import {
 import type { MealPlanEntry } from '../shared/meal-plan';
 import type { MealSuggestion } from '../shared/meal-suggestions';
 
+// This suite covers the existing plan interactions. Nutrition has its own
+// component tests; suppress its independent read so ordered plan fetches stay
+// specific to the behavior asserted here.
+vi.mock('./MealPlanNutrition', () => ({
+  WeekNutrition: () => null,
+  DayNutrition: () => null,
+}));
+vi.mock('./useMealPlanNutrition', () => ({
+  useMealPlanNutrition: () => ({
+    state: { kind: 'loading' },
+    retry: () => undefined,
+  }),
+}));
+
 beforeEach(() => {
   // Only the clock is faked; promises and Mantine's transitions run for real.
   vi.useFakeTimers({ toFake: ['Date'] });

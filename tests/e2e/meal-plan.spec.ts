@@ -168,6 +168,92 @@ test('home is the plan, first in the navigation', async ({ page }) => {
   ).toHaveText(['Plan', 'Pantry', 'Recipes', 'Family']);
 });
 
+test('shows day and week nutrition on a phone and refreshes after a plan edit', async ({
+  page,
+}, testInfo) => {
+  const monday = futureWeek(10);
+  const tuesday = addDays(monday, 1);
+  await openPlan(page, '/plan');
+  const title = unique('Egg supper');
+  const recipe = (
+    await call<{ recipe: Saved }>(
+      page.request,
+      testInfo,
+      'POST',
+      '/api/recipes',
+      {
+        title,
+        ingredients: ['1 large egg', 'salt to taste'],
+        steps: ['Cook the egg.'],
+        servings: 2,
+      },
+    )
+  ).recipe;
+  await call(
+    page.request,
+    testInfo,
+    'PUT',
+    `/api/recipes/${recipe.id}/nutrition`,
+    {
+      recipeVersion: recipe.version,
+      matches: [
+        {
+          position: 1,
+          line: '1 large egg',
+          fdcId: 171287,
+          quantity: 100,
+          unit: 'g',
+        },
+        { position: 2, line: 'salt to taste', fdcId: null },
+      ],
+    },
+  );
+  await createEntry(page, testInfo, {
+    date: monday,
+    slot: 'dinner',
+    recipeId: recipe.id,
+  });
+  await createEntry(page, testInfo, {
+    date: tuesday,
+    slot: 'lunch',
+    recipeId: recipe.id,
+  });
+  await openPlan(page, `/plan/${monday}`);
+
+  const estimate = page.getByTestId('plan-nutrition');
+  await expect(estimate).toContainText('2 of 2 planned entries included');
+  await expect(estimate.getByRole('row', { name: /^Energy/u })).toContainText(
+    '599 kJ (143 kcal)',
+  );
+  await expect(
+    day(page, monday).getByTestId('plan-day-nutrition'),
+  ).toContainText('300 kJ (72 kcal)');
+  await estimate.getByText('Needs attention (2)').click();
+  await expect(
+    estimate.getByRole('link', { name: new RegExp(title, 'u') }),
+  ).toHaveCount(2);
+  await expect(estimate).toContainText('An ingredient was not counted');
+  await estimate
+    .getByRole('link', { name: new RegExp(title, 'u') })
+    .first()
+    .click();
+  await expect(
+    page.getByRole('heading', { level: 1, name: title }),
+  ).toBeVisible();
+  await page.goBack();
+  await expect(estimate).toContainText('2 of 2 planned entries included');
+
+  await slot(page, monday, 'lunch')
+    .getByRole('button', { name: `Add to lunch, ${dayName(monday)}` })
+    .click();
+  const dialog = await openedDialog(page);
+  await dialog.getByRole('radio', { name: 'Type a meal' }).check();
+  await dialog.getByRole('textbox', { name: 'Meal' }).fill(unique('Leftovers'));
+  await dialog.getByRole('button', { name: 'Add to plan' }).click();
+  await expect(estimate).toContainText('2 of 3 planned entries included');
+  await expect(estimate.getByText('Needs attention (3)')).toBeVisible();
+});
+
 test('a member plans a recipe and a typed meal, moves one, edits a note, and removes one', async ({
   page,
 }, testInfo) => {
