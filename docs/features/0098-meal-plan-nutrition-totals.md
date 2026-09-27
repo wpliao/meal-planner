@@ -5,7 +5,7 @@
 - Issue: [#98](https://github.com/wpliao/meal-planner/issues/98)
 - Product owner: Repository owner
 - Last updated: 2026-09-27
-- Pull requests: [#99 — accepted design](https://github.com/wpliao/meal-planner/pull/99)
+- Pull requests: [#99 — accepted design](https://github.com/wpliao/meal-planner/pull/99); [#100 — implementation](https://github.com/wpliao/meal-planner/pull/100)
 
 ## Problem and outcome
 
@@ -316,7 +316,7 @@ incomplete-value policy, on 2026-09-27.
 | 2026-09-27 | Propose a read-only daily and weekly estimate over current plan entries and saved recipe matches, with one serving per entry as the provisional rule | Ship the next major nutrition capability using the released #49 and #84 data and boundaries                                     | [Issue #98](https://github.com/wpliao/meal-planner/issues/98); [design PR #99](https://github.com/wpliao/meal-planner/pull/99)             |
 | 2026-09-27 | Choose one serving per planned recipe entry; keep the design in `Designing` pending full acceptance                                                  | The plan is shared and has no portion field; one serving gives an understandable per-person planning estimate without migration | Product owner's Codex reply on 2026-09-27; [issue #98](https://github.com/wpliao/meal-planner/issues/98)                                   |
 | 2026-09-27 | Accept the full design and stabilize `AC-01`–`AC-07` without changing their identifiers                                                              | The owner explicitly accepted the design after choosing the one-serving rule                                                    | Product owner's Codex reply on 2026-09-27; [issue #98](https://github.com/wpliao/meal-planner/issues/98)                                   |
-| 2026-09-27 | Begin the read-only implementation after design PR #99 merged; retain the accepted portion and gap rules                                             | The accepted design is now on `main` and needs an independently reviewable code PR                                              | [Design PR #99](https://github.com/wpliao/meal-planner/pull/99); implementation branch `codex/98-meal-plan-nutrition-implementation`       |
+| 2026-09-27 | Begin the read-only implementation after design PR #99 merged; retain the accepted portion and gap rules                                             | The accepted design is now on `main` and needs an independently reviewable code PR                                              | [Design PR #99](https://github.com/wpliao/meal-planner/pull/99); [implementation PR #100](https://github.com/wpliao/meal-planner/pull/100) |
 | 2026-09-27 | Reserve the week table during a pending nutrition read, keep the previous estimate during refresh, and place day details after meal controls         | A late nutrition response moved an open plan menu in WebKit; the plan must remain usable while this independent read completes  | Local full browser run on 2026-09-27; `src/client/MealPlanNutrition.test.tsx` — “reserves the week table while nutrition is still loading” |
 
 ## Release record
