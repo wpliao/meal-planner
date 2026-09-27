@@ -5,7 +5,7 @@
 - Issue: [#84](https://github.com/wpliao/meal-planner/issues/84)
 - Product owner: Repository owner
 - Last updated: 2026-09-27
-- Pull requests: [#85 — design proposal](https://github.com/wpliao/meal-planner/pull/85); [#88 — implementation, part A](https://github.com/wpliao/meal-planner/pull/88); [#89 — load fix](https://github.com/wpliao/meal-planner/pull/89); [#90 — implementation, part B](https://github.com/wpliao/meal-planner/pull/90); [#93 — Workers AI output cap](https://github.com/wpliao/meal-planner/pull/93); [#94 — Workers AI cancellation](https://github.com/wpliao/meal-planner/pull/94); [#95 — development validation record](https://github.com/wpliao/meal-planner/pull/95); [#96 — CPU validation record](https://github.com/wpliao/meal-planner/pull/96)
+- Pull requests: [#85 — design proposal](https://github.com/wpliao/meal-planner/pull/85); [#88 — implementation, part A](https://github.com/wpliao/meal-planner/pull/88); [#89 — load fix](https://github.com/wpliao/meal-planner/pull/89); [#90 — implementation, part B](https://github.com/wpliao/meal-planner/pull/90); [#93 — Workers AI output cap](https://github.com/wpliao/meal-planner/pull/93); [#94 — Workers AI cancellation](https://github.com/wpliao/meal-planner/pull/94); [#95 — development validation record](https://github.com/wpliao/meal-planner/pull/95); [#96 — CPU validation record](https://github.com/wpliao/meal-planner/pull/96); [#97 — production release record](https://github.com/wpliao/meal-planner/pull/97)
 
 ## Problem and outcome
 
