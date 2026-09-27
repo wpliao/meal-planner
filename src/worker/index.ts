@@ -31,6 +31,10 @@ import {
   type MealPlanResponse,
 } from '../shared/meal-plan';
 import {
+  nutritionWeekQuery,
+  type MealPlanNutritionResponse,
+} from '../shared/meal-plan-nutrition';
+import {
   rankMealSuggestions,
   validateSuggestionQuery,
   type MealSuggestionsResponse,
@@ -90,6 +94,7 @@ import {
   readMealPlan,
   updateMealPlanEntry,
 } from './data/meal-plan-repository';
+import { readMealPlanNutrition } from './data/meal-plan-nutrition-repository';
 import { readSuggestionInput } from './data/meal-suggestion-repository';
 import {
   readRecipeNutrition,
@@ -161,6 +166,7 @@ const NUTRITION_FOODS_PATH = '/api/nutrition/foods';
 
 const RECIPE_IMPORT_PATH = '/api/recipes/import-preview';
 const MEAL_PLAN_PATH = '/api/meal-plan';
+const MEAL_PLAN_NUTRITION_PATH = '/api/meal-plan/nutrition';
 const MEAL_PLAN_ENTRIES_PATH = '/api/meal-plan/entries';
 const MEAL_PLAN_SUGGESTIONS_PATH = '/api/meal-plan/suggestions';
 const MEAL_PLAN_ENTRY_PATH =
@@ -947,6 +953,28 @@ const handleMealPlan = async (
   return json(body);
 };
 
+/** A seven-day, read-only estimate from confirmed current USDA matches. */
+const handleMealPlanNutrition = async (
+  request: Request,
+  env: AppEnv,
+  identityProvider: IdentityProvider,
+): Promise<Response> => {
+  if (request.method !== 'GET') {
+    throw new ApiError(404, 'not_found', 'Not found.');
+  }
+  const member = await requireMemberForRequest(request, env, identityProvider);
+  const weekStart = nutritionWeekQuery(new URL(request.url).searchParams);
+  if (weekStart === null) {
+    throw invalidRequest('Provide week as one Monday date and nothing else.');
+  }
+  const body: MealPlanNutritionResponse = await readMealPlanNutrition(
+    env.DB,
+    member.householdId,
+    weekStart,
+  );
+  return json(body);
+};
+
 /**
  * Read-only: ranks the household's own recipes for one meal date (the #73
  * design). Membership is checked before the query and before any household
@@ -1165,6 +1193,10 @@ const route = async (
 
   if (url.pathname === MEAL_PLAN_PATH) {
     return handleMealPlan(request, env, identityProvider);
+  }
+
+  if (url.pathname === MEAL_PLAN_NUTRITION_PATH) {
+    return handleMealPlanNutrition(request, env, identityProvider);
   }
 
   if (url.pathname === MEAL_PLAN_SUGGESTIONS_PATH) {

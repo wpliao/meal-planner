@@ -22,6 +22,8 @@ import {
   RemoveEntryDialog,
   type DialogOutcome,
 } from './MealPlanDialogs';
+import { DayNutrition, WeekNutrition } from './MealPlanNutrition';
+import { useMealPlanNutrition } from './useMealPlanNutrition';
 import {
   dayLabel,
   groupWeek,
@@ -47,6 +49,7 @@ import {
   type MealPlanUsage,
   type MealSlot,
 } from '../shared/meal-plan';
+import type { PlanNutritionDay } from '../shared/meal-plan-nutrition';
 
 type LoadState =
   | { kind: 'loading' }
@@ -84,6 +87,12 @@ function Week({
   today: todayDate,
 }: Readonly<{ weekStart: string; today: string }>) {
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
+  const [nutritionRevision, setNutritionRevision] = useState(0);
+  const nutrition = useMealPlanNutrition(
+    weekStart,
+    state.kind === 'ready',
+    nutritionRevision,
+  );
   const [notice, setNotice] = useState<Notice>(null);
   const [dialog, setDialog] = useState<Dialog | null>(null);
   // Registries of the controls focus returns to. They are filled by ref
@@ -107,6 +116,7 @@ function Week({
         entries: response.entries,
         usage: response.usage,
       });
+      setNutritionRevision((value) => value + 1);
     } catch {
       setState({ kind: 'unavailable' });
     }
@@ -294,6 +304,11 @@ function Week({
       {week && state.kind === 'ready' && (
         <>
           <UsageHint usage={state.usage} weekStart={weekStart} />
+          <WeekNutrition
+            planned={state.entries.length}
+            retry={nutrition.retry}
+            state={nutrition.state}
+          />
           {state.entries.length === 0 && (
             <Text c="dimmed" data-testid="plan-empty" mb="md">
               Nothing is planned for this week yet. Use Add under any meal to
@@ -308,6 +323,13 @@ function Week({
                 isToday={date === todayDate}
                 key={date}
                 menuButtons={menuButtons}
+                nutrition={
+                  nutrition.state.kind === 'ready'
+                    ? nutrition.state.value.days.find(
+                        (day) => day.date === date,
+                      )
+                    : undefined
+                }
                 onAction={setDialog}
                 slots={week[date]}
               />
@@ -395,6 +417,7 @@ function Day({
   slots,
   addButtons,
   menuButtons,
+  nutrition,
   onAction,
 }: Readonly<{
   date: string;
@@ -402,6 +425,7 @@ function Day({
   slots: Record<MealSlot, MealPlanEntry[]>;
   addButtons: Map<string, HTMLButtonElement>;
   menuButtons: Map<string, HTMLButtonElement>;
+  nutrition?: PlanNutritionDay;
   onAction: (dialog: Dialog) => void;
 }>) {
   const headingId = `day-${date}`;
@@ -488,6 +512,7 @@ function Day({
           );
         })}
       </Stack>
+      {nutrition && <DayNutrition day={nutrition} />}
     </Card>
   );
 }
