@@ -23,8 +23,9 @@ need attention. It is a planning estimate, not a record of what anyone ate.
 
 The owner wants the major features available for an app release. This design
 keeps the slice on the existing plan and nutrition data: no new provider,
-dataset, targets, or tracking workflow. It is **not accepted yet**; the
-[portion rule](#open-owner-decision) must be resolved before implementation.
+dataset, targets, or tracking workflow. The owner chose
+[one serving per planned recipe entry](#resolved-portion-decision). The
+overall design still awaits acceptance before implementation.
 
 ## User scenarios
 
@@ -32,7 +33,7 @@ dataset, targets, or tracking workflow. It is **not accepted yet**; the
    see an estimate for each day and the Monday–Sunday week, with the existing
    eight nutrients and energy in kJ and kcal.
 2. Given the same recipe planned twice, when totals are calculated, then
-   each entry contributes once under the accepted portion rule. A moved or
+   each entry contributes one serving. A moved or
    removed entry affects the next read.
 3. Given a recipe with an unchecked or changed ingredient, a deliberate
    **Don't count** line, a missing USDA nutrient, or no servings count, when
@@ -68,15 +69,15 @@ They become stable when the owner accepts the design.
       NZ/AU panel nutrients for each day and the displayed Monday–Sunday
       week, with energy in kJ and kcal, using only saved current recipe
       matches and USDA reference values.
-- [ ] `AC-02`: Each planned recipe entry contributes according to the
-      accepted portion rule. Repeated entries each contribute once. Free-text
+- [ ] `AC-02`: Each planned recipe entry contributes one serving of its
+      linked recipe. Repeated entries each contribute one serving. Free-text
       entries and deleted recipes contribute no numeric value and are
       identified as gaps.
 - [ ] `AC-03`: The view distinguishes a complete estimate from partial data:
-      unchecked or changed ingredient lines, uncounted lines, recipes without
-      servings, and missing nutrient values are represented according to the
-      accepted design. A member can navigate to a live recipe to address a
-      gap.
+      unchecked, changed, or deliberately uncounted ingredient lines and
+      missing USDA nutrient values mark known values as partial; a recipe
+      without servings contributes no number. No gap is treated as zero, and
+      a member can navigate to a live recipe to address it.
 - [ ] `AC-04`: Totals reflect current household plan entries, recipe
       servings, ingredient text, confirmed matches, and USDA values on the
       next read. No AI request, nutrient snapshot, or member-entered nutrient
@@ -97,8 +98,8 @@ They become stable when the owner accepts the design.
 The `/plan/:weekStart` view gains a **Week nutrition estimate** section after
 the week navigation and before the day cards. It shows the eight existing
 panel rows, including energy in kJ with kcal in parentheses, and the plain
-sentence **Based on one serving of each included recipe entry** under the
-provisional portion rule. The section says how many of the week's planned
+sentence **Based on one serving of each included recipe entry**. The section
+says how many of the week's planned
 entries contributed. A day card gains a compact **Day nutrition estimate**
 line with energy, protein, and coverage; an expandable table shows all eight
 rows. The week table remains visible. A member can open a day's details with
@@ -111,7 +112,7 @@ estimate. Repeated entries count separately. The section lists gaps by day
 and entry, using the plan's existing display title and a reason:
 
 - **Add servings** when a live recipe has counted nutrition but no servings;
-  it contributes no value under the provisional per-serving rule.
+  it contributes no value under the one-serving rule.
 - **Work out nutrition** when no current counted ingredient contributes.
 - **Check recipe nutrition** when ingredient lines are unchecked, changed,
   or deliberately not counted. A partial recipe still contributes its known
@@ -183,15 +184,14 @@ resolves this display-only difference.
 
 ### Portion rule and aggregation
 
-**Provisional owner decision:** each plan entry represents one serving of
-its linked recipe. A recipe with `servings = 4` contributes one quarter of
+**Owner decision:** each plan entry represents one serving of its linked
+recipe. A recipe with `servings = 4` contributes one quarter of
 its whole-recipe known values for each entry. The daily total sums entries
 on that date across breakfast, lunch, and dinner. The week sums the seven
 unrounded daily totals. Two entries for the same recipe contribute twice.
 The result is an illustrative one-person menu; it does not claim to be a
 household total or an intake record. The section and API contract must say
-this explicitly. The owner may instead choose whole recipes or editable
-portions in the [open decision](#open-owner-decision).
+this explicitly.
 
 The aggregation preserves `null` separately from known zero. If a recipe
 or nutrient has no known value, it adds no number and lowers coverage. A
@@ -204,16 +204,14 @@ gaps with AI output or a guessed amount.
 
 ### Data and migrations
 
-Under the provisional one-serving rule, no schema change is needed. The
+Under the chosen one-serving rule, no schema change is needed. The
 endpoint derives its response from the current plan entries, recipes,
 ingredient lines, confirmed matches, and global USDA reference tables.
 It writes no snapshot, personal consumption record, or audit row. Existing
 retention and deletion rules remain: removing a plan entry removes its
 contribution on the next read; recipe deletion retains the plan title but
 sets its link to `NULL`; household decommission deletes plan entries and
-matches. If the owner chooses editable portions, this section must be
-revised with a forward migration, bounds, conflict semantics, retention,
-and a matching decommission test **before acceptance**.
+matches. The plan does not gain an editable portion count.
 
 ### Security and privacy
 
@@ -290,7 +288,7 @@ Update them with exact symbols and test names in the implementation PR.
 
 The design PR contains no app or database changes. After owner acceptance,
 an implementation PR can add the read-only endpoint and UI. No migration,
-secret, provider, or dataset load is needed under the provisional portion
+secret, provider, or dataset load is needed under the chosen portion
 rule. Verify must pass on the implementation PR with Sonar Quality Gate and
 security review. Deploy to development first, validate the phone scenarios
 and bounded CPU behavior, and record the result. Production deployment
@@ -298,24 +296,22 @@ requires explicit owner approval; it does not follow from design acceptance.
 The code can be rolled back by redeploying the previous Worker, with no data
 recovery because no stored format changes.
 
-## Open owner decision
+## Resolved portion decision
 
-**What does one planned recipe entry contribute?** The current plan stores
-no portion count and represents a shared household plan. This design
-recommends **one serving per recipe entry**, with the one-person estimate
-wording above. It is the smallest useful release slice and needs no
-migration. Alternatives are **the whole recipe** (a family-batch estimate)
-or **editable portions per entry** (more accurate for varying meals, but a
-new field, migration, edit UI, conflict handling, and additional tests).
-The owner has been asked to choose. No design status change to `Accepted`
-or implementation should occur until the choice is recorded here and in
-issue #98.
+The owner chose **one serving per planned recipe entry** on 2026-09-27.
+The current plan stores no portion count and represents a shared household
+plan. This choice makes the totals an illustrative one-person menu and keeps
+the release slice read-only, with no migration. Whole-recipe totals and
+editable portions were considered but are outside this feature. Acceptance
+of the full design is still pending; the status remains `Designing` until
+the owner agrees to its experience, contracts, and incomplete-value policy.
 
 ## Decision and change log
 
-| Date       | Change                                                                                                                                               | Reason                                                                                      | Evidence                                                                                                                       |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| 2026-09-27 | Propose a read-only daily and weekly estimate over current plan entries and saved recipe matches, with one serving per entry as the provisional rule | Ship the next major nutrition capability using the released #49 and #84 data and boundaries | [Issue #98](https://github.com/wpliao/meal-planner/issues/98); [design PR #99](https://github.com/wpliao/meal-planner/pull/99) |
+| Date       | Change                                                                                                                                               | Reason                                                                                                                          | Evidence                                                                                                                       |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-09-27 | Propose a read-only daily and weekly estimate over current plan entries and saved recipe matches, with one serving per entry as the provisional rule | Ship the next major nutrition capability using the released #49 and #84 data and boundaries                                     | [Issue #98](https://github.com/wpliao/meal-planner/issues/98); [design PR #99](https://github.com/wpliao/meal-planner/pull/99) |
+| 2026-09-27 | Choose one serving per planned recipe entry; keep the design in `Designing` pending full acceptance                                                  | The plan is shared and has no portion field; one serving gives an understandable per-person planning estimate without migration | Product owner's Codex reply on 2026-09-27; [issue #98](https://github.com/wpliao/meal-planner/issues/98)                       |
 
 ## Release record
 
