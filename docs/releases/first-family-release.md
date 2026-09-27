@@ -2,6 +2,7 @@
 
 - Status: Draft for owner review
 - Tracking issue: [#103](https://github.com/wpliao/meal-planner/issues/103)
+- Preparation PR: [#104](https://github.com/wpliao/meal-planner/pull/104)
 - Proposed GitHub release tag: `v1.0.0`
 - Scope decision: Phases 1–7, with Phase 7 represented by the released
   human-reviewed AI ingredient-matching workflow in #84
