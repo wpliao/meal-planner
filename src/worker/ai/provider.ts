@@ -3,6 +3,7 @@ export interface AiRequest {
   system: string;
   user: unknown;
   schema: Record<string, unknown>;
+  maxOutputTokens: number;
 }
 
 export type AiFailure =

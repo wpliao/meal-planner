@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   choosePrompt,
   normalizePrompt,
+  proposalOutputTokens,
   validateChoices,
   validateNormalized,
 } from '../../src/worker/ai/nutrition-proposals';
@@ -17,6 +18,7 @@ const request = {
   system: 'instruction',
   user: { lines: [] },
   schema: { type: 'object' },
+  maxOutputTokens: 512,
 };
 const good = {
   lines: [
@@ -32,6 +34,11 @@ const good = {
 const line = [{ position: 1, text: '2 tbsp soy sauce' }];
 
 describe('nutrition AI payloads', () => {
+  it('budgets enough output tokens for structured recipe lines', () => {
+    expect(proposalOutputTokens(1)).toBe(512);
+    expect(proposalOutputTokens(10)).toBe(960);
+    expect(proposalOutputTokens(100)).toBe(8192);
+  });
   it('sends only the title, requested lines, USDA names and portions', () => {
     const recipe = {
       title: 'Dinner',
@@ -255,6 +262,7 @@ describe('gateway adapters', () => {
       '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
       expect.objectContaining({
         response_format: { type: 'json_schema', json_schema: request.schema },
+        max_tokens: 512,
       }),
       { gateway: { id: 'development-gateway', skipCache: true } },
     );
