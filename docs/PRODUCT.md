@@ -29,6 +29,15 @@ application behavior is a placeholder screen and health endpoint.
 
 ### Planned product phases
 
+For the first family release, Phases 1–6 are delivered. The Phase 7 scope is
+the human-reviewed AI ingredient-matching workflow released with
+[#84](features/0084-recipe-nutrition.md): it uses a provider abstraction and
+AI Gateway, proposes bounded matches, and saves nothing until a member
+confirms. The owner chose this Phases 1–7 scope on 2026-09-28 for the
+[first family release](https://github.com/wpliao/meal-planner/issues/103). AI meal
+suggestions and recipe transformations remain possible later features, not
+claims about this release. Phases 8–9 remain future work.
+
 1. Trusted family boundary: validate identity, household membership, roles, and
    authorization before accepting personal product data.
 2. Lightweight pantry: record useful availability and shopping signals without
@@ -41,9 +50,11 @@ application behavior is a placeholder screen and health endpoint.
 6. Structured nutrition: calculate values from authoritative, cited data and
    explicit quantities rather than model-generated estimates.
 7. Bounded AI assistance: add provider-neutral suggestion or transformation
-   workflows through AI Gateway with human confirmation. Its provider
-   boundary arrives early, with the first Phase 6 feature
-   ([#84](features/0084-recipe-nutrition.md)), for ingredient matching only.
+   workflows through AI Gateway with human confirmation. The first workflow
+   arrived with the Phase 6 [recipe nutrition feature](features/0084-recipe-nutrition.md):
+   AI proposes ingredient matches for review, with Workers AI and Gemini behind
+   the same provider boundary. Other AI workflows need their own accepted
+   feature issues and designs.
 8. Photo ingestion: propose pantry updates from images and require review before
    changing structured records.
 9. PWA and operations: add offline behavior only where consistency rules are

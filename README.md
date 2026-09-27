@@ -1,8 +1,11 @@
 # Family Meal Planner
 
-A private, responsive family meal-planning application. Phase 1 is implementing
-the trusted household boundary; pantry, recipe, nutrition, and AI features have
-not been implemented yet.
+A private, responsive family meal-planning application. The production app
+brings together household access, pantry and shopping signals, a recipe library,
+meal plans, explainable recipe suggestions, and recipe and plan nutrition.
+Recipe ingredient matching uses AI proposals that a member reviews before
+saving. [The product roadmap](./docs/PRODUCT.md) records the release scope and
+future photo and offline work.
 
 ## Quick start
 
