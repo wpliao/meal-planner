@@ -304,7 +304,8 @@ A proposal request runs these steps; see
 
 **Fallback.** Each step tries Workers AI first. Gemini is tried when Workers
 AI returns an error (including the daily-allowance error), times out after
-15 seconds, or fails validation, and only while the environment's
+15 seconds, or fails validation. The timeout signal is passed to both provider
+requests so the abandoned call can be cancelled. Gemini is tried only while the environment's
 `GEMINI_FALLBACK` variable is `on` and its key is set. If both fail, the
 response has `provider: null`. The two steps of one request may be answered
 by different providers, and the response names the provider of the second

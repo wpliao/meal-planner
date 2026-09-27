@@ -253,10 +253,8 @@ describe('gateway adapters', () => {
       '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
       'development-gateway',
     );
-    const result = await adapter.complete(
-      request,
-      new AbortController().signal,
-    );
+    const signal = new AbortController().signal;
+    const result = await adapter.complete(request, signal);
     expect(result).toEqual({ ok: true, value: good });
     expect(run).toHaveBeenCalledWith(
       '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
@@ -264,7 +262,7 @@ describe('gateway adapters', () => {
         response_format: { type: 'json_schema', json_schema: request.schema },
         max_tokens: 512,
       }),
-      { gateway: { id: 'development-gateway', skipCache: true } },
+      { gateway: { id: 'development-gateway', skipCache: true }, signal },
     );
   });
 
