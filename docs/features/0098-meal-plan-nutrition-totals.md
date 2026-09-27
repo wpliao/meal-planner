@@ -1,11 +1,11 @@
 # Feature: Daily and weekly meal-plan nutrition totals
 
-- Status: Designing
+- Status: Accepted
 - Phase: 6 — structured nutrition
 - Issue: [#98](https://github.com/wpliao/meal-planner/issues/98)
 - Product owner: Repository owner
 - Last updated: 2026-09-27
-- Pull requests: [#99 — draft design proposal](https://github.com/wpliao/meal-planner/pull/99)
+- Pull requests: [#99 — accepted design](https://github.com/wpliao/meal-planner/pull/99)
 
 ## Problem and outcome
 
@@ -25,7 +25,9 @@ The owner wants the major features available for an app release. This design
 keeps the slice on the existing plan and nutrition data: no new provider,
 dataset, targets, or tracking workflow. The owner chose
 [one serving per planned recipe entry](#resolved-portion-decision). The
-overall design still awaits acceptance before implementation.
+owner accepted this full design on 2026-09-27. Acceptance authorizes
+implementation after the design PR merges; it does not authorize a
+development or production deployment.
 
 ## User scenarios
 
@@ -62,8 +64,7 @@ overall design still awaits acceptance before implementation.
 
 ## Acceptance criteria
 
-These draft identifiers mirror [issue #98](https://github.com/wpliao/meal-planner/issues/98).
-They become stable when the owner accepts the design.
+These stable identifiers mirror [issue #98](https://github.com/wpliao/meal-planner/issues/98).
 
 - [ ] `AC-01`: The week view displays estimated values for the eight existing
       NZ/AU panel nutrients for each day and the displayed Monday–Sunday
@@ -286,8 +287,8 @@ Update them with exact symbols and test names in the implementation PR.
 
 ## Rollout and rollback
 
-The design PR contains no app or database changes. After owner acceptance,
-an implementation PR can add the read-only endpoint and UI. No migration,
+The design PR contains no app or database changes. After it merges, an
+implementation PR can add the read-only endpoint and UI. No migration,
 secret, provider, or dataset load is needed under the chosen portion
 rule. Verify must pass on the implementation PR with Sonar Quality Gate and
 security review. Deploy to development first, validate the phone scenarios
@@ -302,9 +303,9 @@ The owner chose **one serving per planned recipe entry** on 2026-09-27.
 The current plan stores no portion count and represents a shared household
 plan. This choice makes the totals an illustrative one-person menu and keeps
 the release slice read-only, with no migration. Whole-recipe totals and
-editable portions were considered but are outside this feature. Acceptance
-of the full design is still pending; the status remains `Designing` until
-the owner agrees to its experience, contracts, and incomplete-value policy.
+editable portions were considered but are outside this feature. The owner
+accepted the full design, including its experience, contracts, and
+incomplete-value policy, on 2026-09-27.
 
 ## Decision and change log
 
@@ -312,6 +313,7 @@ the owner agrees to its experience, contracts, and incomplete-value policy.
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | 2026-09-27 | Propose a read-only daily and weekly estimate over current plan entries and saved recipe matches, with one serving per entry as the provisional rule | Ship the next major nutrition capability using the released #49 and #84 data and boundaries                                     | [Issue #98](https://github.com/wpliao/meal-planner/issues/98); [design PR #99](https://github.com/wpliao/meal-planner/pull/99) |
 | 2026-09-27 | Choose one serving per planned recipe entry; keep the design in `Designing` pending full acceptance                                                  | The plan is shared and has no portion field; one serving gives an understandable per-person planning estimate without migration | Product owner's Codex reply on 2026-09-27; [issue #98](https://github.com/wpliao/meal-planner/issues/98)                       |
+| 2026-09-27 | Accept the full design and stabilize `AC-01`–`AC-07` without changing their identifiers                                                              | The owner explicitly accepted the design after choosing the one-serving rule                                                    | Product owner's Codex reply on 2026-09-27; [issue #98](https://github.com/wpliao/meal-planner/issues/98)                       |
 
 ## Release record
 
