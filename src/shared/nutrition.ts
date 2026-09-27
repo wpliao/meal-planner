@@ -259,6 +259,55 @@ export interface RecipeNutritionResponse {
   nutrition: RecipeNutrition;
 }
 
+/** Ephemeral AI suggestions. They have no nutrient values and are never saved. */
+export interface IngredientProposal {
+  position: number;
+  fdcId: number | null;
+  food: FoodChoice | null;
+  quantity: number | null;
+  unit: MatchUnit | null;
+}
+
+export interface NutritionProposalsResponse {
+  recipeVersion: number;
+  provider: 'workers-ai' | 'gemini' | 'fake' | null;
+  proposals: IngredientProposal[];
+}
+
+export const validateProposalRequest = (
+  value: unknown,
+): { recipeVersion: number; positions?: number[] } | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const body = value as Record<string, unknown>;
+  if (
+    Object.keys(body).some(
+      (key) => !['recipeVersion', 'positions'].includes(key),
+    )
+  )
+    return null;
+  if (
+    !Number.isSafeInteger(body.recipeVersion) ||
+    (body.recipeVersion as number) < 1
+  )
+    return null;
+  if (body.positions === undefined)
+    return { recipeVersion: body.recipeVersion as number };
+  if (!Array.isArray(body.positions) || body.positions.length > 100)
+    return null;
+  if (
+    body.positions.some(
+      (position) =>
+        !Number.isInteger(position) || position < 1 || position > 100,
+    )
+  )
+    return null;
+  if (new Set(body.positions).size !== body.positions.length) return null;
+  return {
+    recipeVersion: body.recipeVersion as number,
+    positions: body.positions as number[],
+  };
+};
+
 /** A counted line's food values and grams, for the calculation. */
 export interface CountedFood {
   name: string;

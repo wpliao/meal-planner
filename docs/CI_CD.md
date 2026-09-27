@@ -61,6 +61,20 @@ plan's 100,000 a day. To change the dataset, run
 `node scripts/nutrition-dataset-build.ts` in the Dev Container, review the
 diff, and record the new version in the owning feature's decision log.
 
+### AI proposals
+
+Deploy adds the `AI` binding only to named environments. Before a development
+validation of part B, create that environment's authenticated AI Gateway with
+request logging off and configure its optional Gemini secrets as described in
+[Environments](ENVIRONMENTS.md#ai-gateway-setup-for-recipe-nutrition). Workers
+AI still runs when Gemini is not configured. The two model variables and
+`GEMINI_FALLBACK` can disable either provider; when both are off, matching by
+hand remains available. AI requests store no proposals, so reverting the
+Worker version does not require a data rollback. Production retains its
+previous Worker and migrations `0001`–`0005` until the owner's approval on
+issue #84; its first approved deploy applies `0006` and loads the dataset
+before publishing part B.
+
 ### Reusing CI's verification
 
 Development deploys only from `main`, and every push to `main` runs the full

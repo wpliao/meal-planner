@@ -37,8 +37,10 @@ import {
 } from '../shared/meal-suggestions';
 import {
   foodSearchQuery,
+  validateProposalRequest,
   validateSaveNutritionMatches,
   type FoodSearchResponse,
+  type NutritionProposalsResponse,
   type RecipeNutritionResponse,
 } from '../shared/nutrition';
 import {
@@ -56,6 +58,13 @@ import {
   type RecipesResponse,
 } from '../shared/recipes';
 import { getVerifiedIdentity } from './auth/access-identity';
+import {
+  fakeProvider,
+  geminiProvider,
+  workersAiProvider,
+} from './ai/providers';
+import { proposeNutrition } from './ai/nutrition-proposals';
+import type { AiProvider } from './ai/provider';
 import {
   isValidEmail,
   normalizeEmail,
@@ -118,6 +127,14 @@ import {
 type AppEnv = Env &
   IdentityEnv & {
     BOOTSTRAP_OWNER_EMAIL?: string;
+    AI?: Ai;
+    AI_GATEWAY_ID?: string;
+    AI_GATEWAY_ACCOUNT_ID?: string;
+    AI_GATEWAY_TOKEN?: string;
+    GEMINI_API_KEY?: string;
+    GEMINI_FALLBACK?: string;
+    GEMINI_MODEL?: string;
+    WORKERS_AI_MODEL?: string;
   };
 type IdentityProvider = (
   request: Request,
@@ -138,6 +155,8 @@ const RECIPE_PREFERENCES_PATH =
 
 const RECIPE_NUTRITION_PATH =
   /^\/api\/recipes\/([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/nutrition$/iu;
+const RECIPE_NUTRITION_PROPOSALS_PATH =
+  /^\/api\/recipes\/([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/nutrition\/proposals$/iu;
 const NUTRITION_FOODS_PATH = '/api/nutrition/foods';
 
 const RECIPE_IMPORT_PATH = '/api/recipes/import-preview';
@@ -805,6 +824,108 @@ const handleRecipeNutrition = async (
   throw new ApiError(404, 'not_found', 'Not found.');
 };
 
+const aiProviders = (env: AppEnv): AiProvider[] => {
+  if (env.APP_ENV === 'local') return [fakeProvider()];
+  const providers: AiProvider[] = [
+    workersAiProvider(
+      env.AI,
+      env.WORKERS_AI_MODEL ?? 'off',
+      env.AI_GATEWAY_ID ?? '',
+    ),
+  ];
+  if (env.GEMINI_FALLBACK === 'on' && env.GEMINI_API_KEY) {
+    providers.push(
+      geminiProvider(
+        env.AI_GATEWAY_ACCOUNT_ID,
+        env.AI_GATEWAY_ID ?? '',
+        env.GEMINI_MODEL ?? 'off',
+        env.GEMINI_API_KEY,
+        env.AI_GATEWAY_TOKEN,
+      ),
+    );
+  }
+  return providers;
+};
+
+/** Membership precedes every household read and every provider call. */
+const handleNutritionProposals = async (
+  request: Request,
+  env: AppEnv,
+  recipeId: string,
+  identityProvider: IdentityProvider,
+  providers: (env: AppEnv) => AiProvider[],
+): Promise<Response> => {
+  if (request.method !== 'POST')
+    throw new ApiError(404, 'not_found', 'Not found.');
+  requireMutationHeaders(request);
+  const member = await requireMemberForRequest(request, env, identityProvider);
+  const input = validateProposalRequest(await readJsonObject(request));
+  if (!input)
+    throw invalidRequest('Choose a recipe version and valid line positions.');
+  const recipe = await getRecipe(
+    env.DB,
+    member.householdId,
+    recipeId.toLowerCase(),
+  );
+  if (!recipe)
+    throw new ApiError(404, 'not_found', 'That recipe no longer exists.');
+  if (recipe.version !== input.recipeVersion) {
+    throw new ApiError(
+      409,
+      'stale_version',
+      'Someone else changed this recipe. Review the latest version before saving again.',
+      { current: recipe },
+    );
+  }
+  const nutrition = await readRecipeNutrition(
+    env.DB,
+    member.householdId,
+    recipeId.toLowerCase(),
+  );
+  if (!nutrition)
+    throw new ApiError(404, 'not_found', 'That recipe no longer exists.');
+  if (nutrition.recipeVersion !== input.recipeVersion) {
+    const current = await getRecipe(
+      env.DB,
+      member.householdId,
+      recipeId.toLowerCase(),
+    );
+    throw new ApiError(
+      409,
+      'stale_version',
+      'Someone else changed this recipe. Review the latest version before saving again.',
+      { current },
+    );
+  }
+  const requested =
+    input.positions ??
+    nutrition.lines
+      .filter((line) => line.state === 'unchecked' || line.state === 'changed')
+      .map((line) => line.position);
+  if (
+    requested.some(
+      (position) => !nutrition.lines.some((line) => line.position === position),
+    )
+  ) {
+    throw invalidRequest('Choose positions from this recipe.');
+  }
+  const lines = nutrition.lines.filter((line) =>
+    requested.includes(line.position),
+  );
+  const result = await proposeNutrition(
+    env.DB,
+    recipe.title,
+    lines,
+    providers(env),
+  );
+  const body: NutritionProposalsResponse = {
+    recipeVersion: recipe.version,
+    provider: result.provider === 'fake' ? 'fake' : result.provider,
+    proposals: result.proposals,
+  };
+  return json(body);
+};
+
 // Every active member shares the plan; owner role is not required. Household
 // scope always comes from the verified member, never from the request.
 const handleMealPlan = async (
@@ -948,6 +1069,7 @@ const route = async (
   identityProvider: IdentityProvider,
   importFetch: ImportFetch,
   clock: Clock,
+  providers: (env: AppEnv) => AiProvider[],
 ): Promise<Response> => {
   const url = new URL(request.url);
 
@@ -1026,6 +1148,17 @@ const route = async (
     );
   }
 
+  const proposalsMatch = RECIPE_NUTRITION_PROPOSALS_PATH.exec(url.pathname);
+  if (proposalsMatch) {
+    return handleNutritionProposals(
+      request,
+      env,
+      proposalsMatch[1],
+      identityProvider,
+      providers,
+    );
+  }
+
   if (url.pathname === NUTRITION_FOODS_PATH) {
     return handleFoodSearch(request, env, identityProvider);
   }
@@ -1097,11 +1230,19 @@ export const createWorker = (
   identityProvider: IdentityProvider = getVerifiedIdentity,
   importFetch: ImportFetch = (url, init) => fetch(url, init),
   clock: Clock = () => new Date(),
+  providers: (env: AppEnv) => AiProvider[] = aiProviders,
 ) =>
   ({
     async fetch(request: Request, env: AppEnv): Promise<Response> {
       try {
-        return await route(request, env, identityProvider, importFetch, clock);
+        return await route(
+          request,
+          env,
+          identityProvider,
+          importFetch,
+          clock,
+          providers,
+        );
       } catch (error) {
         if (error instanceof ApiError) return errorResponse(error);
         return errorResponse(

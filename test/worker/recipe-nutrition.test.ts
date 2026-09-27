@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import type {
   FoodSearchResponse,
+  NutritionProposalsResponse,
   NutritionMatchInput,
   RecipeNutrition,
   RecipeNutritionResponse,
@@ -9,6 +10,7 @@ import type {
 import type { RecipeResponse } from '../../src/shared/recipes';
 import type { RecipeDetailResponse } from '../../src/shared/recipe-preferences';
 import { createWorker } from '../../src/worker/index';
+import type { AiProvider } from '../../src/worker/ai/provider';
 import {
   applyMigrations,
   bootstrapOwner,
@@ -23,6 +25,7 @@ import {
 const ORIGIN = 'https://example.test';
 const RECIPES_URL = `${ORIGIN}/api/recipes`;
 const nutritionUrl = (id: string) => `${RECIPES_URL}/${id}/nutrition`;
+const proposalsUrl = (id: string) => `${nutritionUrl(id)}/proposals`;
 const searchUrl = (query: string) =>
   `${ORIGIN}/api/nutrition/foods?q=${encodeURIComponent(query)}`;
 
@@ -550,6 +553,263 @@ describe('recipe nutrition API', () => {
         expect(response.status).toBe(404);
       },
     );
+  });
+
+  describe('AI proposals', () => {
+    const propose = (id: string, body: unknown, env = testEnv) =>
+      call(new Request(proposalsUrl(id), mutationInit('POST', body)), env);
+
+    it('uses the local fake and stores no matches', async () => {
+      const response = await propose(recipe, { recipeVersion: 1 });
+      expect(response.status, await response.clone().text()).toBe(200);
+      const body = await response.json<NutritionProposalsResponse>();
+      expect(body.provider).toBe('fake');
+      expect(body.proposals).toHaveLength(3);
+      expect(body.proposals[0]).toMatchObject({
+        position: 1,
+        fdcId: SOY_SAUCE,
+        quantity: 2,
+        unit: 'tbsp',
+      });
+      expect(body.proposals[2]).toMatchObject({ position: 3, fdcId: null });
+      expect((await matchRows()).results).toEqual([]);
+    });
+
+    it('proposes only the requested changed line', async () => {
+      const response = await propose(recipe, {
+        recipeVersion: 1,
+        positions: [2],
+      });
+      expect(response.status).toBe(200);
+      const body = await response.json<NutritionProposalsResponse>();
+      expect(body.proposals.map((item) => item.position)).toEqual([2]);
+    });
+
+    it('uses the fake failure switch for the unavailable path', async () => {
+      const unavailableRecipe = await seedRecipe(household, 'Unavailable', {
+        ingredients: ['[AI_UNAVAILABLE] soy sauce'],
+      });
+      const response = await propose(unavailableRecipe, { recipeVersion: 1 });
+      expect(response.status).toBe(200);
+      const body = await response.json<NutritionProposalsResponse>();
+      expect(body.provider).toBeNull();
+      expect(body.proposals).toEqual([
+        { position: 1, fdcId: null, food: null, quantity: null, unit: null },
+      ]);
+      expect((await matchRows()).results).toEqual([]);
+    });
+
+    it('refuses a stale version or a position outside the recipe before a provider call', async () => {
+      let calls = 0;
+      const recording: AiProvider = {
+        name: 'workers-ai',
+        complete: () => {
+          calls += 1;
+          return Promise.resolve({ ok: false, failure: 'error' });
+        },
+      };
+      const controlled = createWorker(
+        undefined,
+        undefined,
+        () => NOW,
+        () => [recording],
+      );
+      const { env, statements } = recordingEnv();
+      const stale = await controlled.fetch(
+        new Request(
+          proposalsUrl(recipe),
+          mutationInit('POST', { recipeVersion: 2 }),
+        ),
+        env,
+      );
+      expect(stale.status).toBe(409);
+      expect(
+        statements.filter((sql) =>
+          /FROM recipe_ingredient_matches|FROM nutrition_foods|FROM nutrition_food_portions|SELECT version, servings FROM recipes/u.test(
+            sql,
+          ),
+        ),
+      ).toEqual([]);
+      for (const body of [
+        { recipeVersion: 1, positions: [99] },
+        { recipeVersion: 1, positions: [1, 1] },
+        { recipeVersion: 1, householdId: household },
+      ]) {
+        const response = await controlled.fetch(
+          new Request(proposalsUrl(recipe), mutationInit('POST', body)),
+          testEnv,
+        );
+        expect(response.status).toBe(400);
+      }
+      expect(calls).toBe(0);
+      expect((await matchRows()).results).toEqual([]);
+    });
+
+    it('refuses a revoked member and foreign recipe before any provider call', async () => {
+      let calls = 0;
+      const recording: AiProvider = {
+        name: 'workers-ai',
+        complete: () => {
+          calls += 1;
+          return Promise.resolve({ ok: false, failure: 'error' });
+        },
+      };
+      const controlled = createWorker(
+        undefined,
+        undefined,
+        () => NOW,
+        () => [recording],
+      );
+      const other = await seedOtherHousehold();
+      const theirs = await seedRecipe(other.householdId, 'Private', {
+        ingredients: ['secret'],
+      });
+      const foreign = await controlled.fetch(
+        new Request(
+          proposalsUrl(theirs),
+          mutationInit('POST', { recipeVersion: 1 }),
+        ),
+        testEnv,
+      );
+      expect(foreign.status).toBe(404);
+      expect(await foreign.text()).not.toContain('Private');
+      await testEnv.DB.prepare(
+        "UPDATE household_members SET status = 'revoked', revoked_at = ? WHERE access_subject = 'local-owner'",
+      )
+        .bind(NOW.toISOString())
+        .run();
+      const { env, statements } = recordingEnv();
+      const revoked = await controlled.fetch(
+        new Request(
+          proposalsUrl(recipe),
+          mutationInit('POST', { recipeVersion: 1 }),
+        ),
+        env,
+      );
+      expect(revoked.status).toBe(403);
+      expect(
+        statements.filter((sql) =>
+          /recipe_ingredient|recipes|nutrition_/u.test(sql),
+        ),
+      ).toEqual([]);
+      expect(calls).toBe(0);
+    });
+
+    it('discards a food ID outside the candidates and a nutrient value', async () => {
+      const answers: unknown[] = [
+        {
+          lines: [
+            {
+              position: 1,
+              phrase: 'soy sauce',
+              quantity: 2,
+              unit: 'tbsp',
+              notFood: false,
+            },
+          ],
+        },
+        {
+          lines: [
+            {
+              position: 1,
+              fdcId: 99999999,
+              quantity: 2,
+              unit: 'tbsp',
+              energyKj: 999999,
+            },
+          ],
+        },
+      ];
+      const recording: AiProvider = {
+        name: 'workers-ai',
+        complete: () => Promise.resolve({ ok: true, value: answers.shift() }),
+      };
+      const controlled = createWorker(
+        undefined,
+        undefined,
+        () => NOW,
+        () => [recording],
+      );
+      const response = await controlled.fetch(
+        new Request(
+          proposalsUrl(recipe),
+          mutationInit('POST', { recipeVersion: 1, positions: [1] }),
+        ),
+        testEnv,
+      );
+      expect(response.status).toBe(200);
+      const body = await response.json<NutritionProposalsResponse>();
+      expect(body.proposals).toEqual([
+        { position: 1, fdcId: null, food: null, quantity: null, unit: null },
+      ]);
+    });
+
+    it('reports the provider of the choose step after a Workers AI quota answer', async () => {
+      const steps: string[] = [];
+      const workers: AiProvider = {
+        name: 'workers-ai',
+        complete: (request) => {
+          const step = (request.user as { step: string }).step;
+          steps.push(`workers:${step}`);
+          if (step === 'choose')
+            return Promise.resolve({ ok: false, failure: 'quota' });
+          return Promise.resolve({
+            ok: true,
+            value: {
+              lines: [
+                {
+                  position: 1,
+                  phrase: 'soy sauce',
+                  quantity: 2,
+                  unit: 'tbsp',
+                  notFood: false,
+                },
+              ],
+            },
+          });
+        },
+      };
+      const gemini: AiProvider = {
+        name: 'gemini',
+        complete: (request) => {
+          steps.push(`gemini:${(request.user as { step: string }).step}`);
+          return Promise.resolve({
+            ok: true,
+            value: {
+              lines: [
+                { position: 1, fdcId: SOY_SAUCE, quantity: 2, unit: 'tbsp' },
+              ],
+            },
+          });
+        },
+      };
+      const controlled = createWorker(
+        undefined,
+        undefined,
+        () => NOW,
+        () => [workers, gemini],
+      );
+      const response = await controlled.fetch(
+        new Request(
+          proposalsUrl(recipe),
+          mutationInit('POST', { recipeVersion: 1, positions: [1] }),
+        ),
+        testEnv,
+      );
+      expect(response.status).toBe(200);
+      const body = await response.json<NutritionProposalsResponse>();
+      expect(body.provider).toBe('gemini');
+      expect(body.proposals[0]).toMatchObject({
+        fdcId: SOY_SAUCE,
+        quantity: 2,
+        unit: 'tbsp',
+      });
+      expect(steps).toEqual([
+        'workers:normalize',
+        'workers:choose',
+        'gemini:choose',
+      ]);
+    });
   });
 
   describe('retention', () => {

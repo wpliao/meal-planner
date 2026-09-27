@@ -417,7 +417,12 @@ const RECIPES = {
   ],
 };
 
-const stubRecipes = async (page: Page, path: string, heading: string) => {
+const stubRecipes = async (
+  page: Page,
+  path: string,
+  heading: string,
+  nutrition: unknown = NUTRITION,
+) => {
   await page.route('**/api/recipes', (route) =>
     route.fulfill({
       contentType: 'application/json',
@@ -435,7 +440,7 @@ const stubRecipes = async (page: Page, path: string, heading: string) => {
           favourite: true,
           notNowUntil: '2099-01-02T12:00:00.000Z',
         },
-        nutrition: NUTRITION,
+        nutrition,
       }),
     }),
   );
@@ -483,6 +488,86 @@ test('recipe nutrition review', async ({ page }) => {
   const review = await openedDialog(page);
   await expect(review.getByTestId('review-line')).toHaveCount(3);
   await expect(review).toHaveScreenshot('recipe-nutrition-review.png');
+});
+
+const UNCHECKED_NUTRITION = {
+  ...NUTRITION,
+  lines: RECIPE.ingredients.map((text, index) => ({
+    position: index + 1,
+    text,
+    state: 'unchecked',
+    match: null,
+  })),
+  checked: false,
+  needsCheck: 0,
+  counted: 0,
+  totals: null,
+  perServing: null,
+  sources: [],
+};
+
+test('recipe nutrition AI proposals', async ({ page }) => {
+  await page.route(`**/api/recipes/${RECIPE_ID}/nutrition/proposals`, (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        recipeVersion: 1,
+        provider: 'fake',
+        proposals: [
+          {
+            position: 1,
+            fdcId: SOY_SAUCE.fdcId,
+            food: SOY_SAUCE,
+            quantity: 2,
+            unit: 'tbsp',
+          },
+          {
+            position: 2,
+            fdcId: HONEY.fdcId,
+            food: HONEY,
+            quantity: 1,
+            unit: 'tbsp',
+          },
+          { position: 3, fdcId: null, food: null, quantity: null, unit: null },
+        ],
+      }),
+    }),
+  );
+  await stubRecipes(
+    page,
+    `/recipes/${RECIPE_ID}`,
+    RECIPE.title,
+    UNCHECKED_NUTRITION,
+  );
+  await page.getByRole('button', { name: 'Work out nutrition' }).click();
+  const review = await openedDialog(page);
+  await expect(review.getByText(SOY_SAUCE.name)).toBeVisible();
+  await expect(review).toHaveScreenshot('recipe-nutrition-ai-proposals.png');
+});
+
+test('recipe nutrition AI unavailable', async ({ page }) => {
+  await page.route(`**/api/recipes/${RECIPE_ID}/nutrition/proposals`, (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        recipeVersion: 1,
+        provider: null,
+        proposals: [],
+      }),
+    }),
+  );
+  await stubRecipes(
+    page,
+    `/recipes/${RECIPE_ID}`,
+    RECIPE.title,
+    UNCHECKED_NUTRITION,
+  );
+  await page.getByRole('button', { name: 'Work out nutrition' }).click();
+  const review = await openedDialog(page);
+  await expect(review.getByTestId('nutrition-ai-unavailable')).toBeVisible();
+  await expect(review).toHaveScreenshot('recipe-nutrition-ai-unavailable.png');
+  await assertTextContrast(page);
+  await assertEveryMantineClassIsStyled(page);
 });
 
 test('recipe editor', async ({ page }) => {

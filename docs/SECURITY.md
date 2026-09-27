@@ -29,6 +29,18 @@ resource sharing.
   request content-type and same-origin checks for browser mutations.
 - AI integrations run server-side through AI Gateway, minimize disclosed data,
   and cannot authoritatively calculate nutrition.
+- Recipe nutrition proposals send only the recipe title and the requested
+  ingredient lines to an AI provider, then USDA candidate food names, IDs,
+  and portions in the second call. Notes, steps, source URLs, recipe IDs, and
+  household or member identities do not enter prompts. The Worker validates
+  chosen IDs against per-line candidates and converts quantities with USDA
+  measures. No proposal is stored or counted before a member confirms it.
+- Each environment uses its own authenticated AI Gateway with request logging
+  off (analytics only). Worker logs contain provider, outcome, latency, and
+  line count only. Gemini's unpaid tier lets Google use submitted content to
+  improve products and permits human review; its terms bar use by anyone under 18. The owner stated on 2026-09-26 that every household member is an adult.
+  Set `GEMINI_FALLBACK=off` or remove its key if this changes. See
+  [ADR 0010](DECISIONS/0010-ai-provider-boundary.md).
 - The static Content Security Policy in `public/_headers` allows
   `style-src 'self' 'unsafe-inline'`. The component library sets inline style
   attributes that no nonce or hash can cover; the reasoning and what it gives

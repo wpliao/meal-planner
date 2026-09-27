@@ -16,11 +16,13 @@ import { useEffect, useId, useRef, useState, type RefObject } from 'react';
 import { api, ApiRequestError, jsonMutation, type Notice } from './api';
 import {
   fetchNutrition,
+  fetchProposals,
   isLineReady,
   parseQuantity,
   reviewGrams,
   reviewLines,
   toMatchInput,
+  withProposals,
   type ReviewLine,
   type ReviewMode,
 } from './nutrition-client';
@@ -39,6 +41,7 @@ import {
   type MatchUnit,
   type RecipeNutrition,
   type RecipeNutritionResponse,
+  type IngredientProposal,
 } from '../shared/nutrition';
 
 type SearchResult =
@@ -209,7 +212,7 @@ function ReviewCard({
   line,
   onChange,
 }: Readonly<{ line: ReviewLine; onChange: (line: ReviewLine) => void }>) {
-  const [searching, setSearching] = useState(line.food === null);
+  const [searching, setSearching] = useState(false);
   const amountRef = useRef<HTMLInputElement>(null);
   const choosing = searching || line.food === null;
 
@@ -283,6 +286,8 @@ export interface NutritionReviewProps {
   recipeId: string;
   nutrition: RecipeNutrition;
   mode: ReviewMode;
+  initialProposals: IngredientProposal[];
+  initialUnavailable: boolean;
   onClose: () => void;
   onSaved: (nutrition: RecipeNutrition) => void;
   onRecipeChanged: () => void;
@@ -297,27 +302,36 @@ export function NutritionReview({
   recipeId,
   nutrition,
   mode,
+  initialProposals,
+  initialUnavailable,
   onClose,
   onSaved,
   onRecipeChanged,
 }: Readonly<NutritionReviewProps>) {
   const phone = useMediaQuery('(max-width: 36em)');
   const [base, setBase] = useState(nutrition);
-  const [lines, setLines] = useState(() => reviewLines(nutrition, mode));
+  const [lines, setLines] = useState(() =>
+    withProposals(reviewLines(nutrition, mode), initialProposals),
+  );
+  const [unavailable, setUnavailable] = useState(initialUnavailable);
+  const [retrying, setRetrying] = useState(false);
   const [pending, setPending] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const [recipeChanged, setRecipeChanged] = useState(false);
   const [attempted, setAttempted] = useState(false);
   const remainingId = useId();
   const body = useRef<HTMLDivElement>(null);
+  const manuallyEdited = useRef(new Set<number>());
 
   const remaining = lines.filter((line) => !isLineReady(line)).length;
   const others = base.lines.length - lines.length;
 
-  const update = (next: ReviewLine) =>
+  const update = (next: ReviewLine) => {
+    manuallyEdited.current.add(next.position);
     setLines((current) =>
       current.map((line) => (line.position === next.position ? next : line)),
     );
+  };
 
   const close = () => {
     if (pending) return;
@@ -330,11 +344,38 @@ export function NutritionReview({
     const fresh = await fetchNutrition(recipeId);
     setBase(fresh);
     setLines(reviewLines(fresh, mode));
+    manuallyEdited.current.clear();
     setNotice({
       tone: 'error',
       message:
         'Someone changed this recipe while you were checking it. The list now shows its current ingredients.',
     });
+  };
+
+  const retry = async () => {
+    setRetrying(true);
+    try {
+      const answer = await fetchProposals(
+        recipeId,
+        base.recipeVersion,
+        lines.map((line) => line.position),
+      );
+      setUnavailable(answer.provider === null);
+      if (answer.provider)
+        setLines((current) =>
+          current.map((line) =>
+            manuallyEdited.current.has(line.position)
+              ? line
+              : withProposals([line], answer.proposals)[0],
+          ),
+        );
+    } catch (error) {
+      if (error instanceof ApiRequestError && error.status === 409) {
+        await refresh();
+      } else setUnavailable(true);
+    } finally {
+      setRetrying(false);
+    }
   };
 
   /**
@@ -408,9 +449,31 @@ export function NutritionReview({
     >
       <Stack aria-busy={pending} gap="md" ref={body}>
         <Text fz="sm">
-          Choose the food and amount for each ingredient, or mark it “Don’t
-          count”. Values come from USDA FoodData Central.
+          Suggested by AI. Check each line, then save. Values come from USDA
+          FoodData Central, not from AI.
         </Text>
+        {unavailable && (
+          <Alert
+            color="clay"
+            data-testid="nutrition-ai-unavailable"
+            variant="light"
+          >
+            <Stack align="flex-start" gap="xs">
+              <Text fz="sm">
+                AI matching isn't available right now. You can choose foods
+                yourself, or try again later.
+              </Text>
+              <Button
+                loading={retrying}
+                onClick={() => void retry()}
+                size="sm"
+                variant="default"
+              >
+                Try again
+              </Button>
+            </Stack>
+          </Alert>
+        )}
         {mode === 'changed' && others > 0 && (
           <Text c="dimmed" fz="sm">
             {others === 1
