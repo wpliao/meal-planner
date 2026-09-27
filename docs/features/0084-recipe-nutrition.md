@@ -5,7 +5,7 @@
 - Issue: [#84](https://github.com/wpliao/meal-planner/issues/84)
 - Product owner: Repository owner
 - Last updated: 2026-09-27
-- Pull requests: [#85 — design proposal](https://github.com/wpliao/meal-planner/pull/85); [#88 — implementation, part A](https://github.com/wpliao/meal-planner/pull/88); [#89 — load fix](https://github.com/wpliao/meal-planner/pull/89); [#90 — implementation, part B](https://github.com/wpliao/meal-planner/pull/90); [#93 — Workers AI output cap](https://github.com/wpliao/meal-planner/pull/93); [#94 — Workers AI cancellation](https://github.com/wpliao/meal-planner/pull/94)
+- Pull requests: [#85 — design proposal](https://github.com/wpliao/meal-planner/pull/85); [#88 — implementation, part A](https://github.com/wpliao/meal-planner/pull/88); [#89 — load fix](https://github.com/wpliao/meal-planner/pull/89); [#90 — implementation, part B](https://github.com/wpliao/meal-planner/pull/90); [#93 — Workers AI output cap](https://github.com/wpliao/meal-planner/pull/93); [#94 — Workers AI cancellation](https://github.com/wpliao/meal-planner/pull/94); [#95 — development validation record](https://github.com/wpliao/meal-planner/pull/95)
 
 ## Problem and outcome
 
@@ -663,11 +663,16 @@ The owner chose these on 2026-09-26, before the design
   **all deployed versions** over **12 hours** showed P50 **5.5 ms** and
   P90/P99/P999 **26.38 ms**, with brief higher-percentile spikes. These
   aggregate figures do not identify the nutrition route or latest version.
-  The corresponding `Exceeded CPU Time Limits` / `Exceeded resources`
-  invocation count is pending the owner's check. See the
-  [metrics record](https://github.com/wpliao/meal-planner/issues/84#issuecomment-5852467711).
-- **Production release:** Pending the development CPU error check, a
-  production-specific gateway and secrets, and the owner's explicit
-  production deployment approval. Production has not been changed.
+  For the same 12-hour window, the owner found no errors, including no
+  `Exceeded CPU Time Limits` or `Exceeded resources` invocations. See the
+  [metrics record](https://github.com/wpliao/meal-planner/issues/84#issuecomment-5852467711)
+  and [CPU error check](https://github.com/wpliao/meal-planner/issues/84#issuecomment-5853312889).
+- **Development validation:** Complete for the accepted phone journeys,
+  provider paths, and observed CPU error status. The 17-line Workers AI
+  timeout remains a performance limitation; Gemini fallback succeeded. No
+  per-recipe neuron delta or route-specific CPU measurement was taken.
+- **Production release:** Pending a production-specific gateway and secrets,
+  and the owner's explicit production deployment approval. Production has
+  not been changed.
 - **Known follow-up work:** daily and weekly nutrition totals on the meal
   plan; investigate large-recipe Workers AI timeouts if they remain common.
