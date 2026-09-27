@@ -632,6 +632,8 @@ The owner chose these on 2026-09-26, before the design
 
 | 2026-09-27 | Set a 512–8192-token Workers AI output cap based on requested line count for both structured steps. No criterion changed. | Development fallback logs showed `workers-ai: invalid` and `gemini: ok`; Cloudflare's documented default is 256 output tokens, which can truncate multi-line JSON. The exact cause of that request remains unconfirmed pending a development retest. | [#93](https://github.com/wpliao/meal-planner/pull/93); [Workers AI model parameters](https://developers.cloudflare.com/workers-ai/models/llama-3.3-70b-instruct-fp8-fast/) |
 
+| 2026-09-27 | Forward the proposal runner's abort signal to the Workers AI binding. No criterion changed. | A 17-line development request timed out at 15 seconds on both Workers AI steps, and Gemini handled both. The binding supported a signal, but the adapter did not pass it, so cancellation was not requested when fallback began. | [#94](https://github.com/wpliao/meal-planner/pull/94); [issue #84 validation](https://github.com/wpliao/meal-planner/issues/84#issuecomment-5852228025) |
+
 ## Release record
 
 - Development validation: Pending
