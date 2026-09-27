@@ -1,0 +1,56 @@
+name: Development nutrition fixture
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Seed or clean the two synthetic development weeks
+        type: choice
+        required: true
+        options:
+          - seed
+          - cleanup
+      week_start:
+        description: Monday of the small test week; the next week is the 126-entry load test
+        type: string
+        required: true
+      confirmation:
+        description: Type SEED_DEVELOPMENT_NUTRITION or CLEAN_DEVELOPMENT_NUTRITION
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+# The fixture writes development D1; do not overlap a deploy, migration, or
+# household decommission of that environment.
+concurrency:
+  group: cloudflare-development
+  cancel-in-progress: false
+
+jobs:
+  fixture:
+    name: Manage development nutrition fixture
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: development
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - name: Manage fixture
+        run: node scripts/dev-nutrition-fixture.ts
+        env:
+          GITHUB_REF: ${{ github.ref }}
+          NUTRITION_FIXTURE_ENVIRONMENT: development
+          NUTRITION_FIXTURE_MODE: ${{ inputs.mode }}
+          NUTRITION_FIXTURE_WEEK_START: ${{ inputs.week_start }}
+          NUTRITION_FIXTURE_CONFIRMATION: ${{ inputs.confirmation }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

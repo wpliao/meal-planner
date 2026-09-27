@@ -18,6 +18,7 @@
     "src/worker",
     "src/shared",
     "src/operations/household-decommission",
+    "src/operations/dev-nutrition-fixture.ts",
     "test/operations/fake-cloudflare.ts",
     "test/worker",
     "worker-configuration.d.ts"
