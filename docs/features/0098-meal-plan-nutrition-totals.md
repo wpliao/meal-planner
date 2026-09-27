@@ -5,7 +5,7 @@
 - Issue: [#98](https://github.com/wpliao/meal-planner/issues/98)
 - Product owner: Repository owner
 - Last updated: 2026-09-27
-- Pull requests: Design proposal pending
+- Pull requests: [#99 — draft design proposal](https://github.com/wpliao/meal-planner/pull/99)
 
 ## Problem and outcome
 
@@ -313,9 +313,9 @@ issue #98.
 
 ## Decision and change log
 
-| Date       | Change                                                                                                                                               | Reason                                                                                      | Evidence                                                                         |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| 2026-09-27 | Propose a read-only daily and weekly estimate over current plan entries and saved recipe matches, with one serving per entry as the provisional rule | Ship the next major nutrition capability using the released #49 and #84 data and boundaries | [Issue #98](https://github.com/wpliao/meal-planner/issues/98); design PR pending |
+| Date       | Change                                                                                                                                               | Reason                                                                                      | Evidence                                                                                                                       |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-09-27 | Propose a read-only daily and weekly estimate over current plan entries and saved recipe matches, with one serving per entry as the provisional rule | Ship the next major nutrition capability using the released #49 and #84 data and boundaries | [Issue #98](https://github.com/wpliao/meal-planner/issues/98); [design PR #99](https://github.com/wpliao/meal-planner/pull/99) |
 
 ## Release record
 
