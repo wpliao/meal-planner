@@ -25,7 +25,7 @@ export const workersAiProvider = (
   gatewayId: string,
 ): AiProvider => ({
   name: 'workers-ai',
-  async complete(request) {
+  async complete(request, signal) {
     if (!ai || model === 'off' || !gatewayId) return failure('unavailable');
     try {
       const answer: unknown = await ai.run(
@@ -38,7 +38,7 @@ export const workersAiProvider = (
           response_format: { type: 'json_schema', json_schema: request.schema },
           max_tokens: request.maxOutputTokens,
         } as Parameters<Ai['run']>[1],
-        { gateway: { id: gatewayId, skipCache: true } },
+        { gateway: { id: gatewayId, skipCache: true }, signal },
       );
       if (answer && typeof answer === 'object' && 'response' in answer) {
         return parseJson(answer.response);
