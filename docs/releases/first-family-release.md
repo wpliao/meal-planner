@@ -97,7 +97,7 @@ recipes with incomplete nutrition appear as coverage gaps rather than zero.
 
 ## Publication checklist
 
-- [x] Owner reviews the Phases 1–7 scope, notes, and known limits.
+- [x] Owner confirms the Phases 1–7 first-release scope.
 - [x] Owner accepts the Cloudflare Free seven-day D1 Time Travel window and
       whole-database rollback for this first private release.
 - [x] Owner approves Dependabot alerts; enable and verify the setting, then
