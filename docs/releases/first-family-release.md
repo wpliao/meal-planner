@@ -64,9 +64,11 @@ recipes with incomplete nutrition appear as coverage gaps rather than zero.
   deployment. This checks the perimeter redirect, while the owner's phone
   check exercised the authenticated app.
 - `pnpm audit --prod --audit-level high` reported **No known vulnerabilities
-  found** on 2026-09-28. GitHub's Dependabot alerts endpoint reported that
-  alerts are disabled for this repository, so that endpoint provides no
-  independent vulnerability result. [PR #92](https://github.com/wpliao/meal-planner/pull/92)
+  found** on 2026-09-28. The owner approved Dependabot alerts for ongoing
+  monitoring; they were enabled on 2026-09-28, the setting was verified, and
+  GitHub reported zero open alerts at that checkpoint. This does not enable
+  automatic security-update PRs or replace review of future alerts.
+  [PR #92](https://github.com/wpliao/meal-planner/pull/92)
   updates `jose` and has passing `Verify`; [PR #91](https://github.com/wpliao/meal-planner/pull/91)
   groups development dependencies and currently fails `Verify`. Neither is
   part of the deployed app code or this release scope.
@@ -86,21 +88,21 @@ recipes with incomplete nutrition appear as coverage gaps rather than zero.
   Cloudflare documents [Worker version
   rollbacks](https://developers.cloudflare.com/workers/versions-and-deployments/rollbacks/)
   and [D1 Time Travel](https://developers.cloudflare.com/d1/reference/time-travel/)
-  separately. A general family-data backup and restore rehearsal is not yet
-  documented; the owner should confirm the recovery expectation before
-  publishing the first release. No data restoration is implied by a Worker
-  rollback.
+  separately. The owner confirmed the Cloudflare Free plan and accepted its
+  seven-day D1 Time Travel window for this first private release on 2026-09-28.
+  A restore rewinds the whole database, including valid changes made after the
+  selected point; it requires separate owner approval. A general family-data
+  backup and restore rehearsal is not yet documented. No data restoration is
+  implied by a Worker rollback.
 
 ## Publication checklist
 
-- [ ] Owner reviews the Phases 1–7 scope, notes, and known limits.
-- [ ] Owner confirms the intended D1 recovery window and whether the current
-      Time Travel capability is sufficient for this first private release. Record
-      the answer without database contents or credentials.
-- [ ] Owner reviews the disabled Dependabot alerts setting and decides whether
-      to enable it for ongoing monitoring; the production-dependency audit
-      above passed at this checkpoint.
-- [ ] On an authenticated production phone, check one existing household path
+- [x] Owner confirms the Phases 1–7 first-release scope.
+- [x] Owner accepts the Cloudflare Free seven-day D1 Time Travel window and
+      whole-database rollback for this first private release.
+- [x] Owner approves Dependabot alerts; enable and verify the setting, then
+      check for open alerts.
+- [x] On an authenticated production phone, check one existing household path
       across pantry, recipe selection, meal planning, suggestions, and nutrition;
       record only pass/fail and any visible error.
 - [ ] After this documentation PR merges and its `main` CI passes, choose the
