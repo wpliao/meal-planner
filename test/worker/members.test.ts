@@ -108,7 +108,7 @@ describe('household member APIs', () => {
     const row = {
       member_id: 'member-id',
       household_id: 'household-id',
-      household_name: 'Liao Family',
+      household_name: 'Example Family',
       normalized_email: memberIdentity.email,
       role: 'member',
     };
@@ -158,14 +158,14 @@ describe('household member APIs', () => {
       {
         memberId: 'member-id',
         householdId: 'household-id',
-        householdName: 'Liao Family',
+        householdName: 'Example Family',
         email: memberIdentity.email,
         role: 'member',
       },
       {
         memberId: 'member-id',
         householdId: 'household-id',
-        householdName: 'Liao Family',
+        householdName: 'Example Family',
         email: memberIdentity.email,
         role: 'member',
       },

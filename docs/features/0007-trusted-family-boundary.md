@@ -394,7 +394,7 @@ bootstrap recorded below.
   sanitized evidence and the exact cleanup are recorded in
   [PR #10](https://github.com/wpliao/meal-planner/pull/10#issuecomment-5748492937).
 - `V-DEV-02` (2026-09-20): the owner passed real Cloudflare Access, bootstrapped
-  `Liao Family (Development)` with the configured identity, and observed the
+  the development household with the configured identity, and observed the
   signed-in owner and member-management state. The remaining scenarios are
   pending. Evidence is recorded in
   [issue #7](https://github.com/wpliao/meal-planner/issues/7#issuecomment-5748528535).
@@ -441,7 +441,7 @@ bootstrap recorded below.
   its confirmation gate, `./scripts/verify.sh` (16 client, 48 Worker-runtime,
   15 Playwright tests), and the named production build. It applied
   `0001_create_household_identity.sql` to the distinct production D1 database
-  `d944b652-580f-437e-b7ce-21818525c46c` and deployed production Worker
+  configured in `wrangler.jsonc` and deployed production Worker
   version `2f3855f4-b091-4da7-a2f4-c16ef1e57f91` with its distinct R2 binding.
   Unauthenticated requests to `/` and `/api/health` returned `302` to the
   production Cloudflare Access application. Two earlier attempts failed closed

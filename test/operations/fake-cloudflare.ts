@@ -9,7 +9,8 @@ import {
 
 export const ACCOUNT_ID = '0123456789abcdef0123456789abcdef';
 export const API_TOKEN = 'fake-token-3f9c1d7e5b';
-export const DEVELOPMENT_D1_ID = '5f5e98ba-7b27-4fcf-8c2b-ab1605461082';
+export const DEVELOPMENT_D1_ID = 'dddddddd-1111-4111-8111-111111111111';
+export const PRODUCTION_D1_ID = 'ffffffff-2222-4222-8222-222222222222';
 export const HOUSEHOLD_ID = '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b';
 export const OTHER_HOUSEHOLD_ID = '1a2b3c4d-5e6f-4a0b-9c1d-2e3f4a5b6c7d';
 export const ACCESS_APP_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
@@ -17,6 +18,43 @@ export const WORKER_NAME = 'family-meal-planner-development';
 export const ACCOUNT_SUBDOMAIN = 'example-account';
 export const WORKER_HOST = `${WORKER_NAME}.${ACCOUNT_SUBDOMAIN}.workers.dev`;
 export const WORKER_ID = 'c81a2d22c29840ed9d61681a3270dbff';
+/**
+ * A `wrangler.jsonc`-shaped fixture with the same environment layout as the
+ * repository file, including comments and trailing commas, so the tests
+ * never depend on the real resource IDs. `wrangler-config.test.ts` checks
+ * that the committed file still has this shape.
+ */
+export const WRANGLER_CONFIG_TEXT = `{
+  // Fixture: mirrors wrangler.jsonc's environment layout.
+  "name": "family-meal-planner",
+  "workers_dev": false,
+  "d1_databases": [
+    { "binding": "DB", "database_name": "family-meal-planner-local", "database_id": "local" },
+  ],
+  "env": {
+    "development": {
+      "name": "family-meal-planner-development",
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "family-meal-planner-dev-d1",
+          "database_id": "${DEVELOPMENT_D1_ID}",
+        },
+      ],
+    },
+    "production": {
+      "name": "family-meal-planner-production",
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "family-meal-planner-prod-d1",
+          "database_id": "${PRODUCTION_D1_ID}",
+        },
+      ],
+    },
+  },
+}
+`;
 export const MIGRATIONS = [
   '0001_create_household_identity.sql',
   '0002_create_pantry_items.sql',

@@ -24,7 +24,7 @@ const ownerSession = {
     email: 'owner@example.test',
     role: 'owner' as const,
   },
-  household: { id: 'household-1', name: 'Liao family' },
+  household: { id: 'household-1', name: 'Example family' },
 };
 
 const memberSession = {
@@ -71,7 +71,7 @@ describe('App', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(memberSession)));
     renderAt('/family');
 
-    expect(await screen.findByText('Liao family')).toBeInTheDocument();
+    expect(await screen.findByText('Example family')).toBeInTheDocument();
     expect(
       screen.getByText('Family member', { exact: true }),
     ).toBeInTheDocument();
@@ -95,7 +95,7 @@ describe('App', () => {
     expect(
       screen.getByText(/has not been added to this family/i),
     ).toBeInTheDocument();
-    expect(screen.queryByText('Liao family')).not.toBeInTheDocument();
+    expect(screen.queryByText('Example family')).not.toBeInTheDocument();
   });
 
   it('lists Recipes in the navigation and opens the library at /recipes', async () => {
@@ -183,7 +183,7 @@ describe('App', () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
 
-    expect(await screen.findByText('Liao family')).toBeInTheDocument();
+    expect(await screen.findByText('Example family')).toBeInTheDocument();
     expect(
       fetchMock.mock.calls.filter(([url]) => url === '/api/session'),
     ).toHaveLength(2);

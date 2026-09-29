@@ -51,3 +51,11 @@ environment, security, and delivery decisions.
 
 Before configuring or deploying a named Cloudflare environment, follow
 [docs/ENVIRONMENTS.md](./docs/ENVIRONMENTS.md).
+
+## License
+
+The source code is released under the [MIT License](./LICENSE). The committed
+nutrition reference data in `data/nutrition/` is derived from USDA FoodData
+Central, which is in the public domain (CC0 1.0); USDA asks that FoodData
+Central be named as the source. See
+[ADR 0009](./docs/DECISIONS/0009-nutrition-reference-data.md).

@@ -35,7 +35,7 @@ describe('session and bootstrap APIs', () => {
     expect(body).toMatchObject({
       status: 'ready',
       member: { email: 'owner@example.test', role: 'owner' },
-      household: { name: 'Liao Family' },
+      household: { name: 'Example Family' },
     });
     expect(Object.keys(body.member).sort()).toEqual(['email', 'id', 'role']);
     expect(Object.keys(body.household).sort()).toEqual(['id', 'name']);
@@ -211,7 +211,7 @@ describe('session and bootstrap APIs', () => {
 
     it('does not report an incomplete setup as an existing family space', async () => {
       await expect(
-        bootstrapHousehold(failingDatabase(false), identity, 'Liao Family'),
+        bootstrapHousehold(failingDatabase(false), identity, 'Example Family'),
       ).rejects.toMatchObject({
         status: 503,
         code: 'service_unavailable',
@@ -223,7 +223,7 @@ describe('session and bootstrap APIs', () => {
         bootstrapHousehold(
           failingDatabase('unavailable'),
           identity,
-          'Liao Family',
+          'Example Family',
         ),
       ).rejects.toMatchObject({
         status: 503,
@@ -233,7 +233,7 @@ describe('session and bootstrap APIs', () => {
 
     it('still reports a genuine conflict when the installation exists', async () => {
       await expect(
-        bootstrapHousehold(failingDatabase(true), identity, 'Liao Family'),
+        bootstrapHousehold(failingDatabase(true), identity, 'Example Family'),
       ).rejects.toMatchObject({
         status: 409,
         code: 'state_conflict',

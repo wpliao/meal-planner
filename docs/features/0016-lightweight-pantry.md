@@ -308,7 +308,7 @@ requires a design change recorded in the decision log below.
   mobile, and the asset pipeline.
 - Development validation: `V-DEV-P1` complete on 2026-09-21. Migration `0002`
   was applied to the development D1 database
-  (`5f5e98ba-7b27-4fcf-8c2b-ab1605461082`) and `42bc7cd` deployed through the
+  (the ID configured in `wrangler.jsonc`) and `42bc7cd` deployed through the
   protected workflow. The owner then worked a 26-case run sheet against real
   Cloudflare Access identities; `QA-01` through `QA-23` passed, covering
   pre-merge acceptance, the merge, the deployment, and the complete development
@@ -334,7 +334,7 @@ requires a design change recorded in the decision log below.
   deployed through the protected workflow, run
   [35612934715](https://github.com/wpliao/meal-planner/actions/runs/35612934715).
   Migration `0002_create_pantry_items.sql` applied to the production D1
-  database `d944b652-580f-437e-b7ce-21818525c46c`; Phase 1's `0001` was already
+  database configured in `wrangler.jsonc`; Phase 1's `0001` was already
   present and untouched. Worker version
   `d776f8f3-12c4-4726-b43f-d60156abae64` published to
   `family-meal-planner-production`. The owner then completed `QA-24` through

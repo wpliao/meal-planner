@@ -412,7 +412,7 @@ chose the recommended option unless noted.
   - The in-workflow `./scripts/verify.sh` passed with 367 unit, 237
     Workers-runtime, and 168 Playwright tests.
   - Migration `0003_create_recipes.sql` was applied to the production D1
-    database `d944b652-580f-437e-b7ce-21818525c46c`; `0001` and `0002` were
+    database configured in `wrangler.jsonc`; `0001` and `0002` were
     already present and untouched.
   - Worker version `1f62f593-28e1-433b-8acc-abdebe0b08a6` of
     `family-meal-planner-production` replaced
