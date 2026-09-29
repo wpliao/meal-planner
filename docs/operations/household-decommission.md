@@ -54,8 +54,9 @@ production retention wording) stays open until that check is recorded.
 - **Operator**: a person with rights to dispatch workflows and change
   Cloudflare Access and Worker settings for the environment.
 
-The owner and operator may be the same person. The private repository cannot
-enforce a second reviewer ([ADR 0005](../DECISIONS/0005-production-deployment-approval-on-github-pro.md)).
+The owner and operator may be the same person. The `development` environment
+has no required reviewer ([ADR 0011](../DECISIONS/0011-production-environment-required-reviewer.md));
+the typed confirmation and the approval comment are the review.
 
 ## One-time setup (owner)
 

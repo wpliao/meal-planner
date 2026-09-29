@@ -3,9 +3,11 @@
 - Status: Accepted
 - Date: 2026-09-19
 
-The production required-reviewer clause below is superseded by
-[ADR 0005](0005-production-deployment-approval-on-github-pro.md); the resource
-isolation decision remains in force.
+The production required-reviewer clause below was superseded by
+[ADR 0005](0005-production-deployment-approval-on-github-pro.md) while the
+repository was private and is in force again under
+[ADR 0011](0011-production-environment-required-reviewer.md); the resource
+isolation decision was never affected.
 
 ## Context
 
