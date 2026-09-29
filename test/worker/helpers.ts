@@ -235,7 +235,7 @@ export const bootstrapOwner = async (): Promise<Response> =>
   fetchWorker(
     new Request(
       'https://example.test/api/bootstrap',
-      mutationInit('POST', { householdName: 'Liao Family' }),
+      mutationInit('POST', { householdName: 'Example Family' }),
     ),
   );
 

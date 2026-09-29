@@ -19,6 +19,7 @@ import {
   ACCOUNT_ID,
   API_TOKEN,
   createFakeCloudflare,
+  DEVELOPMENT_D1_ID,
 } from '../operations/fake-cloudflare';
 import {
   applyMigrations,
@@ -466,7 +467,7 @@ describe('household decommission procedure against the real schema', () => {
   const configFor = (householdId: string) => ({
     environment: 'development' as const,
     householdId,
-    databaseId: '5f5e98ba-7b27-4fcf-8c2b-ab1605461082',
+    databaseId: DEVELOPMENT_D1_ID,
     databaseName: 'family-meal-planner-dev-d1',
     workerName: 'family-meal-planner-development',
     accessAppId: ACCESS_APP_ID,
@@ -532,7 +533,7 @@ describe('household decommission procedure against the real schema', () => {
       matches: 0,
     });
     expect(lines.join('\n')).not.toMatch(
-      /@example\.test|Liao Family|rice|eggs|Fry|Eat out|2026-09-2/u,
+      /@example\.test|Example Family|rice|eggs|Fry|Eat out|2026-09-2/u,
     );
   });
 

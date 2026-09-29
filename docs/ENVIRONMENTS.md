@@ -74,9 +74,9 @@ An authorized owner must:
 1. Confirm the separate development and production D1 databases and R2 buckets
    with the exact names in the table above.
 2. Keep the real, non-secret D1 resource IDs in `wrangler.jsonc` and keep the
-   distinct bucket names. The configured D1 IDs are development
-   `5f5e98ba-7b27-4fcf-8c2b-ab1605461082` and production
-   `d944b652-580f-437e-b7ce-21818525c46c`.
+   distinct bucket names. `wrangler.jsonc` is the only place in the
+   repository that records the D1 IDs; documentation and tests refer to it
+   rather than repeating them.
 3. Configure Cloudflare Access applications/policies independently for both
    deployed hostnames before personal data is exposed.
 4. Create least-privilege GitHub environments named `development` and

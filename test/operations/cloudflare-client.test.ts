@@ -11,11 +11,12 @@ import {
   ACCOUNT_ID,
   API_TOKEN,
   createFakeCloudflare,
+  DEVELOPMENT_D1_ID,
   WORKER_ID,
   WORKER_NAME,
 } from './fake-cloudflare';
 
-const DATABASE_ID = '5f5e98ba-7b27-4fcf-8c2b-ab1605461082';
+const DATABASE_ID = DEVELOPMENT_D1_ID;
 
 const clientFor = (fetch: FetchLike, overrides = {}): CloudflareClient =>
   createCloudflareClient({

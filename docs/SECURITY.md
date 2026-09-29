@@ -38,8 +38,9 @@ resource sharing.
 - Each environment uses its own authenticated AI Gateway with request logging
   off (analytics only). Worker logs contain provider, outcome, latency, and
   line count only. Gemini's unpaid tier lets Google use submitted content to
-  improve products and permits human review; its terms bar use by anyone under 18. The owner stated on 2026-09-26 that every household member is an adult.
-  Set `GEMINI_FALLBACK=off` or remove its key if this changes. See
+  improve products and permits human review; its terms bar use by anyone
+  under 18. The owner confirmed on 2026-09-26 that the household meets that
+  condition. Set `GEMINI_FALLBACK=off` or remove its key if this changes. See
   [ADR 0010](DECISIONS/0010-ai-provider-boundary.md).
 - The static Content Security Policy in `public/_headers` allows
   `style-src 'self' 'unsafe-inline'`. The component library sets inline style

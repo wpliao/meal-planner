@@ -1,5 +1,3 @@
-import { readFile } from 'node:fs/promises';
-
 import { describe, expect, it } from 'vitest';
 
 import { runCli } from '../../src/operations/household-decommission/cli.ts';
@@ -19,26 +17,27 @@ import {
   DELETE_INSTALLATION_POINTER_SQL,
 } from '../../src/operations/household-decommission/sql.ts';
 import {
+  ACCOUNT_ID,
   API_TOKEN,
   createFakeCloudflare,
   denyEveryonePolicy,
+  DEVELOPMENT_D1_ID,
   HOUSEHOLD_ID,
   installedCounts,
   MIGRATIONS,
   OTHER_HOUSEHOLD_ID,
+  PRODUCTION_D1_ID,
   TABLES,
   validInputs,
   WORKER_HOST,
   WORKER_ID,
   WORKER_NAME,
+  WRANGLER_CONFIG_TEXT,
   zeroCounts,
   type FakeState,
 } from './fake-cloudflare';
 
-const wranglerText = await readFile(
-  new URL('../../wrangler.jsonc', import.meta.url),
-  'utf8',
-);
+const wranglerText = WRANGLER_CONFIG_TEXT;
 
 type Fake = ReturnType<typeof createFakeCloudflare>;
 
@@ -136,7 +135,7 @@ describe('household decommission procedure', () => {
     expect(others).toHaveLength(0);
     expect(batch.method).toBe('POST');
     expect(batch.path).toBe(
-      '/client/v4/accounts/0123456789abcdef0123456789abcdef/d1/database/5f5e98ba-7b27-4fcf-8c2b-ab1605461082/query',
+      `/client/v4/accounts/${ACCOUNT_ID}/d1/database/${DEVELOPMENT_D1_ID}/query`,
     );
     expect(batch.headers).toMatchObject({
       authorization: `Bearer ${API_TOKEN}`,
@@ -193,8 +192,7 @@ describe('household decommission procedure', () => {
         validInputs({
           DECOMMISSION_ENVIRONMENT: 'production',
           DECOMMISSION_CONFIRMATION: 'DECOMMISSION_PRODUCTION_HOUSEHOLD',
-          DECOMMISSION_EXPECTED_D1_DATABASE_ID:
-            'd944b652-580f-437e-b7ce-21818525c46c',
+          DECOMMISSION_EXPECTED_D1_DATABASE_ID: PRODUCTION_D1_ID,
         }),
       );
       expect(exitCode).toBe(1);
@@ -227,10 +225,7 @@ describe('household decommission procedure', () => {
         'a different D1 database name',
         { databaseName: 'family-meal-planner-prod-d1' },
       ],
-      [
-        'a different D1 database UUID',
-        { databaseUuid: 'd944b652-580f-437e-b7ce-21818525c46c' },
-      ],
+      ['a different D1 database UUID', { databaseUuid: PRODUCTION_D1_ID }],
       ['a missing applied migration', { migrations: [MIGRATIONS[0]] }],
       [
         'an unreviewed applied migration',

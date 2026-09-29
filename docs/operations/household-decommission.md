@@ -103,7 +103,7 @@ Do not add these to the `production` environment.
    Copy the comment's URL (`https://github.com/wpliao/meal-planner/issues/<n>#issuecomment-<id>`).
 
 4. Find the household ID and D1 database ID. The D1 ID for development is in
-   `wrangler.jsonc` (`5f5e98ba-7b27-4fcf-8c2b-ab1605461082`). The household ID
+   `wrangler.jsonc` (`env.development.d1_databases[0].database_id`). The household ID
    is the `household.id` returned by `GET /api/session` for a signed-in member.
 
 ### 2. Close access (manual, before dispatch)
@@ -307,10 +307,10 @@ household has no members or installation pointer, so the app never sees it.
 
 Dispatch from **Actions › D1 batch atomicity probe › Run workflow** on `main`:
 
-| Input                     | Value                                  |
-| ------------------------- | -------------------------------------- |
-| `expected_d1_database_id` | `5f5e98ba-7b27-4fcf-8c2b-ab1605461082` |
-| `confirmation`            | `PROBE_DEVELOPMENT_D1_BATCH`           |
+| Input                     | Value                                               |
+| ------------------------- | --------------------------------------------------- |
+| `expected_d1_database_id` | the development `database_id` from `wrangler.jsonc` |
+| `confirmation`            | `PROBE_DEVELOPMENT_D1_BATCH`                        |
 
 Record the run URL and the verdict in the #32 design's gate 2 and release
 record. If a run fails at `cleanup`, delete the probe row by its logged

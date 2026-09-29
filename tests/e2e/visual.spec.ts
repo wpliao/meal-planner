@@ -16,7 +16,7 @@ test.use({ locale: 'en-US', timezoneId: 'UTC' });
 const SESSION = {
   status: 'ready',
   member: { id: 'owner-1', email: 'owner@example.test', role: 'owner' },
-  household: { id: 'household-1', name: 'Liao family' },
+  household: { id: 'household-1', name: 'Example family' },
 };
 
 const MEMBERS = {

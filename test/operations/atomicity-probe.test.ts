@@ -1,5 +1,3 @@
-import { readFile } from 'node:fs/promises';
-
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -18,14 +16,13 @@ import {
   API_TOKEN,
   createFakeCloudflare,
   DEVELOPMENT_D1_ID,
+  PRODUCTION_D1_ID,
   withHttpFailures,
+  WRANGLER_CONFIG_TEXT,
   type D1Handler,
 } from './fake-cloudflare';
 
-const wranglerText = await readFile(
-  new URL('../../wrangler.jsonc', import.meta.url),
-  'utf8',
-);
+const wranglerText = WRANGLER_CONFIG_TEXT;
 
 const PROBE_ID = '0b5b3c1e-2f4d-4a6b-8c9d-0e1f2a3b4c5d';
 
@@ -229,7 +226,7 @@ describe('D1 batch atomicity probe', () => {
     [
       'the production database',
       {
-        PROBE_EXPECTED_D1_DATABASE_ID: 'd944b652-580f-437e-b7ce-21818525c46c',
+        PROBE_EXPECTED_D1_DATABASE_ID: PRODUCTION_D1_ID,
       },
       'does not match the development database',
     ],

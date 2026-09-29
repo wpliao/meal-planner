@@ -1,4 +1,4 @@
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir } from 'node:fs/promises';
 
 import { describe, expect, it } from 'vitest';
 
@@ -16,13 +16,13 @@ import {
   DEVELOPMENT_D1_ID,
   HOUSEHOLD_ID,
   MIGRATIONS,
+  PRODUCTION_D1_ID,
   validInputs,
+  WRANGLER_CONFIG_TEXT,
 } from './fake-cloudflare';
 
 const repositoryRoot = new URL('../../', import.meta.url);
-const wranglerConfig = parseJsonc(
-  await readFile(new URL('wrangler.jsonc', repositoryRoot), 'utf8'),
-);
+const wranglerConfig = parseJsonc(WRANGLER_CONFIG_TEXT);
 
 const parse = (inputs: Record<string, string | undefined>) =>
   parseDecommissionConfig({
@@ -32,7 +32,7 @@ const parse = (inputs: Record<string, string | undefined>) =>
   });
 
 describe('decommission approval inputs', () => {
-  it('accepts a complete development request that matches wrangler.jsonc', () => {
+  it('accepts a complete development request that matches the repository configuration', () => {
     expect(parse(validInputs())).toEqual({
       environment: 'development',
       householdId: HOUSEHOLD_ID,
@@ -54,8 +54,7 @@ describe('decommission approval inputs', () => {
         validInputs({
           DECOMMISSION_ENVIRONMENT: 'production',
           DECOMMISSION_CONFIRMATION: confirmationFor('production'),
-          DECOMMISSION_EXPECTED_D1_DATABASE_ID:
-            'd944b652-580f-437e-b7ce-21818525c46c',
+          DECOMMISSION_EXPECTED_D1_DATABASE_ID: PRODUCTION_D1_ID,
         }),
       ),
     ).toThrow(PRODUCTION_INELIGIBLE_MESSAGE);
@@ -124,10 +123,7 @@ describe('decommission approval inputs', () => {
     ],
     [
       'the production D1 ID for development',
-      {
-        DECOMMISSION_EXPECTED_D1_DATABASE_ID:
-          'd944b652-580f-437e-b7ce-21818525c46c',
-      },
+      { DECOMMISSION_EXPECTED_D1_DATABASE_ID: PRODUCTION_D1_ID },
     ],
     ['a missing Access application', { DECOMMISSION_ACCESS_APP_ID: undefined }],
     ['an invalid account ID', { CLOUDFLARE_ACCOUNT_ID: 'not-an-account' }],
@@ -172,7 +168,7 @@ describe('repository target', () => {
     ).toEqual(['0001_a.sql', '0002_b.sql']);
   });
 
-  it('reads each named environment from wrangler.jsonc', () => {
+  it('reads each named environment from the repository configuration', () => {
     expect(repositoryTargetFor(wranglerConfig, 'development')).toEqual({
       workerName: 'family-meal-planner-development',
       databaseName: 'family-meal-planner-dev-d1',
@@ -181,7 +177,7 @@ describe('repository target', () => {
     expect(repositoryTargetFor(wranglerConfig, 'production')).toEqual({
       workerName: 'family-meal-planner-production',
       databaseName: 'family-meal-planner-prod-d1',
-      databaseId: 'd944b652-580f-437e-b7ce-21818525c46c',
+      databaseId: PRODUCTION_D1_ID,
     });
   });
 
