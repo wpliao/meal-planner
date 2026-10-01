@@ -7,6 +7,7 @@ import {
   RECIPE_INGREDIENT_MAX_LENGTH,
   RECIPE_STEP_MAX_LENGTH,
   validateRecipeIngredients,
+  validateRecipeLink,
   validateRecipeNotes,
   validateRecipeServings,
   validateRecipeSteps,
@@ -41,6 +42,8 @@ export interface RecipeEditorDraft {
   steps: readonly string[];
   notes?: string | null;
   servings?: number | null;
+  /** A manual recipe's link (#113); never set for an import. */
+  link?: string | null;
 }
 
 export type WebsiteSourceInput = Extract<
@@ -64,6 +67,7 @@ export const EMPTY_RECIPE_DRAFT: RecipeEditorDraft = {
   steps: [''],
   notes: '',
   servings: null,
+  link: null,
 };
 
 export const draftFromRecipe = (recipe: Recipe): RecipeEditorDraft => ({
@@ -72,6 +76,7 @@ export const draftFromRecipe = (recipe: Recipe): RecipeEditorDraft => ({
   steps: recipe.steps,
   notes: recipe.notes ?? '',
   servings: recipe.servings,
+  link: recipe.link,
 });
 
 /** Keeps a text link at least as tall as the touch-target floor. */
@@ -165,10 +170,33 @@ export const useRecipe = (id: string) => {
 // ---------------------------------------------------------------------------
 // Source presentation
 
-/** The short list label: "Manual", or the host the text was copied from. */
-export const sourceLabel = (
-  source: RecipeSourceLabel | RecipeSource,
-): string => (source.kind === 'manual' ? 'Manual' : source.host);
+/**
+ * The short list label: the host the text was copied from, or "Manual" with
+ * the host of its recipe link when it has one (#113).
+ */
+export const sourceLabel = (source: RecipeSourceLabel): string => {
+  if (source.kind === 'website') return source.host;
+  return source.linkHost ? `Manual · ${source.linkHost}` : 'Manual';
+};
+
+/**
+ * A manual recipe's link, only if it is an `https:` URL, with its host. Like
+ * {@link safeSourceHref}, it never lets a bad stored value become an active
+ * link.
+ */
+export const safeRecipeLink = (
+  link: string | null,
+): { href: string; host: string } | null => {
+  if (link === null) return null;
+  try {
+    const url = new URL(link);
+    return url.protocol === 'https:'
+      ? { href: url.href, host: url.hostname }
+      : null;
+  } catch {
+    return null;
+  }
+};
 
 /**
  * The page the recipe text came from, only if it is an `https:` URL. The
@@ -330,6 +358,7 @@ export const changedFields = (
   if (!same(draft.steps, current.steps)) changed.push('steps');
   if ((draft.notes ?? null) !== (current.notes ?? null)) changed.push('notes');
   if (draft.servings !== current.servings) changed.push('servings');
+  if (draft.link !== current.link) changed.push('recipe link');
   return changed;
 };
 
@@ -343,12 +372,15 @@ export interface RecipeFormValues {
   notes: string;
   /** As typed; empty means not set. */
   servings: string;
+  /** As typed; empty means no link. */
+  link: string;
 }
 
 export interface RecipeFormErrors {
   title?: string;
   notes?: string;
   servings?: string;
+  link?: string;
   ingredients?: string;
   steps?: string;
   /** Per visible line, keyed by its position in the form. */
@@ -398,6 +430,7 @@ export const validateRecipeForm = (
       ? Number(typedServings)
       : typedServings || null,
   );
+  const link = validateRecipeLink(values.link);
 
   const errors: RecipeFormErrors = {
     ingredientLines: lineErrors(
@@ -410,6 +443,7 @@ export const validateRecipeForm = (
   if (!title.ok) errors.title = title.message;
   if (!notes.ok) errors.notes = notes.message;
   if (!servings.ok) errors.servings = servings.message;
+  if (!link.ok) errors.link = link.message;
   // A too-long line is already reported on that line.
   if (!ingredients.ok && Object.keys(errors.ingredientLines).length === 0) {
     errors.ingredients = ingredients.message;
@@ -418,7 +452,14 @@ export const validateRecipeForm = (
     errors.steps = steps.message;
   }
 
-  if (title.ok && notes.ok && ingredients.ok && steps.ok && servings.ok) {
+  if (
+    title.ok &&
+    notes.ok &&
+    ingredients.ok &&
+    steps.ok &&
+    servings.ok &&
+    link.ok
+  ) {
     return {
       ok: true,
       content: {
@@ -427,6 +468,7 @@ export const validateRecipeForm = (
         ingredients: ingredients.value,
         steps: steps.value,
         servings: servings.value,
+        link: link.value,
       },
     };
   }

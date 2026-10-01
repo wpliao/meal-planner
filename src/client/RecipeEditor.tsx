@@ -290,6 +290,12 @@ export interface RecipeEditorProps {
   initialDraft: RecipeEditorDraft;
   /** Set for a website import preview: shows provenance and truncation. */
   importContext?: RecipeImportContext;
+  /**
+   * Offers the recipe link field (#113). Only a manually entered recipe takes
+   * one; an import shows its own source instead. Defaults to true unless
+   * importing.
+   */
+  linkable?: boolean;
   submitLabel: string;
   pending: boolean;
   /** Prevents saving, with a reason, while a conflict is unresolved. */
@@ -316,6 +322,7 @@ const toLines = (values: readonly string[]): Line[] =>
 export function RecipeEditor({
   initialDraft,
   importContext,
+  linkable = !importContext,
   submitLabel,
   pending,
   blockedReason,
@@ -333,6 +340,7 @@ export function RecipeEditor({
   const [servings, setServings] = useState(
     initialDraft.servings == null ? '' : String(initialDraft.servings),
   );
+  const [link, setLink] = useState(initialDraft.link ?? '');
   const [errors, setErrors] = useState<RecipeFormErrors>(NO_ERRORS);
   const [attempt, setAttempt] = useState(0);
   const formRef = useRef<HTMLFormElement>(null);
@@ -358,6 +366,7 @@ export function RecipeEditor({
       steps: steps.map((line) => line.text),
       notes,
       servings,
+      link: linkable ? link : '',
     });
     if (!result.ok) {
       setErrors(result.errors);
@@ -371,6 +380,7 @@ export function RecipeEditor({
   const problems = [
     errors.title,
     errors.servings,
+    errors.link,
     errors.ingredients,
     ...Object.values(errors.ingredientLines),
     errors.steps,
@@ -443,6 +453,18 @@ export function RecipeEditor({
           styles={{ input: { maxWidth: '8rem' } }}
           value={servings}
         />
+
+        {linkable && (
+          <TextInput
+            description="Optional. The web page this recipe comes from."
+            error={errors.link}
+            inputMode="url"
+            label="Recipe link"
+            onChange={(event) => setLink(event.currentTarget.value)}
+            type="url"
+            value={link}
+          />
+        )}
 
         <LineList
           description={`One per line, in the order you use them. Each up to ${count(RECIPE_INGREDIENT_MAX_LENGTH)} characters.`}

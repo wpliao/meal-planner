@@ -5,8 +5,10 @@ import {
   cleanRecipeLines,
   cleanRecipeNotes,
   isAllowedRecipeHost,
+  parseRecipeLinkUrl,
   parseRecipeSourceUrl,
   RECIPE_IMPORT_HOSTS,
+  RECIPE_LINK_IMPORTED_MESSAGE,
   RECIPE_INGREDIENT_MAX_LENGTH,
   RECIPE_INGREDIENTS_MAX,
   RECIPE_NOTES_MAX_LENGTH,
@@ -20,6 +22,7 @@ import {
   truncateRecipeText,
   validateCreateRecipe,
   validateRecipeIngredients,
+  validateRecipeLink,
   validateRecipeNotes,
   validateRecipeSource,
   validateRecipeSteps,
@@ -206,6 +209,81 @@ describe('recipe source URL policy', () => {
   });
 });
 
+describe('manual recipe link', () => {
+  it('accepts an https link from any host and drops its fragment', () => {
+    const parsed = parseRecipeLinkUrl(
+      'https://www.kikkoman.com.sg/product_recipes/soy-chicken/#steps',
+    );
+    expect(parsed.ok && parsed.url.href).toBe(
+      'https://www.kikkoman.com.sg/product_recipes/soy-chicken/',
+    );
+    expect(isAllowedRecipeHost('www.kikkoman.com.sg')).toBe(false);
+  });
+
+  it.each([
+    ['not a URL', 'kikkoman.com.sg/recipe', 'malformed'],
+    ['http', 'http://example.com/rice', 'not_allowed'],
+    ['credentials', 'https://user:pw@example.com/', 'not_allowed'],
+    ['a port', 'https://example.com:8443/', 'not_allowed'],
+    [
+      'an over-length URL',
+      `https://example.com/${'a'.repeat(RECIPE_SOURCE_URL_MAX_LENGTH)}`,
+      'too_long',
+    ],
+  ])('refuses a link with %s', (_label, value, problem) => {
+    expect(parseRecipeLinkUrl(value)).toEqual({ ok: false, problem });
+  });
+
+  it('treats absent, null, and blank links as no link and trims a link', () => {
+    expect(validateRecipeLink(undefined)).toEqual({ ok: true, value: null });
+    expect(validateRecipeLink(null)).toEqual({ ok: true, value: null });
+    expect(validateRecipeLink('  ')).toEqual({ ok: true, value: null });
+    expect(validateRecipeLink(' https://example.com/a ')).toEqual({
+      ok: true,
+      value: 'https://example.com/a',
+    });
+    expect(validateRecipeLink(7)).toEqual({
+      ok: false,
+      message: 'The recipe link must be text.',
+    });
+  });
+
+  it('takes a link on a manual create and an update, but not on an import', () => {
+    const content = { title: 'Soup', ingredients: ['water'], steps: ['Boil.'] };
+    expect(
+      validateCreateRecipe({ ...content, link: 'https://example.com/soup' }),
+    ).toMatchObject({ ok: true, value: { link: 'https://example.com/soup' } });
+    expect(
+      validateUpdateRecipe({ version: 3, link: 'https://example.com/soup' }),
+    ).toEqual({
+      ok: true,
+      value: { version: 3, link: 'https://example.com/soup' },
+    });
+    expect(validateUpdateRecipe({ version: 3, link: null })).toEqual({
+      ok: true,
+      value: { version: 3, link: null },
+    });
+
+    const imported = {
+      ...content,
+      source: {
+        kind: 'website',
+        submittedUrl: 'https://www.budgetbytes.com/soup/',
+      },
+    };
+    expect(
+      validateCreateRecipe({ ...imported, link: 'https://example.com/soup' }),
+    ).toEqual({
+      ok: false,
+      errors: [{ field: 'link', message: RECIPE_LINK_IMPORTED_MESSAGE }],
+    });
+    expect(validateCreateRecipe({ ...imported, link: null })).toMatchObject({
+      ok: true,
+      value: { link: null },
+    });
+  });
+});
+
 describe('recipe source metadata', () => {
   it('defaults to manual and accepts an explicit manual source', () => {
     expect(validateRecipeSource(undefined)).toEqual({
@@ -317,6 +395,7 @@ describe('recipe request validation', () => {
         ingredients: ['water'],
         steps: ['Boil.'],
         servings: null,
+        link: null,
         source: { kind: 'manual' },
       },
     });
@@ -384,6 +463,7 @@ describe('recipe request validation', () => {
     ['bad notes', { version: 1, notes: [] }, 'notes'],
     ['bad ingredients', { version: 1, ingredients: [] }, 'ingredients'],
     ['bad steps', { version: 1, steps: [''] }, 'steps'],
+    ['a bad link', { version: 1, link: 'ftp://example.com/' }, 'link'],
   ])('rejects an update with %s', (_label, input, field) => {
     const result = validateUpdateRecipe(input);
     expect(result.ok).toBe(false);

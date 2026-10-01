@@ -4,8 +4,9 @@
  * The Worker validates every request with these functions; the client uses the
  * same functions to validate a form before sending it, and the website import
  * adapter uses the truncation helper to fit an extracted draft into the same
- * bounds. The migration `0003_create_recipes.sql` enforces the storage bounds
- * with CHECK constraints that must stay in step with these constants.
+ * bounds. The migrations `0003_create_recipes.sql` and
+ * `0007_add_recipe_link.sql` enforce the storage bounds with CHECK constraints
+ * that must stay in step with these constants.
  *
  * Lengths are counted in Unicode code points, which is what SQLite `length()`
  * counts for TEXT, so a value that passes here also passes the database CHECK.
@@ -65,9 +66,13 @@ export type RecipeSource =
       importedAt: string;
     };
 
-/** The short label shown in the library list. */
+/**
+ * The short label shown in the library list. A manual recipe carries the host
+ * of its recipe link (#113), or null when it has none.
+ */
 export type RecipeSourceLabel =
-  { kind: 'manual' } | { kind: 'website'; host: string };
+  | { kind: 'manual'; linkHost: string | null }
+  | { kind: 'website'; host: string };
 
 export interface RecipeSummary {
   id: string;
@@ -88,6 +93,12 @@ export interface Recipe {
   steps: string[];
   /** How many servings the recipe makes, or null when not set. */
   servings: number | null;
+  /**
+   * The page a manually entered recipe comes from (#113), or null. Stored and
+   * shown, never fetched. Always null for an imported recipe, whose page is
+   * in its source.
+   */
+  link: string | null;
   source: RecipeSource;
   version: number;
   createdAt: string;
@@ -119,6 +130,8 @@ export interface CreateRecipeRequest {
   steps: string[];
   /** Omitted means not set. */
   servings?: number | null;
+  /** Manual recipes only; omitted, null, or blank means no link. */
+  link?: string | null;
   /** Omitted means manual entry. */
   source?: RecipeSourceInput;
 }
@@ -126,7 +139,8 @@ export interface CreateRecipeRequest {
 /**
  * Update requires the version the member edited plus at least one field. A
  * supplied ingredient or step list replaces the whole ordered list. Source
- * provenance cannot be changed after creation.
+ * provenance cannot be changed after creation; only a manual recipe takes a
+ * link.
  */
 export interface UpdateRecipeRequest {
   version: number;
@@ -135,6 +149,7 @@ export interface UpdateRecipeRequest {
   ingredients?: string[];
   steps?: string[];
   servings?: number | null;
+  link?: string | null;
 }
 
 export interface DeleteRecipeRequest {
@@ -158,6 +173,7 @@ export type RecipeField =
   | 'ingredients'
   | 'steps'
   | 'servings'
+  | 'link'
   | 'source'
   | 'version';
 
@@ -176,6 +192,7 @@ export interface RecipeContent {
   ingredients: string[];
   steps: string[];
   servings: number | null;
+  link: string | null;
 }
 
 export type ValidRecipeSource =
@@ -199,6 +216,7 @@ export interface ValidUpdateRecipe {
   ingredients?: string[];
   steps?: string[];
   servings?: number | null;
+  link?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -286,6 +304,21 @@ export type RecipeUrlProblem = 'malformed' | 'too_long' | 'not_allowed';
 export const parseRecipeSourceUrl = (
   value: string,
 ): { ok: true; url: URL } | { ok: false; problem: RecipeUrlProblem } => {
+  const parsed = parseRecipeLinkUrl(value);
+  if (parsed.ok && !isAllowedRecipeHost(parsed.url.hostname)) {
+    return { ok: false, problem: 'not_allowed' };
+  }
+  return parsed;
+};
+
+/**
+ * Parses a manual recipe's link (#113) under the same structural rules as an
+ * import source, but from any host: the Worker stores the link and never
+ * fetches it, so the import allowlist does not apply.
+ */
+export const parseRecipeLinkUrl = (
+  value: string,
+): { ok: true; url: URL } | { ok: false; problem: RecipeUrlProblem } => {
   if (recipeTextLength(value) > RECIPE_SOURCE_URL_MAX_LENGTH) {
     return { ok: false, problem: 'too_long' };
   }
@@ -305,9 +338,6 @@ export const parseRecipeSourceUrl = (
     url.password !== '' ||
     url.port !== ''
   ) {
-    return { ok: false, problem: 'not_allowed' };
-  }
-  if (!isAllowedRecipeHost(url.hostname)) {
     return { ok: false, problem: 'not_allowed' };
   }
   return { ok: true, url };
@@ -406,6 +436,32 @@ export const validateRecipeServings = (
         `Servings must be a whole number from ${RECIPE_SERVINGS_MIN} to ${RECIPE_SERVINGS_MAX}.`,
       );
 };
+
+const LINK_MESSAGES: Record<RecipeUrlProblem, string> = {
+  malformed:
+    'The recipe link is not a web address. Paste the whole link, starting with https://.',
+  too_long: `The recipe link must be ${RECIPE_SOURCE_URL_MAX_LENGTH} characters or fewer.`,
+  not_allowed:
+    'The recipe link must be an https web address without a username, password, or port.',
+};
+
+/** A manual recipe's link: blank, null, or absent means no link. */
+export const validateRecipeLink = (
+  value: unknown,
+): FieldResult<string | null> => {
+  if (value === undefined || value === null) return { ok: true, value: null };
+  if (typeof value !== 'string') return fail('The recipe link must be text.');
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return { ok: true, value: null };
+  const parsed = parseRecipeLinkUrl(trimmed);
+  return parsed.ok
+    ? { ok: true, value: parsed.url.href }
+    : fail(LINK_MESSAGES[parsed.problem]);
+};
+
+/** Shown when a link is sent for a recipe imported from a website. */
+export const RECIPE_LINK_IMPORTED_MESSAGE =
+  'An imported recipe already links to its page, so it cannot take a recipe link.';
 
 export const validateRecipeVersion = (value: unknown): FieldResult<number> =>
   typeof value === 'number' && Number.isSafeInteger(value) && value >= 1
@@ -514,6 +570,7 @@ const CREATE_FIELDS = new Set([
   'ingredients',
   'steps',
   'servings',
+  'link',
   'source',
 ]);
 const UPDATE_FIELDS = new Set([
@@ -523,6 +580,7 @@ const UPDATE_FIELDS = new Set([
   'ingredients',
   'steps',
   'servings',
+  'link',
 ]);
 
 const collect = <T>(
@@ -576,7 +634,11 @@ export const validateCreateRecipe = (
     'servings',
     validateRecipeServings(input.servings),
   );
+  const link = collect(errors, 'link', validateRecipeLink(input.link));
   const source = collect(errors, 'source', validateRecipeSource(input.source));
+  if (source?.kind === 'website' && link) {
+    errors.push({ field: 'link', message: RECIPE_LINK_IMPORTED_MESSAGE });
+  }
 
   if (
     errors.length > 0 ||
@@ -585,13 +647,14 @@ export const validateCreateRecipe = (
     ingredients === undefined ||
     steps === undefined ||
     servings === undefined ||
+    link === undefined ||
     source === undefined
   ) {
     return { ok: false, errors };
   }
   return {
     ok: true,
-    value: { title, notes, ingredients, steps, servings, source },
+    value: { title, notes, ingredients, steps, servings, link, source },
   };
 };
 
@@ -625,7 +688,7 @@ export const validateUpdateRecipe = (
         {
           field: 'request',
           message:
-            'Provide version and at least one of title, notes, ingredients, steps, or servings.',
+            'Provide version and at least one of title, notes, ingredients, steps, servings, or link.',
         },
       ],
     };
@@ -660,6 +723,9 @@ export const validateUpdateRecipe = (
       'servings',
       validateRecipeServings(input.servings),
     );
+  }
+  if (Object.hasOwn(input, 'link')) {
+    change.link = collect(errors, 'link', validateRecipeLink(input.link));
   }
 
   return errors.length > 0

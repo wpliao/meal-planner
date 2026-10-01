@@ -29,6 +29,7 @@ export const recipe = (over: Partial<Recipe> = {}): Recipe => ({
   ingredients: ['2 tbsp soy sauce', '500 g chicken'],
   steps: ['Marinate the chicken.', 'Grill it.'],
   servings: null,
+  link: null,
   source: { kind: 'manual' },
   version: 1,
   createdAt: '2026-09-21T00:00:00.000Z',
@@ -39,7 +40,7 @@ export const recipe = (over: Partial<Recipe> = {}): Recipe => ({
 export const summary = (over: Partial<RecipeSummary> = {}): RecipeSummary => ({
   id: RECIPE_ID,
   title: 'Soy chicken',
-  source: { kind: 'manual' },
+  source: { kind: 'manual', linkHost: null },
   version: 1,
   createdAt: '2026-09-21T00:00:00.000Z',
   updatedAt: '2026-09-21T00:00:00.000Z',

@@ -4,6 +4,7 @@ import {
   RECIPE_INGREDIENT_MAX_LENGTH,
   RECIPE_INGREDIENTS_MAX,
   RECIPE_LIMIT,
+  RECIPE_LINK_IMPORTED_MESSAGE,
   RECIPE_NOTES_MAX_LENGTH,
   RECIPE_SOURCE_PAGE_TITLE_MAX_LENGTH,
   RECIPE_STEP_MAX_LENGTH,
@@ -24,6 +25,7 @@ import {
   seedRecipe,
   testEnv,
 } from './helpers';
+import { stubOutboundFetch } from './setup';
 
 const RECIPES_URL = 'https://example.test/api/recipes';
 const recipeUrl = (id: string) => `${RECIPES_URL}/${id}`;
@@ -117,6 +119,7 @@ describe('recipe API', () => {
         'createdAt',
         'id',
         'ingredients',
+        'link',
         'notes',
         'servings',
         'source',
@@ -131,7 +134,7 @@ describe('recipe API', () => {
         {
           id: recipe.id,
           title: manual.title,
-          source: { kind: 'manual' },
+          source: { kind: 'manual', linkHost: null },
           version: 1,
           createdAt: recipe.createdAt,
           updatedAt: recipe.updatedAt,
@@ -305,6 +308,124 @@ describe('recipe API', () => {
         200,
       );
       expect((await remove(recipe.id, { version: 2 })).status).toBe(204);
+    });
+  });
+
+  describe('manual recipe link', () => {
+    const link = 'https://www.kikkoman.com.sg/product_recipes/soy-chicken/';
+
+    const storedLink = async (id: string): Promise<string | null> =>
+      (
+        await testEnv.DB.prepare(`SELECT link_url FROM recipes WHERE id = ?`)
+          .bind(id)
+          .first<{ link_url: string | null }>()
+      )?.link_url ?? null;
+
+    it('saves a link from any https host, never fetching it, and shows its host in the list', async () => {
+      const outbound: unknown[] = [];
+      stubOutboundFetch((input) => {
+        outbound.push(input);
+        return Promise.reject(new Error('The link must not be fetched.'));
+      });
+      const recipe = await createOk({ ...manual, link: ` ${link}#steps ` });
+
+      expect(recipe.link).toBe(link);
+      expect(recipe.source).toEqual({ kind: 'manual' });
+      expect(await getOk(recipe.id)).toEqual(recipe);
+      expect(await storedLink(recipe.id)).toBe(link);
+      expect((await list())[0].source).toEqual({
+        kind: 'manual',
+        linkHost: 'www.kikkoman.com.sg',
+      });
+      expect(outbound).toEqual([]);
+    });
+
+    it('stores no link when it is absent, null, or blank', async () => {
+      for (const body of [
+        manual,
+        { ...manual, link: null },
+        { ...manual, link: '  ' },
+      ]) {
+        const recipe = await createOk(body);
+        expect(recipe.link).toBeNull();
+        expect(await storedLink(recipe.id)).toBeNull();
+      }
+    });
+
+    it('adds, keeps, and clears a link through version-checked edits', async () => {
+      const recipe = await createOk(manual);
+
+      const added = await patch(recipe.id, { version: 1, link });
+      expect(added.status).toBe(200);
+      expect((await added.json<{ recipe: Recipe }>()).recipe).toMatchObject({
+        link,
+        version: 2,
+      });
+
+      const kept = await patch(recipe.id, { version: 2, title: 'Mine' });
+      expect((await kept.json<{ recipe: Recipe }>()).recipe.link).toBe(link);
+
+      const stale = await patch(recipe.id, { version: 2, link: null });
+      expect(stale.status).toBe(409);
+      expect(await storedLink(recipe.id)).toBe(link);
+
+      const cleared = await patch(recipe.id, { version: 3, link: null });
+      expect((await cleared.json<{ recipe: Recipe }>()).recipe).toMatchObject({
+        link: null,
+        version: 4,
+      });
+      expect(await storedLink(recipe.id)).toBeNull();
+    });
+
+    it.each([
+      ['an http link', 'http://www.kikkoman.com.sg/a/'],
+      ['credentials', 'https://u:p@example.com/a'],
+      ['a port', 'https://example.com:8443/a'],
+      ['a malformed link', 'kikkoman.com.sg/a'],
+      ['a non-string link', 42],
+      ['an overlong link', `https://example.com/${'a'.repeat(2048)}`],
+    ])('rejects %s and saves nothing', async (_label, value) => {
+      const response = await create({ ...manual, link: value });
+      expect(response.status).toBe(400);
+      expect(await list()).toEqual([]);
+
+      const recipe = await createOk(manual);
+      const edit = await patch(recipe.id, { version: 1, link: value });
+      expect(edit.status).toBe(400);
+      expect((await getOk(recipe.id)).version).toBe(1);
+    });
+
+    it('refuses a link for an imported recipe and changes nothing', async () => {
+      const refused = await create({ ...manual, source: website, link });
+      expect(refused.status).toBe(400);
+      await expect(refused.json()).resolves.toMatchObject({
+        error: {
+          code: 'invalid_request',
+          message: RECIPE_LINK_IMPORTED_MESSAGE,
+        },
+      });
+      expect(await list()).toEqual([]);
+
+      const imported = await createOk({ ...manual, source: website });
+      expect(imported.link).toBeNull();
+      const edit = await patch(imported.id, { version: 1, title: 'X', link });
+      expect(edit.status).toBe(400);
+      await expect(edit.json()).resolves.toMatchObject({
+        error: { message: RECIPE_LINK_IMPORTED_MESSAGE },
+      });
+      expect(await getOk(imported.id)).toEqual(imported);
+
+      // Clearing a link that is not there is a harmless no-op.
+      const cleared = await patch(imported.id, { version: 1, link: null });
+      expect(cleared.status).toBe(200);
+    });
+
+    it('reports a link edit of another household’s recipe as not found', async () => {
+      const { householdId } = await seedOtherHousehold();
+      const otherId = await seedRecipe(householdId, 'Theirs');
+      const response = await patch(otherId, { version: 1, link });
+      expect(response.status).toBe(404);
+      expect(await storedLink(otherId)).toBeNull();
     });
   });
 
