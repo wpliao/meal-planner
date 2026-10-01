@@ -44,6 +44,8 @@ export const RECIPE_IMPORT_HOSTS: readonly string[] = [
   'www.thewoksoflife.com',
   'kikkoman.co.jp',
   'www.kikkoman.co.jp',
+  'recipetineats.com',
+  'www.recipetineats.com',
 ];
 
 export type RecipeSourceKind = 'manual' | 'website';

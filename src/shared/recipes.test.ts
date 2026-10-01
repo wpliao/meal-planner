@@ -158,7 +158,7 @@ describe('recipe field validation', () => {
 
 describe('recipe source URL policy', () => {
   it('lists each allowed site with and without www', () => {
-    expect(RECIPE_IMPORT_HOSTS).toHaveLength(12);
+    expect(RECIPE_IMPORT_HOSTS).toHaveLength(14);
     for (const host of RECIPE_IMPORT_HOSTS.filter(
       (h) => !h.startsWith('www.'),
     )) {
