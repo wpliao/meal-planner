@@ -52,6 +52,7 @@ interface RecipeBody {
   ingredients: string[];
   steps: string[];
   notes?: string | null;
+  servings?: number | null;
 }
 
 interface SavedRecipe extends RecipeBody {
@@ -646,4 +647,101 @@ test('the import screen fits a phone with touch-sized controls', async ({
   // The link field stays wide enough to check a pasted address.
   const input = await field(page, 'Recipe page link').boundingBox();
   expect(input!.width).toBeGreaterThan(200);
+});
+
+test('a member adjusts servings and units on the recipe page', async ({
+  page,
+}, testInfo) => {
+  await openRecipes(page);
+  const saved = await createRecipe(page, testInfo, {
+    title: unique('Baked thighs'),
+    ingredients: ['1 lb chicken thighs', '2 eggs', 'salt to taste'],
+    steps: ['Bake at 375°F in a 9x13-inch pan.'],
+    servings: 4,
+  });
+  await page.goto(`/recipes/${saved.id}`);
+  await expect(
+    page.getByRole('heading', { level: 1, name: saved.title }),
+  ).toBeVisible();
+
+  const ingredients = page
+    .getByTestId('recipe-ingredients')
+    .getByRole('listitem');
+  const steps = page.getByTestId('recipe-steps').getByRole('listitem');
+  const servings = page.getByRole('textbox', { name: 'Servings' });
+  // A segmented control's radio is hidden; its label is what a member taps.
+  const unit = (name: string) =>
+    page.locator('label').filter({ hasText: new RegExp(`^${name}$`, 'u') });
+
+  // Metric is the default, so the imperial recipe reads in metric.
+  await expect(ingredients).toHaveText([
+    '455 g chicken thighs',
+    '2 eggs',
+    'salt to taste',
+  ]);
+  await expect(steps).toHaveText(['Bake at 190°C in a 23 x 33 cm pan.']);
+  await expect(page.getByTestId('recipe-amounts-note')).toHaveText(
+    'Amounts are converted to metric and rounded. Edit recipe shows them as written.',
+  );
+
+  await page.getByRole('button', { name: 'More servings' }).click();
+  await page.getByRole('button', { name: 'More servings' }).click();
+  await expect(servings).toHaveValue('6');
+  await expect(ingredients).toHaveText([
+    '680 g chicken thighs',
+    '3 eggs',
+    'salt to taste',
+  ]);
+  await expect(page.getByTestId('recipe-steps-note')).toHaveText(
+    'Amounts in the steps are for 4 servings.',
+  );
+  await expect(page.getByTestId('recipe-amounts-status')).toHaveText(
+    'Showing amounts for 6 servings, in metric.',
+  );
+
+  await unit('Imperial').click();
+  await expect(ingredients).toHaveText([
+    '1 ½ lb chicken thighs',
+    '3 eggs',
+    'salt to taste',
+  ]);
+  await expect(steps).toHaveText(['Bake at 375°F in a 9x13-inch pan.']);
+
+  // The controls are touch-sized and the page does not scroll sideways.
+  for (const control of [
+    page.getByRole('button', { name: 'Fewer servings' }),
+    page.getByRole('button', { name: 'More servings' }),
+    page.getByRole('button', { name: 'Reset' }),
+    servings,
+    unit('Metric'),
+    unit('Imperial'),
+  ]) {
+    const box = await control.boundingBox();
+    const name = String(control);
+    expect(box, name).not.toBeNull();
+    expect(box!.height, name).toBeGreaterThanOrEqual(44);
+    expect(box!.width, name).toBeGreaterThanOrEqual(44);
+  }
+  const scrollWidth = await page.evaluate(
+    () => document.documentElement.scrollWidth,
+  );
+  expect(scrollWidth).toBeLessThanOrEqual(page.viewportSize()!.width);
+
+  // Units are remembered on this device; servings start again each visit.
+  await page.reload();
+  await expect(servings).toHaveValue('4');
+  await expect(page.getByRole('radio', { name: 'Imperial' })).toBeChecked();
+  await expect(ingredients).toHaveText([
+    '1 lb chicken thighs',
+    '2 eggs',
+    'salt to taste',
+  ]);
+
+  // The editor still shows the saved text as written.
+  await unit('Metric').click();
+  await page.getByRole('link', { name: 'Edit recipe' }).click();
+  await expect(field(page, 'Ingredient 1')).toHaveValue('1 lb chicken thighs');
+  await expect(field(page, 'Step 1')).toHaveValue(
+    'Bake at 375°F in a 9x13-inch pan.',
+  );
 });

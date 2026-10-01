@@ -1,4 +1,10 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   jsonResponse,
@@ -542,5 +548,183 @@ describe('Recipe preferences', () => {
     renderRecipes([detailPath]);
     await screen.findByRole('heading', { level: 1, name: 'Soy chicken' });
     expect(screen.queryByTestId('recipe-not-now')).not.toBeInTheDocument();
+  });
+});
+
+describe('Recipe amounts (#118)', () => {
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  const lines = () =>
+    within(screen.getByTestId('recipe-ingredients'))
+      .getAllByRole('listitem')
+      .map((item) => item.textContent);
+  const stepLines = () =>
+    within(screen.getByTestId('recipe-steps'))
+      .getAllByRole('listitem')
+      .map((item) => item.textContent);
+  const status = () => screen.getByTestId('recipe-amounts-status').textContent;
+  const openRecipe = async (over: Parameters<typeof recipe>[0]) => {
+    const spy = mockFetch(() => jsonResponse({ recipe: recipe(over) }));
+    renderRecipes([detailPath]);
+    await screen.findByRole('heading', { level: 1, name: 'Soy chicken' });
+    return spy;
+  };
+  const thighs = {
+    ingredients: ['1 lb chicken thighs', '2 eggs', 'salt to taste'],
+    steps: ['Bake at 375°F in a 9x13-inch pan.'],
+    servings: 4,
+  };
+
+  it('shows imperial amounts in metric by default and says so', async () => {
+    await openRecipe(thighs);
+
+    expect(screen.getByRole('radio', { name: 'Metric' })).toBeChecked();
+    expect(lines()).toEqual([
+      '455 g chicken thighs',
+      '2 eggs',
+      'salt to taste',
+    ]);
+    expect(stepLines()).toEqual(['Bake at 190°C in a 23 x 33 cm pan.']);
+    expect(screen.getByTestId('recipe-amounts-note')).toHaveTextContent(
+      'Amounts are converted to metric and rounded. Edit recipe shows them as written.',
+    );
+    expect(screen.queryByTestId('recipe-steps-note')).toBeNull();
+    expect(status()).toBe('');
+  });
+
+  it('shows a metric recipe exactly as written, without notes', async () => {
+    await openRecipe({
+      ingredients: ['  2 tbsp  soy sauce', '500g chicken'],
+      servings: 4,
+    });
+
+    expect(lines()).toEqual(['  2 tbsp  soy sauce', '500g chicken']);
+    expect(screen.queryByTestId('recipe-amounts-note')).toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Servings' })).toHaveValue('4');
+  });
+
+  it('adjusts amounts for more servings, announces it, and resets', async () => {
+    const spy = await openRecipe(thighs);
+    const more = screen.getByRole('button', { name: 'More servings' });
+
+    fireEvent.click(more);
+    fireEvent.click(more);
+
+    expect(screen.getByRole('textbox', { name: 'Servings' })).toHaveValue('6');
+    expect(lines()).toEqual([
+      '680 g chicken thighs',
+      '3 eggs',
+      'salt to taste',
+    ]);
+    expect(stepLines()).toEqual(['Bake at 190°C in a 23 x 33 cm pan.']);
+    expect(screen.getByTestId('recipe-amounts-note')).toHaveTextContent(
+      'Amounts are adjusted for 6 servings, converted to metric, and rounded. Edit recipe shows them as written.',
+    );
+    expect(screen.getByTestId('recipe-steps-note')).toHaveTextContent(
+      'Amounts in the steps are for 4 servings.',
+    );
+    expect(status()).toBe('Showing amounts for 6 servings, in metric.');
+    expect(screen.getByText('Serves 4')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
+    expect(lines()).toEqual([
+      '455 g chicken thighs',
+      '2 eggs',
+      'salt to taste',
+    ]);
+    expect(screen.queryByRole('button', { name: 'Reset' })).toBeNull();
+    expect(screen.queryByTestId('recipe-steps-note')).toBeNull();
+    expect(status()).toBe('Showing amounts for 4 servings, in metric.');
+    // Adjusting never saves anything.
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it('takes a typed servings count from 1 to 50', async () => {
+    await openRecipe({ ...thighs, servings: 2 });
+    const field = screen.getByRole('textbox', { name: 'Servings' });
+
+    fireEvent.change(field, { target: { value: '1' } });
+    expect(lines()[1]).toBe('1 eggs');
+    expect(
+      screen.getByRole('button', { name: 'Fewer servings' }),
+    ).toBeDisabled();
+
+    fireEvent.change(field, { target: { value: '50' } });
+    expect(lines()[1]).toBe('50 eggs');
+    expect(
+      screen.getByRole('button', { name: 'More servings' }),
+    ).toBeDisabled();
+
+    fireEvent.change(field, { target: { value: '' } });
+    fireEvent.blur(field);
+    expect(field).toHaveValue('50');
+  });
+
+  it('offers a scale when the recipe has no servings count', async () => {
+    await openRecipe({ ...thighs, servings: null });
+
+    expect(screen.queryByRole('textbox', { name: 'Servings' })).toBeNull();
+    expect(screen.getByRole('radio', { name: '1×' })).toBeChecked();
+    fireEvent.click(screen.getByRole('radio', { name: '2×' }));
+
+    expect(lines()).toEqual([
+      '905 g chicken thighs',
+      '4 eggs',
+      'salt to taste',
+    ]);
+    expect(screen.getByTestId('recipe-amounts-note')).toHaveTextContent(
+      'Amounts are scaled to 2×, converted to metric, and rounded.',
+    );
+    expect(screen.getByTestId('recipe-steps-note')).toHaveTextContent(
+      'Amounts in the steps are for the original recipe.',
+    );
+    expect(status()).toBe('Showing amounts at 2×, in metric.');
+  });
+
+  it('remembers Imperial on this device', async () => {
+    await openRecipe({
+      ingredients: ['500 g beef mince'],
+      steps: ['Bake at 180°C.'],
+      servings: 4,
+    });
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Imperial' }));
+    expect(lines()).toEqual(['1 lb beef mince']);
+    expect(stepLines()).toEqual(['Bake at 350°F.']);
+    expect(status()).toBe('Showing amounts for 4 servings, in imperial.');
+    expect(localStorage.getItem('meal-planner:units')).toBe('imperial');
+  });
+
+  it('starts in the remembered system and ignores an unknown value', async () => {
+    localStorage.setItem('meal-planner:units', 'imperial');
+    await openRecipe({ ingredients: ['500 g beef mince'], servings: 4 });
+    expect(screen.getByRole('radio', { name: 'Imperial' })).toBeChecked();
+    expect(lines()).toEqual(['1 lb beef mince']);
+  });
+
+  it('falls back to Metric when the browser blocks storage', async () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    await openRecipe({ ingredients: ['1 lb beef'], servings: 4 });
+
+    expect(screen.getByRole('radio', { name: 'Metric' })).toBeChecked();
+    expect(lines()).toEqual(['455 g beef']);
+    fireEvent.click(screen.getByRole('radio', { name: 'Imperial' }));
+    expect(lines()).toEqual(['1 lb beef']);
+  });
+
+  it('starts again from the recipe count on another visit', async () => {
+    await openRecipe(thighs);
+    fireEvent.click(screen.getByRole('button', { name: 'More servings' }));
+    cleanup();
+
+    await openRecipe(thighs);
+    expect(screen.getByRole('textbox', { name: 'Servings' })).toHaveValue('4');
   });
 });

@@ -12,6 +12,7 @@ import {
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { Notice } from './api';
+import type { PresentedRecipe } from './RecipeAmounts';
 import {
   RECIPES_BACK_LINK,
   touchLink,
@@ -99,12 +100,22 @@ export function RecipeBody({
   headingOrder = 2,
   idPrefix,
   afterIngredients,
+  presented,
 }: Readonly<{
   recipe: Pick<Recipe, 'ingredients' | 'steps' | 'notes'>;
   headingOrder?: TitleOrder;
   idPrefix: string;
   /** Shown between the ingredients and the steps, such as nutrition. */
   afterIngredients?: ReactNode;
+  /**
+   * Adjusted ingredient and step text, one entry per saved line, with the
+   * controls and notes that explain it (#118). Without it the saved text is
+   * shown as written.
+   */
+  presented?: Pick<
+    PresentedRecipe,
+    'ingredients' | 'steps' | 'controls' | 'notes'
+  >;
 }>) {
   return (
     <Stack gap="lg">
@@ -112,13 +123,15 @@ export function RecipeBody({
         <Title id={`${idPrefix}-ingredients`} mb="xs" order={headingOrder}>
           Ingredients
         </Title>
+        {presented?.controls}
         <List data-testid="recipe-ingredients" spacing="xs">
           {recipe.ingredients.map((line, index) => (
             <List.Item key={`${index}-${line}`} style={wrap}>
-              {line}
+              {presented?.ingredients[index] ?? line}
             </List.Item>
           ))}
         </List>
+        {presented?.notes}
       </section>
       {afterIngredients}
       <section aria-labelledby={`${idPrefix}-steps`}>
@@ -128,7 +141,7 @@ export function RecipeBody({
         <List data-testid="recipe-steps" spacing="sm" type="ordered">
           {recipe.steps.map((step, index) => (
             <List.Item key={`${index}-${step}`} style={wrap}>
-              {step}
+              {presented?.steps[index] ?? step}
             </List.Item>
           ))}
         </List>
