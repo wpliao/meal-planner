@@ -80,9 +80,9 @@ An authorized owner must:
 3. Configure Cloudflare Access applications/policies independently for both
    deployed hostnames before personal data is exposed.
 4. Create least-privilege GitHub environments named `development` and
-   `production`, and restrict production deployments to `main`. Required
-   environment reviewers are unavailable for this private GitHub Pro repository;
-   see [ADR 0005](DECISIONS/0005-production-deployment-approval-on-github-pro.md).
+   `production`, and restrict production deployments to `main`. Add the owner
+   as a required reviewer on `production` only; see
+   [ADR 0011](DECISIONS/0011-production-environment-required-reviewer.md).
 5. Add scoped `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets to each
    GitHub environment. Do not reuse a broad personal global API key.
 6. Add custom domains/routes only after reviewing Access and DNS configuration.

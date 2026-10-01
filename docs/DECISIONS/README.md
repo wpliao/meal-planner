@@ -15,3 +15,4 @@ decisions.
 - [0008 — Household transfer and decommissioning](./0008-household-decommissioning.md)
 - [0009 — Nutrition reference data from USDA FoodData Central](./0009-nutrition-reference-data.md)
 - [0010 — AI provider boundary through AI Gateway](./0010-ai-provider-boundary.md)
+- [0011 — Production environment required reviewer on the public repository](./0011-production-environment-required-reviewer.md)

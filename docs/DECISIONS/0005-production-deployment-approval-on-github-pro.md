@@ -1,6 +1,6 @@
 # ADR 0005: Production deployment approval on private GitHub Pro
 
-- Status: Accepted
+- Status: Superseded by [ADR 0011](0011-production-environment-required-reviewer.md) on 2026-09-29
 - Date: 2026-09-21
 - Supersedes: The required-reviewer clause of [ADR 0002](0002-environment-isolation.md)
 
