@@ -1,11 +1,11 @@
 # Feature: Recipe link for manually entered recipes
 
-- Status: Proposed
+- Status: Accepted
 - Phase: 3 follow-up
 - Issue: https://github.com/wpliao/meal-planner/issues/113
 - Product owner: wpliao
 - Last updated: 2026-10-01
-- Pull requests: none
+- Pull requests: [#114](https://github.com/wpliao/meal-planner/pull/114) (design)
 
 ## Problem and outcome
 
@@ -196,6 +196,7 @@ needed. A later forward migration can drop it if the feature is retired.
 | Date       | Change           | Reason                                                                                                                         | Evidence                                                  |
 | ---------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
 | 2026-10-01 | Initial proposal | The owner enters some recipes by hand from web pages (Kikkoman Singapore after #111 was withdrawn) and wants to keep the page. | [#113](https://github.com/wpliao/meal-planner/issues/113) |
+| 2026-10-01 | Accepted         | The owner approved the design by merging its pull request.                                                                     | [#114](https://github.com/wpliao/meal-planner/pull/114)   |
 
 ## Release record
 
