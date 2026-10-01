@@ -44,8 +44,8 @@ credentials, require an exact typed confirmation, verify the target and current
 schema, and run a parameterized, transactional deletion. It can record a run URL
 without printing family data. Development rehearses the same path first. The
 production branch and owner-approval process follow
-[ADR 0005](0005-production-deployment-approval-on-github-pro.md); GitHub Pro does
-not enforce a second reviewer on this private repository.
+[ADR 0011](0011-production-environment-required-reviewer.md), which added an
+enforced production environment reviewer once the repository became public.
 
 ## Decision
 

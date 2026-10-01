@@ -35,9 +35,9 @@ target environment, reuses CI's result for the exact commit (see below), builds 
 Wrangler environment, applies pending D1 migrations remotely, and deploys with
 the matching GitHub environment credentials. Production additionally requires
 the literal confirmation input, the `main`-only GitHub environment branch policy,
-and explicit product-owner approval recorded before dispatch. This private
-GitHub Pro repository cannot configure required environment reviewers; see
-[ADR 0005](DECISIONS/0005-production-deployment-approval-on-github-pro.md).
+explicit product-owner approval recorded before dispatch, and the owner's
+approval of the run at the `production` environment gate; see
+[ADR 0011](DECISIONS/0011-production-environment-required-reviewer.md).
 
 Development and production jobs target different Wrangler environments and
 therefore different Worker, D1, and R2 resources. The workflows do not create
@@ -104,8 +104,8 @@ any credentialed step. Follow the
 
 - Pull requests never deploy production.
 - A production deploy is tied to a reviewed Git commit, a `main`-only environment,
-  a literal confirmation input, and the owner's recorded approval. These process
-  and workflow controls are not equivalent to an enforced reviewer gate.
+  a literal confirmation input, the owner's recorded approval, and the
+  `production` environment's required-reviewer gate, which GitHub enforces.
 - The protected workflow applies committed migrations immediately before the
   matching deployment. Owners must configure the environment credentials and
   review the target environment first; the workflow does not create resources.
