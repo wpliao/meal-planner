@@ -57,10 +57,11 @@ export function RecipeCreate({
   const save = async (content: RecipeContent) => {
     setPending(true);
     setNotice(null);
-    const body: CreateRecipeRequest = {
-      ...content,
-      ...(importContext ? { source: importContext.source } : {}),
-    };
+    // An import carries its own source and never a recipe link (#113).
+    const { link, ...rest } = content;
+    const body: CreateRecipeRequest = importContext
+      ? { ...rest, source: importContext.source }
+      : { ...rest, link };
     try {
       const { recipe } = await api<RecipeResponse>(
         '/api/recipes',
@@ -266,6 +267,7 @@ export function RecipeEdit() {
             : undefined
         }
         initialDraft={draftFromRecipe(recipe)}
+        linkable={recipe.source.kind === 'manual'}
         notice={notice}
         onCancel={() => leave(null)}
         onSubmit={(content) => void save(content)}

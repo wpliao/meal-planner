@@ -927,7 +927,8 @@ describe('recipe nutrition migration', () => {
     const columns = await testEnv.DB.prepare(
       'SELECT name, "notnull" FROM pragma_table_info(\'recipes\')',
     ).all<{ name: string; notnull: number }>();
-    expect(columns.results.at(-1)).toEqual({ name: 'servings', notnull: 0 });
+    // 0007 adds link_url after it (#113).
+    expect(columns.results.at(-2)).toEqual({ name: 'servings', notnull: 0 });
     const tables = await testEnv.DB.prepare(
       `SELECT name FROM sqlite_master
         WHERE type = 'table'
@@ -1072,5 +1073,111 @@ describe('recipe nutrition migration', () => {
         .bind('a'.repeat(64))
         .run(),
     ).rejects.toThrow(/CHECK/iu);
+  });
+});
+
+describe('recipe link migration', () => {
+  beforeEach(applyMigrations);
+
+  const seedHousehold = async (): Promise<string> => {
+    const now = new Date().toISOString();
+    const id = crypto.randomUUID();
+    await testEnv.DB.prepare(
+      `INSERT INTO households (id, name, created_at, updated_at)
+       VALUES (?, 'Link Family', ?, ?)`,
+    )
+      .bind(id, now, now)
+      .run();
+    return id;
+  };
+
+  const setLink = (recipeId: string, value: unknown) =>
+    testEnv.DB.prepare('UPDATE recipes SET link_url = ? WHERE id = ?')
+      .bind(value, recipeId)
+      .run();
+
+  it('applies 0007 on top of the existing schema, adding only a nullable link column to recipes', async () => {
+    const columns = await testEnv.DB.prepare(
+      'SELECT name, "notnull", dflt_value FROM pragma_table_info(\'recipes\')',
+    ).all<{ name: string; notnull: number; dflt_value: unknown }>();
+    expect(columns.results.at(-1)).toEqual({
+      name: 'link_url',
+      notnull: 0,
+      dflt_value: null,
+    });
+
+    // An existing recipe keeps no link.
+    const householdId = await seedHousehold();
+    const recipeId = await seedRecipe(householdId, 'Soup');
+    const row = await testEnv.DB.prepare(
+      'SELECT link_url FROM recipes WHERE id = ?',
+    )
+      .bind(recipeId)
+      .first<{ link_url: string | null }>();
+    expect(row?.link_url).toBeNull();
+  });
+
+  it('accepts only an https link of up to 2,048 characters on a manual recipe', async () => {
+    const householdId = await seedHousehold();
+    const recipeId = await seedRecipe(householdId, 'Soup');
+    for (const valid of [
+      'https://www.kikkoman.com.sg/product_recipes/soup/',
+      `https://example.com/${'a'.repeat(2048 - 20)}`,
+      null,
+    ]) {
+      await setLink(recipeId, valid);
+    }
+    for (const invalid of [
+      'http://example.com/a',
+      'javascript:alert(1)',
+      'https://',
+      '',
+      `https://example.com/${'a'.repeat(2048 - 19)}`,
+    ]) {
+      await expect(setLink(recipeId, invalid), invalid).rejects.toThrow(
+        /CHECK/iu,
+      );
+    }
+  });
+
+  it('rejects a link on a website-sourced recipe', async () => {
+    const householdId = await seedHousehold();
+    const now = new Date().toISOString();
+    const recipeId = crypto.randomUUID();
+    await testEnv.DB.prepare(
+      `INSERT INTO recipes (
+         id, household_id, title, version, write_token, source_kind,
+         source_submitted_url, source_host, source_imported_at,
+         created_at, updated_at
+       ) VALUES (?, ?, 'Imported', 1, ?, 'website', ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        recipeId,
+        householdId,
+        crypto.randomUUID(),
+        'https://budgetbytes.com/a',
+        'budgetbytes.com',
+        now,
+        now,
+        now,
+      )
+      .run();
+    await expect(setLink(recipeId, 'https://example.com/a')).rejects.toThrow(
+      /CHECK/iu,
+    );
+    await setLink(recipeId, null);
+  });
+
+  it('deletes the link with its recipe and its household', async () => {
+    const householdId = await seedHousehold();
+    const recipeId = await seedRecipe(householdId, 'Soup');
+    await setLink(recipeId, 'https://example.com/soup');
+    await testEnv.DB.prepare('DELETE FROM households WHERE id = ?')
+      .bind(householdId)
+      .run();
+    const count = await testEnv.DB.prepare(
+      'SELECT COUNT(*) AS n FROM recipes WHERE link_url IS NOT NULL',
+    ).first<{ n: number }>();
+    expect(count?.n).toBe(0);
   });
 });

@@ -253,6 +253,24 @@ nutrition_dataset (1 row)   nutrition_foods (1) ──< nutrition_food_portions 
   does not imply erasure from D1 Time Travel history. At most 100 rows per
   recipe, so at most 50,000 per household.
 
+## Manual recipe link
+
+[Feature #113](features/0113-manual-recipe-link.md) lets a manually entered
+recipe keep the web page it came from, in
+`migrations/0007_add_recipe_link.sql`. The migration adds one nullable column
+and rewrites nothing.
+
+- `recipes.link_url` is an absolute `https` address without its fragment, of
+  up to 2,048 code points, or `NULL`. A `CHECK` allows it only on `manual`
+  rows; a `website` row keeps its import source in the source columns
+  instead. The Worker also refuses a link for an imported recipe before any
+  write.
+- It is recipe content: setting or clearing it bumps the recipe's version
+  under the usual write token. It follows the recipe's household scope and is
+  deleted with the recipe or the household.
+- The link is stored and shown, never fetched, so any host is allowed. The
+  library list reads only its host.
+
 ## Durable principles
 
 - D1 is authoritative for structured application data.

@@ -22,6 +22,7 @@ import {
   RECIPES_BACK_LINK,
   failureMessage,
   isNotFound,
+  safeRecipeLink,
   safeSourceHref,
   setRecipeFlash,
   useRecipe,
@@ -105,6 +106,7 @@ export function RecipeDetail() {
   };
 
   const href = safeSourceHref(recipe.source);
+  const link = safeRecipeLink(recipe.link);
 
   /** Sets or clears a household preference; the recipe itself is untouched. */
   const changePreference = async (
@@ -152,9 +154,12 @@ export function RecipeDetail() {
             {href && <SourceLink host={recipe.source.host} href={href} />}
           </>
         ) : (
-          <Text c="dimmed" fz="sm">
-            Entered by hand
-          </Text>
+          <>
+            <Text c="dimmed" fz="sm">
+              Entered by hand
+            </Text>
+            {link && <SourceLink host={link.host} href={link.href} />}
+          </>
         )}
         {recipe.servings !== null && (
           <Text c="dimmed" fz="sm">

@@ -1,5 +1,6 @@
 import {
   RECIPE_LIMIT,
+  RECIPE_LINK_IMPORTED_MESSAGE,
   type Recipe,
   type RecipeSource,
   type RecipeSourceKind,
@@ -7,13 +8,14 @@ import {
   type ValidCreateRecipe,
   type ValidUpdateRecipe,
 } from '../../shared/recipes';
-import { ApiError } from '../errors';
+import { ApiError, invalidRequest } from '../errors';
 
 interface RecipeRow {
   id: string;
   title: string;
   notes: string | null;
   servings: number | null;
+  link_url: string | null;
   version: number;
   source_kind: RecipeSourceKind;
   source_submitted_url: string | null;
@@ -32,6 +34,7 @@ type SummaryRow = Pick<
   | 'version'
   | 'source_kind'
   | 'source_host'
+  | 'link_url'
   | 'created_at'
   | 'updated_at'
 >;
@@ -42,7 +45,7 @@ interface LineRow {
 
 type LineTable = 'recipe_ingredients' | 'recipe_steps';
 
-const RECIPE_COLUMNS = `id, title, notes, servings, version, source_kind,
+const RECIPE_COLUMNS = `id, title, notes, servings, link_url, version, source_kind,
   source_submitted_url, source_resolved_url, source_host, source_page_title,
   source_imported_at, created_at, updated_at`;
 
@@ -82,11 +85,23 @@ const toRecipe = (
   ingredients: ingredients.map((line) => line.text),
   steps: steps.map((line) => line.text),
   servings: row.servings,
+  link: row.link_url,
   source: toSource(row),
   version: row.version,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
+
+// The migration's CHECK keeps a stored link an https URL; a value that still
+// fails to parse is shown as no link rather than failing the whole list.
+const linkHost = (link: string | null): string | null => {
+  if (link === null) return null;
+  try {
+    return new URL(link).hostname;
+  } catch {
+    return null;
+  }
+};
 
 const toSummary = (row: SummaryRow): RecipeSummary => ({
   id: row.id,
@@ -94,7 +109,7 @@ const toSummary = (row: SummaryRow): RecipeSummary => ({
   source:
     row.source_kind === 'website'
       ? { kind: 'website', host: row.source_host as string }
-      : { kind: 'manual' },
+      : { kind: 'manual', linkHost: linkHost(row.link_url) },
   version: row.version,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
@@ -106,7 +121,7 @@ export const listRecipes = async (
 ): Promise<RecipeSummary[]> => {
   const result = await db
     .prepare(
-      `SELECT id, title, version, source_kind, source_host,
+      `SELECT id, title, version, source_kind, source_host, link_url,
               created_at, updated_at
          FROM recipes
         WHERE household_id = ?
@@ -212,12 +227,12 @@ export const createRecipe = async (
     db
       .prepare(
         `INSERT INTO recipes (
-           id, household_id, title, notes, servings, version, write_token,
-           source_kind, source_submitted_url, source_resolved_url,
+           id, household_id, title, notes, servings, link_url, version,
+           write_token, source_kind, source_submitted_url, source_resolved_url,
            source_host, source_page_title, source_imported_at, created_at,
            updated_at
          )
-         SELECT ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?
+         SELECT ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?
           WHERE (SELECT COUNT(*) FROM recipes WHERE household_id = ?)
                 < ${RECIPE_LIMIT}`,
       )
@@ -227,6 +242,7 @@ export const createRecipe = async (
         input.title,
         input.notes,
         input.servings,
+        input.link,
         writeToken,
         input.source.kind,
         website?.submittedUrl ?? null,
@@ -257,6 +273,7 @@ export const createRecipe = async (
     ingredients: [...input.ingredients],
     steps: [...input.steps],
     servings: input.servings,
+    link: input.link,
     source: website
       ? {
           kind: 'website',
@@ -284,6 +301,27 @@ const conflictFor = async (
 };
 
 /**
+ * Refuses a link for an imported recipe (#113) before anything is written.
+ * Source kind never changes after creation, so this read cannot race the
+ * update. A missing recipe is left for the guarded update to report.
+ */
+const requireManualRecipe = async (
+  db: D1Database,
+  householdId: string,
+  recipeId: string,
+): Promise<void> => {
+  const row = await db
+    .prepare(
+      `SELECT source_kind FROM recipes WHERE household_id = ? AND id = ?`,
+    )
+    .bind(householdId, recipeId)
+    .first<Pick<RecipeRow, 'source_kind'>>();
+  if (row?.source_kind === 'website') {
+    throw invalidRequest(RECIPE_LINK_IMPORTED_MESSAGE);
+  }
+};
+
+/**
  * Applies a member's edit made against `change.version`. Each supplied list
  * replaces the whole ordered list. The UPDATE sets a fresh write token, and
  * every later statement in the batch requires that token, so two updates from
@@ -299,6 +337,8 @@ export const updateRecipe = async (
   const now = new Date().toISOString();
   const hasNotes = Object.hasOwn(change, 'notes');
   const hasServings = Object.hasOwn(change, 'servings');
+  const hasLink = Object.hasOwn(change, 'link');
+  if (change.link) await requireManualRecipe(db, householdId, recipeId);
 
   const statements: D1PreparedStatement[] = [
     db
@@ -307,6 +347,7 @@ export const updateRecipe = async (
             SET title = COALESCE(?, title),
                 notes = CASE WHEN ? = 1 THEN ? ELSE notes END,
                 servings = CASE WHEN ? = 1 THEN ? ELSE servings END,
+                link_url = CASE WHEN ? = 1 THEN ? ELSE link_url END,
                 version = version + 1,
                 write_token = ?,
                 updated_at = ?
@@ -320,6 +361,8 @@ export const updateRecipe = async (
         change.notes ?? null,
         hasServings ? 1 : 0,
         change.servings ?? null,
+        hasLink ? 1 : 0,
+        change.link ?? null,
         writeToken,
         now,
         householdId,

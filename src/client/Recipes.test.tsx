@@ -65,13 +65,19 @@ describe('Recipe library list', () => {
             title: 'Miso soup',
             source: { kind: 'website', host: 'www.justonecookbook.com' },
           }),
+          summary({
+            id: 'c',
+            title: 'Teriyaki salmon',
+            source: { kind: 'manual', linkHost: 'www.kikkoman.com.sg' },
+          }),
         ],
       }),
     );
     renderRecipes(['/recipes']);
 
     const items = await screen.findAllByTestId('recipe-item');
-    expect(items).toHaveLength(2);
+    expect(items).toHaveLength(3);
+    expect(items[2]).toHaveTextContent('Source: Manual · www.kikkoman.com.sg');
     expect(items[0]).toHaveTextContent('Soy chicken');
     expect(items[0]).toHaveTextContent('Source: Manual');
     expect(items[1]).toHaveTextContent('Source: www.justonecookbook.com');
@@ -130,6 +136,38 @@ describe('Recipe detail', () => {
       'Family favourite.\nUse short grain.',
     );
     expect(screen.getByText('Entered by hand')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /original recipe/u })).toBeNull();
+  });
+
+  it('links a manual recipe to its recipe link safely and descriptively', async () => {
+    mockFetch(() =>
+      jsonResponse({
+        recipe: recipe({
+          link: 'https://www.kikkoman.com.sg/product_recipes/soy-chicken/',
+        }),
+      }),
+    );
+    renderRecipes([detailPath]);
+
+    expect(await screen.findByText('Entered by hand')).toBeInTheDocument();
+    const link = screen.getByRole('link', {
+      name: 'Open the original recipe on www.kikkoman.com.sg (opens in a new tab)',
+    });
+    expect(link).toHaveAttribute(
+      'href',
+      'https://www.kikkoman.com.sg/product_recipes/soy-chicken/',
+    );
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('shows no link for a stored recipe link that is not https', async () => {
+    mockFetch(() =>
+      jsonResponse({ recipe: recipe({ link: 'javascript:alert(1)' }) }),
+    );
+    renderRecipes([detailPath]);
+
+    await screen.findByText('Entered by hand');
     expect(screen.queryByRole('link', { name: /original recipe/u })).toBeNull();
   });
 

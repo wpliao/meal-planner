@@ -44,6 +44,13 @@ and counted by the household decommission procedure. It is additive. Rolling
 back the Worker leaves the new column and tables unread; retiring them needs a
 forward migration.
 
+Migration `0007_add_recipe_link.sql` adds the optional recipe link for
+[feature #113](../docs/features/0113-manual-recipe-link.md): a nullable
+`recipes.link_url` column whose `CHECK` allows only an `https://` address of
+up to 2,048 characters on a `manual` row. Existing rows get `NULL`, so it
+rewrites nothing. Older Worker code ignores the column, so it is safe to apply
+before the new code; retiring it needs a forward migration.
+
 Migrations are immutable and ordered. Test each migration against a fresh local
 D1 database, apply it to the development D1 database before any production
 rollout, and obtain explicit production approval before applying it to

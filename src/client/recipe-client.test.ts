@@ -6,6 +6,7 @@ import {
   failureMessage,
   importHost,
   isNotFound,
+  safeRecipeLink,
   safeSourceHref,
   sourceLabel,
   validateRecipeForm,
@@ -19,6 +20,7 @@ const saved: Recipe = {
   ingredients: ['rice'],
   steps: ['cook'],
   servings: null,
+  link: null,
   source: { kind: 'manual' },
   version: 2,
   createdAt: '2026-09-21T00:00:00.000Z',
@@ -27,7 +29,10 @@ const saved: Recipe = {
 
 describe('recipe client helpers', () => {
   it('labels manual and website sources', () => {
-    expect(sourceLabel({ kind: 'manual' })).toBe('Manual');
+    expect(sourceLabel({ kind: 'manual', linkHost: null })).toBe('Manual');
+    expect(
+      sourceLabel({ kind: 'manual', linkHost: 'www.kikkoman.com.sg' }),
+    ).toBe('Manual · www.kikkoman.com.sg');
     expect(sourceLabel({ kind: 'website', host: 'budgetbytes.com' })).toBe(
       'budgetbytes.com',
     );
@@ -96,6 +101,7 @@ describe('recipe client helpers', () => {
       ingredients: ['rice'],
       steps: ['cook'],
       servings: null,
+      link: null,
     };
     expect(changedFields(same, saved)).toEqual([]);
     expect(
@@ -106,10 +112,18 @@ describe('recipe client helpers', () => {
           ingredients: ['rice', 'salt'],
           steps: ['boil'],
           servings: 4,
+          link: 'https://example.com/rice',
         },
         saved,
       ),
-    ).toEqual(['title', 'ingredients', 'steps', 'notes', 'servings']);
+    ).toEqual([
+      'title',
+      'ingredients',
+      'steps',
+      'notes',
+      'servings',
+      'recipe link',
+    ]);
   });
 
   it('validates and normalizes a complete form with the shared rules', () => {
@@ -120,6 +134,7 @@ describe('recipe client helpers', () => {
         steps: ['cook', ''],
         notes: '   ',
         servings: ' 4 ',
+        link: '',
       }),
     ).toEqual({
       ok: true,
@@ -129,6 +144,7 @@ describe('recipe client helpers', () => {
         ingredients: ['rice'],
         steps: ['cook'],
         servings: 4,
+        link: null,
       },
     });
   });
@@ -144,6 +160,7 @@ describe('recipe client helpers', () => {
       steps: ['cook'],
       notes: '',
       servings: typed,
+      link: '',
     });
     expect(result.ok && result.content.servings).toBe(servings);
   });
@@ -157,12 +174,63 @@ describe('recipe client helpers', () => {
         steps: ['cook'],
         notes: '',
         servings: typed,
+        link: '',
       });
       expect(!result.ok && result.errors.servings).toBe(
         'Servings must be a whole number from 1 to 50.',
       );
     },
   );
+
+  it.each([
+    ['', null],
+    ['   ', null],
+    [
+      ' https://www.kikkoman.com.sg/product_recipes/soy-chicken/#steps ',
+      'https://www.kikkoman.com.sg/product_recipes/soy-chicken/',
+    ],
+  ])('reads the recipe link %j as %j', (typed, link) => {
+    const result = validateRecipeForm({
+      title: 'Rice',
+      ingredients: ['rice'],
+      steps: ['cook'],
+      notes: '',
+      servings: '',
+      link: typed,
+    });
+    expect(result.ok && result.content.link).toBe(link);
+  });
+
+  it.each([
+    [
+      'www.kikkoman.com.sg/recipe',
+      'The recipe link is not a web address. Paste the whole link, starting with https://.',
+    ],
+    [
+      'http://example.com/rice',
+      'The recipe link must be an https web address without a username, password, or port.',
+    ],
+  ])('refuses the recipe link %j beside the field', (typed, message) => {
+    const result = validateRecipeForm({
+      title: 'Rice',
+      ingredients: ['rice'],
+      steps: ['cook'],
+      notes: '',
+      servings: '',
+      link: typed,
+    });
+    expect(!result.ok && result.errors.link).toBe(message);
+  });
+
+  it('links a manual recipe only to an https link, with its host', () => {
+    expect(safeRecipeLink(null)).toBeNull();
+    expect(safeRecipeLink('javascript:alert(1)')).toBeNull();
+    expect(safeRecipeLink('not a url')).toBeNull();
+    expect(safeRecipeLink('https://www.kikkoman.com.sg/a/')).toEqual({
+      href: 'https://www.kikkoman.com.sg/a/',
+      host: 'www.kikkoman.com.sg',
+    });
+  });
 
   it('reports a too-long ingredient on the visible line', () => {
     const result = validateRecipeForm({
@@ -171,6 +239,7 @@ describe('recipe client helpers', () => {
       steps: ['cook'],
       notes: '',
       servings: '',
+      link: '',
     });
     expect(result).toEqual({
       ok: false,

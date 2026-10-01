@@ -287,7 +287,40 @@ describe('Creating a recipe', () => {
         ingredients: ['2 cups water', '1 cup rice'],
         steps: ['Cook the rice.'],
         servings: null,
+        link: null,
       },
+    });
+  });
+
+  it('saves a recipe link, and explains a link it cannot accept', async () => {
+    const created = recipe({
+      title: 'Rice',
+      link: 'https://www.kikkoman.com.sg/product_recipes/rice/',
+    });
+    const fetchMock = mockFetch(
+      () => jsonResponse({ recipe: created }, 201),
+      () => jsonResponse({ recipe: created }),
+    );
+    renderRecipes(['/recipes/new']);
+
+    fillMinimalRecipe();
+    type('Recipe link', 'www.kikkoman.com.sg/product_recipes/rice/');
+    click('Save recipe');
+    expect(
+      await screen.findAllByText(
+        'The recipe link is not a web address. Paste the whole link, starting with https://.',
+      ),
+    ).not.toHaveLength(0);
+    const field = screen.getByRole('textbox', { name: 'Recipe link' });
+    expect(field).toHaveFocus();
+    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue('Rice');
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    type('Recipe link', 'https://www.kikkoman.com.sg/product_recipes/rice/');
+    click('Save recipe');
+    await screen.findByText('“Rice” was saved to the family recipes.');
+    expect(sent(fetchMock, 0).body).toMatchObject({
+      link: 'https://www.kikkoman.com.sg/product_recipes/rice/',
     });
   });
 
@@ -442,6 +475,9 @@ describe('Reviewing an imported draft', () => {
       servings: null,
       source: importContext.source,
     });
+    expect(
+      screen.queryByRole('textbox', { name: 'Recipe link' }),
+    ).not.toBeInTheDocument();
   });
 
   it('shows no link for a source that is not https', () => {
@@ -503,8 +539,53 @@ describe('Editing a recipe', () => {
         ingredients: current.ingredients,
         steps: current.steps,
         servings: null,
+        link: null,
       },
     });
+  });
+
+  it('edits and clears the recipe link of a manual recipe', async () => {
+    const linked = recipe({
+      version: 3,
+      link: 'https://www.kikkoman.com.sg/product_recipes/soy-chicken/',
+    });
+    const fetchMock = mockFetch(
+      () => jsonResponse({ recipe: linked }),
+      () => jsonResponse({ recipe: { ...linked, link: null, version: 4 } }),
+      () => jsonResponse({ recipe: { ...linked, link: null, version: 4 } }),
+    );
+    renderRecipes([editPath]);
+
+    const field = await screen.findByRole('textbox', { name: 'Recipe link' });
+    expect(field).toHaveValue(linked.link);
+    type('Recipe link', '   ');
+    click('Save changes');
+
+    await screen.findByText('Your changes were saved.');
+    expect(sent(fetchMock, 1).body).toMatchObject({ version: 3, link: null });
+  });
+
+  it('offers no recipe link when editing an imported recipe', async () => {
+    mockFetch(() =>
+      jsonResponse({
+        recipe: recipe({
+          source: {
+            kind: 'website',
+            submittedUrl: 'https://www.budgetbytes.com/rice/',
+            resolvedUrl: null,
+            host: 'www.budgetbytes.com',
+            pageTitle: null,
+            importedAt: '2026-09-21T00:00:00.000Z',
+          },
+        }),
+      }),
+    );
+    renderRecipes([editPath]);
+
+    await screen.findByRole('textbox', { name: 'Title' });
+    expect(
+      screen.queryByRole('textbox', { name: 'Recipe link' }),
+    ).not.toBeInTheDocument();
   });
 
   it('returns to the recipe when opened directly and cancelled', async () => {

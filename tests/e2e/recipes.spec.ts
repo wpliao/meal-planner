@@ -155,6 +155,57 @@ test('a member creates, views, edits, and deletes a recipe', async ({
   ).toHaveCount(0);
 });
 
+test('a manual recipe keeps a link to the page it came from', async ({
+  page,
+}) => {
+  await openRecipes(page);
+  const title = unique('Teriyaki salmon');
+  const link = 'https://www.kikkoman.com.sg/product_recipes/teriyaki-salmon/';
+
+  await page.getByRole('link', { name: 'Add recipe' }).click();
+  await fill(page, 'Title', title);
+  await fill(page, 'Ingredient 1', '2 salmon fillets');
+  await fill(page, 'Step 1', 'Pan-fry and glaze.');
+  await fill(page, 'Recipe link', 'www.kikkoman.com.sg/teriyaki-salmon');
+  await page.getByRole('button', { name: 'Save recipe' }).click();
+
+  // A link that is not a whole https address is explained beside the field.
+  const linkField = field(page, 'Recipe link');
+  await expect(linkField).toHaveAttribute('aria-invalid', 'true');
+  await expect(linkField).toBeFocused();
+  await expect(page.getByTestId('form-errors')).toContainText(
+    'The recipe link is not a web address.',
+  );
+  await expect(field(page, 'Title')).toHaveValue(title);
+
+  await fill(page, 'Recipe link', link);
+  await page.getByRole('button', { name: 'Save recipe' }).click();
+  await expect(status(page)).toContainText(
+    `“${title}” was saved to the family recipes.`,
+  );
+  await expect(page.getByText('Entered by hand')).toBeVisible();
+  const original = page.getByRole('link', {
+    name: 'Open the original recipe on www.kikkoman.com.sg (opens in a new tab)',
+  });
+  await expect(original).toHaveAttribute('href', link);
+  await expect(original).toHaveAttribute('rel', 'noopener noreferrer');
+
+  await page.getByRole('link', { name: /All recipes/u }).click();
+  const item = page.getByTestId('recipe-item').filter({ hasText: title });
+  await expect(item).toContainText('Manual · www.kikkoman.com.sg');
+  await item.getByRole('link', { name: title }).click();
+
+  // Clearing the field removes the link.
+  await page.getByRole('link', { name: 'Edit recipe' }).click();
+  await expect(field(page, 'Recipe link')).toHaveValue(link);
+  await fill(page, 'Recipe link', '');
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  await expect(status(page)).toContainText('Your changes were saved.');
+  await expect(
+    page.getByRole('link', { name: /original recipe/u }),
+  ).toHaveCount(0);
+});
+
 test('validation marks the fields and keeps what was typed', async ({
   page,
 }) => {
