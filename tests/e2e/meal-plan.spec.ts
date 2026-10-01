@@ -729,8 +729,10 @@ test('a keyboard alone chooses a suggestion and plans it', async ({
   const radios = group.getByRole('radio');
   await expect(radios.nth(1)).toBeVisible();
 
-  // Tab leaves "What to add" for the suggestions; arrows choose among them.
-  await dialog.getByRole('radio', { name: 'Pick a recipe' }).focus();
+  // The search field comes first and has focus (#117); Tab leaves it for the
+  // suggestions, and arrows choose among them.
+  const recipeField = dialog.getByRole('combobox', { name: 'Recipe' });
+  await expect(recipeField).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(radios.first()).toBeFocused();
   await page.keyboard.press('Space');
@@ -742,26 +744,20 @@ test('a keyboard alone chooses a suggestion and plans it', async ({
     const id = radio.getAttribute('aria-labelledby') ?? '';
     return document.getElementById(id)?.textContent ?? '';
   });
-  await expect(dialog.getByRole('combobox', { name: 'Recipe' })).toHaveValue(
-    chosen,
-  );
+  await expect(recipeField).toHaveValue(chosen);
 
   // Tab passes the Not now buttons (#78) of the chosen option and those
-  // after it, then reaches the recipe field; on to the note, and Enter adds
-  // it.
-  const recipeField = dialog.getByRole('combobox', { name: 'Recipe' });
+  // after it, then reaches the note, and Enter adds it.
+  const note = dialog.getByRole('textbox', { name: /Note/u });
   await page.keyboard.press('Tab');
   await expect(
     dialog.getByRole('button', { name: `Not now: ${chosen}` }),
   ).toBeFocused();
   for (let stop = 0; stop < 5; stop += 1) {
-    if (await recipeField.evaluate((field) => field === document.activeElement))
-      break;
+    if (await note.evaluate((field) => field === document.activeElement)) break;
     await expect(page.locator(':focus')).toHaveAccessibleName(/^Not now: /u);
     await page.keyboard.press('Tab');
   }
-  await expect(recipeField).toBeFocused();
-  await page.keyboard.press('Tab');
   await expect(dialog.getByRole('textbox', { name: /Note/u })).toBeFocused();
   await page.keyboard.type('by keyboard');
   await page.keyboard.press('Enter');
@@ -769,6 +765,53 @@ test('a keyboard alone chooses a suggestion and plans it', async ({
     `Added “${chosen}” to breakfast on ${dayName(saturday)}.`,
   );
   await expect(add).toBeFocused();
+});
+
+test('a member types straight into the search above the suggestions', async ({
+  page,
+}, testInfo) => {
+  const monday = futureWeek(12);
+  const sunday = addDays(monday, 6);
+  await openPlan(page, '/plan');
+  const title = unique('Lasagne');
+  await createRecipeWith(page, testInfo, title, ['pasta sheets']);
+  await openPlan(page, `/plan/${monday}`);
+
+  await slot(page, sunday, 'lunch')
+    .getByRole('button', { name: `Add to lunch, ${dayName(sunday)}` })
+    .click();
+  const dialog = await openedDialog(page);
+  const field = dialog.getByRole('combobox', { name: 'Recipe' });
+  const group = dialog.getByRole('radiogroup', {
+    name: 'Suggested for Sunday lunch',
+  });
+
+  // The field leads, has focus, and leaves the suggestions in view: focus
+  // alone does not open its list (#117).
+  await expect(field).toBeFocused();
+  await expect(group.getByRole('radio').first()).toBeInViewport();
+  expect((await field.boundingBox())!.y).toBeLessThan(
+    (await group.boundingBox())!.y,
+  );
+  await expect(page.getByRole('listbox')).toBeHidden();
+
+  // Typing opens the list below the field, in view, on a phone too.
+  await page.keyboard.type(title);
+  const option = page.getByRole('option', { name: title });
+  await expect(option).toBeInViewport();
+  const fieldBox = (await field.boundingBox())!;
+  expect((await option.boundingBox())!.y).toBeGreaterThanOrEqual(
+    fieldBox.y + fieldBox.height,
+  );
+  await option.click();
+  await expect(field).toHaveValue(title);
+  await dialog.getByRole('button', { name: 'Add to plan' }).click();
+  await expect(result(page)).toContainText(
+    `Added “${title}” to lunch on ${dayName(sunday)}.`,
+  );
+  await expect(
+    slot(page, sunday, 'lunch').getByRole('link', { name: title }),
+  ).toBeVisible();
 });
 
 // ---------------------------------------------------------------------------

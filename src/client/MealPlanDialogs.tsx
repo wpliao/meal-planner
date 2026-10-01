@@ -289,10 +289,31 @@ const filterOptions: OptionsFilter = ({ options, search }) =>
   );
 
 /**
+ * Moves focus into the field once it appears, unless the member is already
+ * typing somewhere else. The recipes load after the dialog opens, so the
+ * modal's own `data-autofocus` has run before the field exists (#117).
+ */
+const useFocusOnArrival = (enabled: boolean) => {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    const active = document.activeElement;
+    const typing =
+      active instanceof HTMLTextAreaElement ||
+      (active instanceof HTMLInputElement &&
+        active.type !== 'radio' &&
+        active !== ref.current);
+    if (!typing) ref.current?.focus();
+  }, [enabled]);
+  return ref;
+};
+
+/**
  * One searchable field rather than a list of every recipe: the dropdown
  * shows only what matches the typing and scrolls within a fixed height, so
  * the dialog stays the same size however large the library grows (owner
- * review, V-DEV-P1).
+ * review, V-DEV-P1). It comes before the suggestions and takes focus, so a
+ * member who knows the meal can type straight away (#117).
  */
 function RecipePicker({
   list,
@@ -307,6 +328,8 @@ function RecipePicker({
   onSelect: (id: string) => void;
   error?: string;
 }>) {
+  const ready = list.kind === 'ready' && list.recipes.length > 0;
+  const fieldRef = useFocusOnArrival(ready);
   if (list.kind === 'loading') {
     return <Text component="output">Checking your recipes…</Text>;
   }
@@ -335,13 +358,20 @@ function RecipePicker({
   }
   return (
     <Select
-      // With suggestions above it, the field can sit at the modal's bottom
-      // edge, where a dropdown has no room and is hidden as detached (on a
-      // Chromium phone it also flickered in a loop). Focus brings the field
-      // to the middle of the modal first; jsdom has no scrollIntoView.
+      // A short landscape viewport can still put the field at the modal's
+      // bottom edge, where a dropdown has no room and is hidden as detached
+      // (#73). Focus brings the field to the middle of the modal first; jsdom
+      // has no scrollIntoView.
       onFocus={(event) =>
         event.currentTarget.scrollIntoView?.({ block: 'center' })
       }
+      // Focus on arrival must not open the list over the suggestions; a
+      // click, typing, or the arrow keys still open it (#117 AC-04).
+      openOnFocus={false}
+      // The modal's focus trap picks this field when it is already there as
+      // the trap starts; the hook covers a field that arrives later.
+      data-autofocus
+      ref={fieldRef}
       data={list.recipes.map((recipe) => ({
         value: recipe.id,
         label: recipe.title,
@@ -747,6 +777,13 @@ export function AddEntryDialog({
 
           {mode === 'recipe' ? (
             <>
+              <RecipePicker
+                error={errors.recipe}
+                list={list}
+                onSelect={setRecipeId}
+                retry={() => void load()}
+                selected={recipeId}
+              />
               {suggestable && (
                 <MealSuggestions
                   heading={suggestionsHeading(target.date, target.slot)}
@@ -760,13 +797,6 @@ export function AddEntryDialog({
                   selected={recipeId}
                 />
               )}
-              <RecipePicker
-                error={errors.recipe}
-                list={list}
-                onSelect={setRecipeId}
-                retry={() => void load()}
-                selected={recipeId}
-              />
             </>
           ) : (
             <TextInput

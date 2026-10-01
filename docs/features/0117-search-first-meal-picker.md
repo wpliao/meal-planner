@@ -1,11 +1,11 @@
 # Feature: Put recipe search above suggestions when adding a meal
 
-- Status: Proposed
+- Status: Implementing
 - Phase: 5 follow-up
 - Issue: https://github.com/wpliao/meal-planner/issues/117
 - Product owner: wpliao
-- Last updated: 2026-10-01
-- Pull requests: [#119](https://github.com/wpliao/meal-planner/pull/119) (design)
+- Last updated: 2026-10-02
+- Pull requests: [#119](https://github.com/wpliao/meal-planner/pull/119) (design); implementation pending
 
 ## Problem and outcome
 
@@ -134,13 +134,13 @@ No change.
 
 ## Traceability
 
-| Criterion | Implementation | Automated tests | Release evidence |
-| --------- | -------------- | --------------- | ---------------- |
-| `AC-01`   | Pending        | Pending         | Pending          |
-| `AC-02`   | Pending        | Pending         | Pending          |
-| `AC-03`   | Pending        | Pending         | Pending          |
-| `AC-04`   | Pending        | Pending         | Pending          |
-| `AC-05`   | Pending        | Pending         | Pending          |
+| Criterion | Implementation                                                                                                     | Automated tests                                                                                                                                                                                                                                                                                                                   | Release evidence |
+| --------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `AC-01`   | `RecipePicker` rendered before `MealSuggestions` in `AddEntryDialog`, `src/client/MealPlanDialogs.tsx`             | `src/client/MealPlan.test.tsx` › suggestions › "puts the focused search field above the suggestions, list closed", "shows suggestions for the meal in Pick a recipe mode only"; `tests/e2e/meal-plan.spec.ts` › "a member types straight into the search above the suggestions"                                                   | Pending          |
+| `AC-02`   | `data-autofocus` and `useFocusOnArrival` on `RecipePicker`'s `Select`, `src/client/MealPlanDialogs.tsx`            | `src/client/MealPlan.test.tsx` › suggestions › "puts the focused search field above the suggestions, list closed", "leaves focus where it lands when the library is empty"; `tests/e2e/meal-plan.spec.ts` › "a keyboard alone chooses a suggestion and plans it", "a member types straight into the search above the suggestions" | Pending          |
+| `AC-03`   | `onSelect={setRecipeId}` shared by `RecipePicker` and `MealSuggestions` (unchanged); DOM order in `AddEntryDialog` | `src/client/MealPlan.test.tsx` › suggestions › "plans a chosen suggestion exactly as a searched recipe"; `tests/e2e/meal-plan.spec.ts` › "a keyboard alone chooses a suggestion and plans it"                                                                                                                                     | Pending          |
+| `AC-04`   | `openOnFocus={false}` and the focus `scrollIntoView` on `RecipePicker`'s `Select`                                  | `tests/e2e/meal-plan.spec.ts` › "a member types straight into the search above the suggestions" (desktop and phone projects)                                                                                                                                                                                                      | Pending          |
+| `AC-05`   | —                                                                                                                  | The tests named for `AC-01`–`AC-04`, run in all four browser projects                                                                                                                                                                                                                                                             | Pending          |
 
 ## Rollout and rollback
 
@@ -152,9 +152,11 @@ previous Worker; there is no data.
 
 ## Decision and change log
 
-| Date       | Change           | Reason                                                                                                                                                                         | Evidence                                                  |
-| ---------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
-| 2026-10-01 | Initial proposal | Family feedback said searching meant scrolling past the suggestions. The owner chose to put the search field on top, with focus, and keep the suggestions below it, unchanged. | [#117](https://github.com/wpliao/meal-planner/issues/117) |
+| Date       | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Reason                                                                                                                                                                         | Evidence                                                  |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| 2026-10-01 | Initial proposal                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Family feedback said searching meant scrolling past the suggestions. The owner chose to put the search field on top, with focus, and keep the suggestions below it, unchanged. | [#117](https://github.com/wpliao/meal-planner/issues/117) |
+| 2026-10-01 | Accept design; status `Accepted`; `AC-01`–`AC-05` stable                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | The owner merged the design pull request                                                                                                                                       | [#119](https://github.com/wpliao/meal-planner/pull/119)   |
+| 2026-10-02 | Begin implementation; status `Implementing`. The open UI choice is resolved with the fallback: Mantine 9's searchable `Select` opens its list on focus by default, and the 240px list would cover the suggestions on arrival, so the field sets `openOnFocus={false}`. A click, typing, or the arrow keys still open it. The recipes load after the modal has set its initial focus, so `data-autofocus` alone does not reach the field; a small hook focuses it when it appears, unless the member is already typing in another field. The #73 design's `AC-01` is marked changed | Implementation of the accepted design                                                                                                                                          | Implementation pull request                               |
 
 ## Release record
 
