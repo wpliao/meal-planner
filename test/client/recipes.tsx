@@ -18,6 +18,7 @@ import {
   type RecipeCreateProps,
 } from '../../src/client/RecipeEditPages';
 import { RecipeImport } from '../../src/client/RecipeImport';
+import { RecipeImportSeveral } from '../../src/client/RecipeImportSeveral';
 import type { Recipe, RecipeSummary } from '../../src/shared/recipes';
 
 export const RECIPE_ID = '11111111-1111-4111-8111-111111111111';
@@ -133,6 +134,7 @@ export const renderRecipes = (
             <Route element={<Recipes />} index />
             <Route element={<RecipeCreate {...createProps} />} path="new" />
             <Route element={<RecipeImport />} path="import" />
+            <Route element={<RecipeImportSeveral />} path="import/several" />
             <Route element={<RecipeDetail />} path=":id" />
             <Route element={<RecipeEdit />} path=":id/edit" />
           </Route>

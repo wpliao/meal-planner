@@ -65,6 +65,8 @@ export type ApiErrorCode =
   | 'owner_required'
   | 'state_conflict'
   | 'duplicate_name'
+  /** A website recipe from the same address is already in the library (#116). */
+  | 'duplicate_source'
   | 'stale_version'
   /** A meal-plan week no longer holds what the member saw; nothing was cleared. */
   | 'week_changed'

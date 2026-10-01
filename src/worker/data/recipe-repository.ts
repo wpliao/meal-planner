@@ -8,7 +8,7 @@ import {
   type ValidCreateRecipe,
   type ValidUpdateRecipe,
 } from '../../shared/recipes';
-import { ApiError, invalidRequest } from '../errors';
+import { ApiError, invalidRequest, stateConflict } from '../errors';
 
 interface RecipeRow {
   id: string;
@@ -211,6 +211,80 @@ const deleteLines = (
     )
     .bind(recipeId, recipeId, writeToken);
 
+type WebsiteSource = Extract<ValidCreateRecipe['source'], { kind: 'website' }>;
+
+/**
+ * A household's website recipe whose submitted or resolved address equals the
+ * new import's submitted or resolved address (#116). Bound with
+ * {@link sameSourceBindings}; `recipe` is the outer table's alias.
+ */
+const SAME_SOURCE = `SELECT recipe.id, recipe.title FROM recipes AS recipe
+  WHERE recipe.household_id = ?
+    AND recipe.source_kind = 'website'
+    AND (recipe.source_submitted_url IN (?, ?)
+         OR recipe.source_resolved_url IN (?, ?))`;
+
+const sameSourceBindings = (
+  householdId: string,
+  source: WebsiteSource,
+): string[] => {
+  const addresses = [
+    source.submittedUrl,
+    source.resolvedUrl ?? source.submittedUrl,
+  ];
+  return [householdId, ...addresses, ...addresses];
+};
+
+/**
+ * Explains a guarded create that inserted nothing, with one read: the same
+ * address is already in the library, the library is full, or (when a matching
+ * recipe was deleted in between) the library changed and a retry will save.
+ */
+const createRefusal = async (
+  db: D1Database,
+  householdId: string,
+  onlyIfNew: WebsiteSource | null,
+): Promise<ApiError> => {
+  const row = onlyIfNew
+    ? await db
+        .prepare(
+          `SELECT existing.id AS id, existing.title AS title,
+                  (SELECT COUNT(*) FROM recipes WHERE household_id = ?) AS total
+             FROM (SELECT 1) AS one
+             LEFT JOIN (${SAME_SOURCE}
+                        ORDER BY recipe.created_at, recipe.id LIMIT 1)
+                    AS existing ON 1`,
+        )
+        .bind(householdId, ...sameSourceBindings(householdId, onlyIfNew))
+        .first<{ id: string | null; title: string | null; total: number }>()
+    : await db
+        .prepare(
+          `SELECT NULL AS id, NULL AS title, COUNT(*) AS total
+             FROM recipes WHERE household_id = ?`,
+        )
+        .bind(householdId)
+        .first<{ id: null; title: null; total: number }>();
+
+  if (row?.id && row.title !== null) {
+    return new ApiError(
+      409,
+      'duplicate_source',
+      'A recipe from this link is already in the library.',
+      { existing: { id: row.id, title: row.title } },
+    );
+  }
+  if ((row?.total ?? 0) >= RECIPE_LIMIT) {
+    return new ApiError(
+      400,
+      'limit_reached',
+      `A household library holds at most ${RECIPE_LIMIT} recipes. Remove one before adding another.`,
+    );
+  }
+  return stateConflict(
+    'The recipe library changed while this recipe was being saved. Try again.',
+  );
+};
+
 export const createRecipe = async (
   db: D1Database,
   householdId: string,
@@ -220,9 +294,11 @@ export const createRecipe = async (
   const writeToken = crypto.randomUUID();
   const now = new Date().toISOString();
   const website = input.source.kind === 'website' ? input.source : null;
+  const onlyIfNew = website && input.onlyIfNewSource ? website : null;
 
-  // The guarded INSERT keeps the per-household cap race-safe, and the whole
-  // batch is one transaction, so a recipe never exists without its lines.
+  // The guarded INSERT keeps the per-household cap and, when asked, the
+  // one-recipe-per-address rule race-safe, and the whole batch is one
+  // transaction, so a recipe never exists without its lines.
   const [inserted] = await db.batch([
     db
       .prepare(
@@ -234,7 +310,8 @@ export const createRecipe = async (
          )
          SELECT ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?
           WHERE (SELECT COUNT(*) FROM recipes WHERE household_id = ?)
-                < ${RECIPE_LIMIT}`,
+                < ${RECIPE_LIMIT}
+                ${onlyIfNew ? `AND NOT EXISTS (${SAME_SOURCE})` : ''}`,
       )
       .bind(
         id,
@@ -253,17 +330,14 @@ export const createRecipe = async (
         now,
         now,
         householdId,
+        ...(onlyIfNew ? sameSourceBindings(householdId, onlyIfNew) : []),
       ),
     insertLines(db, 'recipe_ingredients', id, writeToken, input.ingredients),
     insertLines(db, 'recipe_steps', id, writeToken, input.steps),
   ]);
 
   if (inserted.meta.changes === 0) {
-    throw new ApiError(
-      400,
-      'limit_reached',
-      `A household library holds at most ${RECIPE_LIMIT} recipes. Remove one before adding another.`,
-    );
+    throw await createRefusal(db, householdId, onlyIfNew);
   }
 
   return {

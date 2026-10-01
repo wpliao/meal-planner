@@ -614,7 +614,29 @@ test('recipe screens meet WCAG AA contrast, including field errors', async ({
   await page.getByRole('button', { name: 'Get the recipe' }).click();
   await expect(page.getByTestId('import-failed')).toBeVisible();
   await assertTextContrast(page);
+
+  // The bulk import's results, including its clay "Failed" rows (#116).
+  await importSeveralThatFail(page);
+  await assertTextContrast(page);
 });
+
+/**
+ * Runs a bulk import (#116) whose links all fail, one in the preview and one
+ * before any request, so no recipe is saved and the result rows are shown.
+ */
+const importSeveralThatFail = async (page: Page) => {
+  await page.goto('/recipes/import/several');
+  await page
+    .getByRole('textbox', { name: 'Recipe links' })
+    .fill(`${IMPORT_URL}\nnot a link`);
+  await page.getByRole('button', { name: 'Import links' }).click();
+  await expect(page.getByTestId('bulk-import-status')).toHaveText(
+    'Saved 0, failed 2.',
+  );
+  await expect(
+    page.getByRole('button', { name: 'Retry failed links' }),
+  ).toBeVisible();
+};
 
 test('every Mantine component on the recipe screens has its stylesheet', async ({
   page,
@@ -657,6 +679,9 @@ test('every Mantine component on the recipe screens has its stylesheet', async (
     .fill(IMPORT_URL);
   await page.getByRole('button', { name: 'Get the recipe' }).click();
   await expect(page.getByTestId('import-failed')).toBeVisible();
+  await assertEveryMantineClassIsStyled(page);
+
+  await importSeveralThatFail(page);
   await assertEveryMantineClassIsStyled(page);
 });
 

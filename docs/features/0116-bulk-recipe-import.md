@@ -1,11 +1,11 @@
 # Feature: Import several recipe links at once
 
-- Status: Proposed
+- Status: Implementing
 - Phase: 3 follow-up
 - Issue: https://github.com/wpliao/meal-planner/issues/116
 - Product owner: wpliao
-- Last updated: 2026-10-01
-- Pull requests: [#119](https://github.com/wpliao/meal-planner/pull/119) (design)
+- Last updated: 2026-10-02
+- Pull requests: [#119](https://github.com/wpliao/meal-planner/pull/119) (design), PR_IMPL (implementation)
 
 ## Problem and outcome
 
@@ -61,27 +61,37 @@ criteria and explain the change in the decision log; do not silently renumber or
 delete them.
 
 - [ ] `AC-01`: The import screen links to **Import several links**, which
-      accepts up to 20 links, one per line. - Blank lines are ignored, and more than 20 links is refused before
-      anything starts. - A line that is not a link from a supported site is listed as failed
-      with the reason, and no request is made for it. - A link pasted twice (same link once its `#fragment` is removed) is
-      imported once; the repeat is listed as "Listed twice".
+      accepts up to 20 links, one per line.
+  - Blank lines are ignored, and more than 20 links is refused before
+    anything starts.
+  - A line that is not a link from a supported site is listed as failed with
+    the reason, and no request is made for it.
+  - A link pasted twice (same link once its `#fragment` is removed) is
+    imported once; the repeat is listed as "Listed twice".
 - [ ] `AC-02`: **Import links** imports the remaining links one at a time, in
       the order pasted, through the same import preview as a single link.
       Each successful preview is saved without review. The saved recipe is
       exactly what saving the unedited preview on the single-import screen
       would store: title, ingredients, steps, servings, and source. A link
       whose text was shortened says so in its result.
-- [ ] `AC-03`: Each link shows its state: - Waiting or Importing while the batch runs; - Saved, linking to the recipe; - Already in the library, linking to the existing recipe; - Failed, with the reason; - Not imported, after **Stop**.
+- [ ] `AC-03`: Each link shows its state:
+  - Waiting or Importing while the batch runs;
+  - Saved, linking to the recipe;
+  - Already in the library, linking to the existing recipe;
+  - Failed, with the reason;
+  - Not imported, after **Stop**.
 
-      A summary such as "Saved 6, already in the library 1, failed 1" is
-      announced at the end. **Stop** halts the batch after the link being
-      imported. **Retry failed links** puts the failed links back in the box.
+  A summary such as "Saved 6, already in the library 1, failed 1" is announced
+  at the end. **Stop** halts the batch after the link being imported. **Retry
+  failed links** puts the failed links back in the box.
 
 - [ ] `AC-04`: A link counts as already in the library when one of the
       household's website recipes has the same submitted or resolved address
-      as the new import's submitted or resolved address. - The Worker makes this check in the same statement that saves, so two
-      tabs importing the same link save it once. - It applies only when the request asks for it, so the single-link
-      import still lets a member save a second copy.
+      as the new import's submitted or resolved address.
+  - The Worker makes this check in the same statement that saves, so two tabs
+    importing the same link save it once.
+  - It applies only when the request asks for it, so the single-link import
+    still lets a member save a second copy.
 - [ ] `AC-05`: When the library reaches its 500-recipe limit, the batch stops.
       The link that hit the limit is listed as failed with the existing
       limit message, and the rest are listed as "Not imported".
@@ -119,8 +129,9 @@ delete them.
     recipe's title as a link.
   - Failed: "Failed:" and the reason. For an import failure, that is the
     single import's message for its failure class. Otherwise it is "not a
-    link from a supported site", "this link is not a web address", the
-    library-limit message, or "the app could not be reached".
+    link from a supported site", "this link is not a web address", "this
+    link is too long to import", the library-limit message, or "the app could
+    not be reached". Any other refused save shows the Worker's message.
   - Listed twice: "Listed twice", for the second and later copies.
   - Not imported: after **Stop** or the library limit.
 - **After running:**
@@ -144,7 +155,9 @@ delete them.
      `onlyIfNewSource: true`.
 
   The loop awaits each step, so only one link is in flight. **Stop** sets a
-  flag that the loop checks between links.
+  flag that the loop checks between links. Leaving the screen inside the app
+  sets the same flag, because the app's router cannot hold an in-app
+  navigation the way the browser holds a page close.
 
 - **Shared contract (`src/shared/recipes.ts`):**
   - `CreateRecipeRequest` gains optional `onlyIfNewSource: true`. It is
@@ -163,9 +176,12 @@ delete them.
     submitted URL, or the new resolved URL when there is one.
 
   When nothing is inserted, the Worker tells apart the limit, a duplicate,
-  and a lost race with one follow-up read, and returns `duplicate_source` with
-  the existing recipe's ID and title. No new route and no new outbound fetch
-  are added.
+  and a lost race with one follow-up read. A duplicate returns
+  `duplicate_source` with the existing recipe's ID and title, and it is
+  reported before the limit when both apply. The limit returns the existing
+  `limit_reached`. A lost race, where the matching recipe was deleted before
+  the read, returns `409 state_conflict` asking for a retry. No new route and
+  no new outbound fetch are added.
 
 ### Data and migrations
 
@@ -228,14 +244,14 @@ columns. A household has at most 500 recipes, and the existing
 
 ## Traceability
 
-| Criterion | Implementation | Automated tests | Release evidence |
-| --------- | -------------- | --------------- | ---------------- |
-| `AC-01`   | Pending        | Pending         | Pending          |
-| `AC-02`   | Pending        | Pending         | Pending          |
-| `AC-03`   | Pending        | Pending         | Pending          |
-| `AC-04`   | Pending        | Pending         | Pending          |
-| `AC-05`   | Pending        | Pending         | Pending          |
-| `AC-06`   | Pending        | Pending         | Pending          |
+| Criterion | Implementation                                                                                                                                                                                                                                                        | Automated tests                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Release evidence |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------- |
+| `AC-01`   | `ImportSites` and the link in `src/client/RecipeImport.tsx`; the `import/several` route in `src/client/App.tsx`; `planBulkImport`, `RECIPE_BULK_IMPORT_MAX_LINKS` in `src/shared/recipes.ts`; `rowFor`, `REFUSED`, `submit` in `src/client/RecipeImportSeveral.tsx`   | `src/client/RecipeImportSeveral.test.tsx`: "is reached from the import screen and lists the supported sites", "refuses an empty paste and more than 20 links before anything starts", "imports links one at a time, in order, and shows every result"; `src/shared/recipes.test.ts` › `planBulkImport`: all five tests; `tests/e2e/recipes.spec.ts`: "a member imports several links and sees each result"                                                                                                                                                   | Pending          |
+| `AC-02`   | `importLink`, `createRequestFrom`, `run` in `src/client/RecipeImportSeveral.tsx`; `importContextFrom` in `src/client/recipe-client.ts`                                                                                                                                | `src/client/RecipeImportSeveral.test.tsx`: "imports links one at a time, in order, and shows every result"; `tests/e2e/recipes.spec.ts`: "a member imports several links and sees each result"                                                                                                                                                                                                                                                                                                                                                               | Pending          |
+| `AC-03`   | `RowResult`, `summaryOf`, `stop`, `retry`, the status region and the unmount and `beforeunload` effects in `src/client/RecipeImportSeveral.tsx`                                                                                                                       | `src/client/RecipeImportSeveral.test.tsx`: "imports links one at a time, in order, and shows every result", "shows progress, locks the box, and stops after the link in flight", "stops after the link in flight when the member leaves the screen", "asks before the page is closed while a batch runs"; `tests/e2e/recipes.spec.ts`: "a member imports several links and sees each result"; `tests/e2e/visual.spec.ts`: "recipe screens meet WCAG AA contrast, including field errors", "every Mantine component on the recipe screens has its stylesheet" | Pending          |
+| `AC-04`   | `onlyIfNewSource` in `validateCreateRecipe` and `RecipeDuplicateSourceResponse` in `src/shared/recipes.ts`; `duplicate_source` in `src/shared/api.ts`; `SAME_SOURCE`, `sameSourceBindings`, `createRefusal`, `createRecipe` in `src/worker/data/recipe-repository.ts` | `src/shared/recipes.test.ts` › `onlyIfNewSource`: all tests; `test/worker/recipes.test.ts` › "only if the source is new (#116)": "refuses a recipe with %s and saves nothing" (four cases), "saves when no website recipe has either address", "ignores another household’s recipes", "saves two concurrent imports of the same link once", "still saves a second copy when the request does not ask", "refuses the flag for a manual recipe", "asks for a retry when the matching recipe is deleted before the refusal is explained"                        | Pending          |
+| `AC-05`   | `createRefusal` in `src/worker/data/recipe-repository.ts`; the `limit_reached` branch of `importLink` and the skipped rows in `run` in `src/client/RecipeImportSeveral.tsx`                                                                                           | `test/worker/recipes.test.ts`: "reports the library limit when the address is new"; `src/client/RecipeImportSeveral.test.tsx`: "stops at the library limit and lists the rest as not imported"                                                                                                                                                                                                                                                                                                                                                               | Pending          |
+| `AC-06`   | All of the above run without network access: Worker tests use the local runtime, and the browser test answers the import preview at the network                                                                                                                       | The tests above, in CI `Verify`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Pending          |
 
 ## Rollout and rollback
 
@@ -248,9 +264,11 @@ client never sends it.
 
 ## Decision and change log
 
-| Date       | Change           | Reason                                                                                                                                                                                                           | Evidence                                                  |
-| ---------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| 2026-10-01 | Initial proposal | Family feedback asked the app to import recipes by itself. The owner chose: up to 20 links, imported one at a time in the browser with progress, saved without review, and links already in the library skipped. | [#116](https://github.com/wpliao/meal-planner/issues/116) |
+| Date       | Change                 | Reason                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | Evidence                                                  |
+| ---------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| 2026-10-01 | Initial proposal       | Family feedback asked the app to import recipes by itself. The owner chose: up to 20 links, imported one at a time in the browser with progress, saved without review, and links already in the library skipped.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | [#116](https://github.com/wpliao/meal-planner/issues/116) |
+| 2026-10-01 | Accepted               | The owner accepted the design and merged it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | [#119](https://github.com/wpliao/meal-planner/pull/119)   |
+| 2026-10-02 | Implementation choices | Building it settled details the design left open; the sections above now record them. A too-long link gets its own reason, "this link is too long to import". When a matching recipe is deleted between the guarded save and the read that explains it, the Worker answers `state_conflict` and the row offers a retry. A duplicate is reported before the library limit, because the link would not have been saved either way. The app uses React Router's `BrowserRouter`, which cannot block an in-app navigation, so leaving the screen stops the batch after the link in flight rather than asking. The summary always starts with "Saved N" and lists the other counts only when they are not zero. The links box is a fixed six rows, because Mantine's autosize cannot run in the unit-test DOM. The supported-sites list moved into a shared `ImportSites` component so both import screens show the same list. | PR_IMPL                                                   |
 
 ## Release record
 

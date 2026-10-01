@@ -1,5 +1,6 @@
 import {
   Alert,
+  Anchor,
   Button,
   Group,
   List,
@@ -18,6 +19,7 @@ import {
   importContextFrom,
   importFailureMessage,
   RECIPES_BACK_LINK,
+  touchLink,
 } from './recipe-client';
 import {
   recipeImportSites,
@@ -35,6 +37,22 @@ type ImportState =
   | { kind: 'failed'; message: string }
   | { kind: 'ready'; preview: RecipeImportPreviewResponse };
 
+/** The supported sites, as both import screens list them. */
+export function ImportSites() {
+  return (
+    <>
+      <Text c="dimmed" fz="sm">
+        Only these sites can be imported, over https:
+      </Text>
+      <List data-testid="import-sites" fz="sm" spacing={2}>
+        {recipeImportSites().map((site) => (
+          <List.Item key={site}>{site}</List.Item>
+        ))}
+      </List>
+    </>
+  );
+}
+
 /** The one place that says the family's application will contact a site. */
 function WhatHappens() {
   return (
@@ -44,14 +62,7 @@ function WhatHappens() {
         copy the recipe’s title, ingredients, and steps so you can check them.
         Nothing is saved until you review the copy and choose Save.
       </Text>
-      <Text c="dimmed" fz="sm">
-        Only these sites can be imported, over https:
-      </Text>
-      <List data-testid="import-sites" fz="sm" spacing={2}>
-        {recipeImportSites().map((site) => (
-          <List.Item key={site}>{site}</List.Item>
-        ))}
-      </List>
+      <ImportSites />
     </Stack>
   );
 }
@@ -146,6 +157,15 @@ export function RecipeImport() {
             type="url"
             value={url}
           />
+
+          <Anchor
+            component={Link}
+            fz="sm"
+            style={touchLink}
+            to="/recipes/import/several"
+          >
+            Import several links
+          </Anchor>
 
           {contacting && (
             <Text component="output" data-testid="import-progress">
