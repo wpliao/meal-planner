@@ -387,6 +387,21 @@ describe('recipe import adapter', () => {
       expect(preview.source.host).toBe('justonecookbook.com');
     });
 
+    it('follows RecipeTin Eats from its bare domain to www', async () => {
+      const bare = 'https://recipetineats.com/carbonara/';
+      const final = 'https://www.recipetineats.com/carbonara/';
+      const preview = await importOk(
+        {
+          [bare]: () => redirect(301, final),
+          [final]: () => html(SIMPLE_RECIPE_PAGE),
+        },
+        bare,
+      );
+
+      expect(preview.source.resolvedUrl).toBe(final);
+      expect(preview.source.host).toBe('www.recipetineats.com');
+    });
+
     it('resolves a relative Location against the current URL', async () => {
       const preview = await importOk({
         [OYAKODON]: () => redirect(308, '../gyudon/'),

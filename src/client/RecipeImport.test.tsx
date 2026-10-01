@@ -82,6 +82,7 @@ describe('Recipe import entry', () => {
       'justonecookbook.com',
       'thewoksoflife.com',
       'kikkoman.co.jp',
+      'recipetineats.com',
     ]);
   });
 
