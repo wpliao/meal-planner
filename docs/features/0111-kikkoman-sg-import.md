@@ -5,7 +5,7 @@
 - Issue: [#111](https://github.com/wpliao/meal-planner/issues/111)
 - Product owner: Repository owner
 - Last updated: 2026-10-01
-- Pull requests: none yet
+- Pull requests: [#112 — design proposal](https://github.com/wpliao/meal-planner/pull/112)
 
 ## Problem and outcome
 
@@ -224,9 +224,9 @@ them.
 
 ## Decision and change log
 
-| Date       | Change                                                                       | Reason                                                                                                                                                                    | Evidence                                                        |
-| ---------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| 2026-10-01 | Initial proposal; status `Proposed`; amends #31 decision 3 for one host only | Owner chose a Kikkoman Singapore–only reader after a check of all 58 recipe pages found no JSON-LD `Recipe`, and found one consistent template that 57 pages fill in full | [Issue #111](https://github.com/wpliao/meal-planner/issues/111) |
+| Date       | Change                                                                       | Reason                                                                                                                                                                    | Evidence                                                                                                                    |
+| ---------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| 2026-10-01 | Initial proposal; status `Proposed`; amends #31 decision 3 for one host only | Owner chose a Kikkoman Singapore–only reader after a check of all 58 recipe pages found no JSON-LD `Recipe`, and found one consistent template that 57 pages fill in full | [Issue #111](https://github.com/wpliao/meal-planner/issues/111); [PR #112](https://github.com/wpliao/meal-planner/pull/112) |
 
 ## Release record
 
