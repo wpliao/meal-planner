@@ -5,7 +5,7 @@
 - Issue: https://github.com/wpliao/meal-planner/issues/113
 - Product owner: wpliao
 - Last updated: 2026-10-01
-- Pull requests: [#114](https://github.com/wpliao/meal-planner/pull/114) (design)
+- Pull requests: [#114](https://github.com/wpliao/meal-planner/pull/114) (design), [#115](https://github.com/wpliao/meal-planner/pull/115) (implementation)
 
 ## Problem and outcome
 
