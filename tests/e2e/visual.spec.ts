@@ -933,8 +933,8 @@ test('meal plan add dialog', async ({ page }) => {
   await expect(dialog).toHaveScreenshot('plan-add-dialog.png');
 
   // The search shows matches in a dropdown of fixed height, not a list of
-  // the whole library. With suggestions above it, the field starts near the
-  // modal's bottom edge; focus brings it to the middle so the list has room.
+  // the whole library. The field sits above the suggestions (#117), so the
+  // list opens below it and covers them while open.
   await recipe.fill('soup');
   const options = page.getByRole('listbox');
   await expect(options.getByRole('option')).toHaveCount(1);

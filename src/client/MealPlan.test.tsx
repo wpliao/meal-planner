@@ -620,6 +620,56 @@ describe('suggestions', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('puts the focused search field above the suggestions, list closed', async () => {
+    // The recipes arrive after the dialog has settled its own focus.
+    let answer: (response: Response) => void = () => undefined;
+    await openWeek(
+      [],
+      () =>
+        new Promise<Response>((resolve) => {
+          answer = resolve;
+        }),
+      () =>
+        suggestions([
+          suggestion(),
+          suggestion({ recipeId: SOUP, title: 'Miso soup' }),
+        ]),
+    );
+    const dialog = await openAdd();
+    await within(dialog).findByText('Checking your recipes…');
+    await waitFor(() =>
+      expect(dialog).toContainElement(document.activeElement as HTMLElement),
+    );
+    answer(await library());
+    const field = await recipeField(dialog);
+    const choices = await group(dialog);
+
+    expect(
+      field.compareDocumentPosition(choices) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    await waitFor(() => expect(field).toHaveFocus());
+    // Focus alone leaves the suggestions in view; typing opens the list.
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    fireEvent.change(field, { target: { value: 'miso' } });
+    expect(
+      await screen.findByRole('option', { name: 'Miso soup' }),
+    ).toBeInTheDocument();
+  });
+
+  it('leaves focus where it lands when the library is empty', async () => {
+    await openWeek(
+      [],
+      () => jsonResponse({ recipes: [] }),
+      () => suggestions(),
+    );
+    const dialog = await openAdd();
+    expect(await within(dialog).findByTestId('picker-empty')).toBeVisible();
+    expect(
+      within(dialog).queryByRole('combobox', { name: 'Recipe' }),
+    ).not.toBeInTheDocument();
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+  });
+
   it('words each reason from the data', async () => {
     await openWeek([], library, () =>
       suggestions([
