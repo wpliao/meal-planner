@@ -96,6 +96,18 @@ const touchLabel = {
   },
 } as const;
 
+/** The label above each amount control, so all of them line up. */
+function ControlLabel({
+  children,
+  id,
+}: Readonly<{ children: ReactNode; id: string }>) {
+  return (
+    <Text component="div" fw={500} fz="sm" id={id} mb={4}>
+      {children}
+    </Text>
+  );
+}
+
 export interface PresentedRecipe {
   ingredients: readonly string[];
   steps: readonly string[];
@@ -171,12 +183,12 @@ function usePresentedRecipe(
 
   const controls = (
     <Stack gap="xs" mb="sm">
-      <Group align="flex-end" gap="md" wrap="wrap">
+      {/* Columns on one line share a height, so every label sits at the top
+          and the stepper is centred against the taller segmented control. */}
+      <Group align="stretch" gap="md" wrap="wrap">
         {base === null ? (
           <div>
-            <Text component="div" fw={500} fz="sm" id={`${ids}-scale`} mb={4}>
-              Scale
-            </Text>
+            <ControlLabel id={`${ids}-scale`}>Scale</ControlLabel>
             <SegmentedControl
               aria-labelledby={`${ids}-scale`}
               data={SCALES.map((item) => ({ ...item }))}
@@ -189,57 +201,58 @@ function usePresentedRecipe(
             />
           </div>
         ) : (
-          <Group align="flex-end" gap="xs" wrap="nowrap">
-            <Button
-              aria-label="Fewer servings"
-              disabled={servings <= MIN_SERVINGS}
-              onClick={() => chooseServings(servings - 1)}
-              miw="var(--mp-touch-target)"
-              px="sm"
-              variant="default"
-            >
-              <span aria-hidden="true">−</span>
-            </Button>
-            <NumberInput
-              allowDecimal={false}
-              allowNegative={false}
-              clampBehavior="strict"
-              hideControls
-              label="Servings"
-              max={MAX_SERVINGS}
-              min={MIN_SERVINGS}
-              onBlur={() => setEntry(servings)}
-              onChange={(value) => {
-                setEntry(value);
-                if (validServings(value) && value !== servings) {
-                  setServings(value);
-                  announce(value, scale, system);
-                }
-              }}
-              value={entry}
-              w="4.5rem"
-            />
-            <Button
-              aria-label="More servings"
-              disabled={servings >= MAX_SERVINGS}
-              onClick={() => chooseServings(servings + 1)}
-              miw="var(--mp-touch-target)"
-              px="sm"
-              variant="default"
-            >
-              <span aria-hidden="true">+</span>
-            </Button>
-            {servings !== base && (
-              <Button onClick={() => chooseServings(base)} variant="subtle">
-                Reset
+          <Stack gap={0}>
+            <ControlLabel id={`${ids}-servings`}>Servings</ControlLabel>
+            <Group align="center" flex={1} gap="xs" wrap="nowrap">
+              <Button
+                aria-label="Fewer servings"
+                disabled={servings <= MIN_SERVINGS}
+                onClick={() => chooseServings(servings - 1)}
+                miw="var(--mp-touch-target)"
+                px="sm"
+                variant="default"
+              >
+                <span aria-hidden="true">−</span>
               </Button>
-            )}
-          </Group>
+              <NumberInput
+                allowDecimal={false}
+                allowNegative={false}
+                aria-labelledby={`${ids}-servings`}
+                clampBehavior="strict"
+                hideControls
+                max={MAX_SERVINGS}
+                min={MIN_SERVINGS}
+                onBlur={() => setEntry(servings)}
+                onChange={(value) => {
+                  setEntry(value);
+                  if (validServings(value) && value !== servings) {
+                    setServings(value);
+                    announce(value, scale, system);
+                  }
+                }}
+                value={entry}
+                w="4.5rem"
+              />
+              <Button
+                aria-label="More servings"
+                disabled={servings >= MAX_SERVINGS}
+                onClick={() => chooseServings(servings + 1)}
+                miw="var(--mp-touch-target)"
+                px="sm"
+                variant="default"
+              >
+                <span aria-hidden="true">+</span>
+              </Button>
+              {servings !== base && (
+                <Button onClick={() => chooseServings(base)} variant="subtle">
+                  Reset
+                </Button>
+              )}
+            </Group>
+          </Stack>
         )}
         <div>
-          <Text component="div" fw={500} fz="sm" id={`${ids}-units`} mb={4}>
-            Units
-          </Text>
+          <ControlLabel id={`${ids}-units`}>Units</ControlLabel>
           <SegmentedControl
             aria-labelledby={`${ids}-units`}
             data={(['metric', 'imperial'] as const).map((value) => ({
