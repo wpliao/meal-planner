@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, jsonMutation } from './api';
 import { AddToPlanDialog } from './MealPlanDialogs';
+import { AdjustableRecipeBody } from './RecipeAmounts';
 import { RecipeNutritionSection } from './RecipeNutrition';
 import { instantDayLabel } from './meal-plan-client';
 import {
@@ -11,7 +12,6 @@ import {
   type RecipePreferencesResponse,
 } from '../shared/recipe-preferences';
 import {
-  RecipeBody,
   RecipeNotice,
   RecipePage,
   RecipeUnavailable,
@@ -192,7 +192,7 @@ export function RecipeDetail() {
         </Group>
       )}
 
-      <RecipeBody
+      <AdjustableRecipeBody
         afterIngredients={
           nutrition && (
             <RecipeNutritionSection
