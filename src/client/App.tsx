@@ -9,6 +9,7 @@ import { Pantry } from './Pantry';
 import { RecipeDetail } from './RecipeDetail';
 import { RecipeCreate, RecipeEdit } from './RecipeEditPages';
 import { RecipeImport } from './RecipeImport';
+import { RecipeImportSeveral } from './RecipeImportSeveral';
 import { Recipes } from './Recipes';
 
 /**
@@ -42,6 +43,7 @@ export function App() {
               <Route element={<Recipes />} index />
               <Route element={<RecipeCreate />} path="new" />
               <Route element={<RecipeImport />} path="import" />
+              <Route element={<RecipeImportSeveral />} path="import/several" />
               <Route element={<RecipeDetail />} path=":id" />
               <Route element={<RecipeEdit />} path=":id/edit" />
             </Route>

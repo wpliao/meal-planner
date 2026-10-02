@@ -621,6 +621,105 @@ test('a failed import explains itself and leaves manual entry open', async ({
   await expect(page.getByTestId('import-failed')).toHaveCount(0);
 });
 
+test('a member imports several links and sees each result', async ({
+  page,
+}, testInfo) => {
+  await openRecipes(page);
+  const slug = unique('bulk').replace(' ', '-');
+  const fresh = `https://www.budgetbytes.com/${slug}-new/`;
+  const known = `https://www.budgetbytes.com/${slug}-known/`;
+  const freshTitle = unique('Bulk soup');
+
+  // One of the links is already in the library from an earlier import.
+  const existing = await mutate(
+    page.request,
+    testInfo,
+    'POST',
+    '/api/recipes',
+    {
+      title: unique('Known stew'),
+      ingredients: ['1 onion'],
+      steps: ['Stew it.'],
+      source: { kind: 'website', submittedUrl: known },
+    },
+  );
+
+  // The preview is answered per link, so no real site is contacted; saving
+  // goes to the Worker, which skips the link it already has.
+  const previews: string[] = [];
+  await page.route('**/api/recipes/import-preview', async (route) => {
+    const { url } = route.request().postDataJSON() as { url: string };
+    previews.push(url);
+    const body = importPreview(url === fresh ? freshTitle : 'Known again');
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ...body,
+        source: {
+          ...body.source,
+          submittedUrl: url,
+          host: 'www.budgetbytes.com',
+        },
+      }),
+    });
+  });
+
+  await page.goto('/recipes/import');
+  await page.getByRole('link', { name: 'Import several links' }).click();
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Import several links' }),
+  ).toBeVisible();
+
+  await page
+    .getByRole('textbox', { name: 'Recipe links' })
+    .fill([fresh, known, 'https://example.com/soup'].join('\n'));
+  await page.getByRole('button', { name: 'Import links' }).click();
+
+  const summary = page.getByTestId('bulk-import-status');
+  await expect(summary).toHaveText(
+    'Saved 1, already in the library 1, failed 1.',
+  );
+  await expect(summary).toBeFocused();
+  expect(previews).toEqual([fresh, known]);
+
+  const rows = page.getByTestId('bulk-import-row');
+  await expect(rows.nth(0)).toContainText(`Saved: ${freshTitle}`);
+  await expect(rows.nth(0)).toContainText('Some text was shortened to fit.');
+  await expect(rows.nth(1)).toContainText(
+    `Already in the library: ${existing.title}`,
+  );
+  await expect(
+    rows.nth(1).getByRole('link', { name: existing.title }),
+  ).toHaveAttribute('href', `/recipes/${existing.id}`);
+  await expect(rows.nth(2)).toContainText(
+    'Failed: not a link from a supported site',
+  );
+
+  // The page fits a phone, and its controls are touch-sized.
+  const scrollWidth = await page.evaluate(
+    () => document.documentElement.scrollWidth,
+  );
+  expect(scrollWidth).toBeLessThanOrEqual(page.viewportSize()!.width);
+  for (const control of [
+    page.getByRole('button', { name: 'Import links' }),
+    rows.nth(0).getByRole('link', { name: freshTitle }),
+  ]) {
+    const box = await control.boundingBox();
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+  }
+
+  // The saved copy opens with its source.
+  await rows.nth(0).getByRole('link', { name: freshTitle }).click();
+  await expect(
+    page.getByRole('heading', { level: 1, name: freshTitle }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', {
+      name: /Open the original recipe on www\.budgetbytes\.com/u,
+    }),
+  ).toHaveAttribute('href', fresh);
+});
+
 test('the import screen fits a phone with touch-sized controls', async ({
   page,
 }) => {

@@ -12,9 +12,14 @@ import {
   RECIPE_TITLE_MAX_LENGTH,
   type Recipe,
   type RecipeConflictResponse,
+  type RecipeDuplicateSourceResponse,
   type RecipeSummary,
+  validateCreateRecipe,
 } from '../../src/shared/recipes';
-import { updateRecipe } from '../../src/worker/data/recipe-repository';
+import {
+  createRecipe as createRecipeRow,
+  updateRecipe,
+} from '../../src/worker/data/recipe-repository';
 import { createWorker } from '../../src/worker/index';
 import {
   applyMigrations,
@@ -558,6 +563,179 @@ describe('recipe API', () => {
         error: { code: 'invalid_request' },
       });
       expect(await list()).toEqual([]);
+    });
+  });
+
+  describe('only if the source is new (#116)', () => {
+    const A = 'https://www.budgetbytes.com/soup/';
+    const A_ELSEWHERE = 'https://budgetbytes.com/soup/';
+    const B = 'https://www.budgetbytes.com/stew/';
+
+    const importBody = (submittedUrl: string, resolvedUrl?: string) => ({
+      ...manual,
+      title: 'Imported soup',
+      source: { kind: 'website', submittedUrl, resolvedUrl },
+      onlyIfNewSource: true,
+    });
+
+    const expectDuplicate = async (
+      response: Response,
+      existing: Recipe,
+    ): Promise<void> => {
+      expect(response.status).toBe(409);
+      expect(await response.json<RecipeDuplicateSourceResponse>()).toEqual({
+        error: {
+          code: 'duplicate_source',
+          message: 'A recipe from this link is already in the library.',
+        },
+        existing: { id: existing.id, title: existing.title },
+      });
+    };
+
+    it.each([
+      ['the same submitted address', [A], [`${A}#comments`]],
+      ['its resolved address as the new submitted one', [B, A], [A]],
+      ['its submitted address as the new resolved one', [A], [B, A]],
+      ['the same resolved address', [B, A], [A_ELSEWHERE, A]],
+    ])(
+      'refuses a recipe with %s and saves nothing',
+      async (
+        _case,
+        [savedSubmitted, savedResolved],
+        [newSubmitted, newResolved],
+      ) => {
+        const existing = await createOk({
+          ...manual,
+          source: {
+            kind: 'website',
+            submittedUrl: savedSubmitted,
+            resolvedUrl: savedResolved,
+          },
+        });
+        const ingredientLines = await lineCount('recipe_ingredients');
+
+        await expectDuplicate(
+          await create(importBody(newSubmitted, newResolved)),
+          existing,
+        );
+        expect(await list()).toHaveLength(1);
+        expect(await lineCount('recipe_ingredients')).toBe(ingredientLines);
+      },
+    );
+
+    it('saves when no website recipe has either address', async () => {
+      await createOk({
+        ...manual,
+        source: { kind: 'website', submittedUrl: B },
+      });
+      // A manual recipe never counts, whatever its link.
+      await createOk({ ...manual, link: A });
+
+      const saved = await createOk(importBody(A, A_ELSEWHERE));
+      expect(saved.source).toMatchObject({
+        kind: 'website',
+        submittedUrl: A,
+        resolvedUrl: A_ELSEWHERE,
+      });
+      expect(await getOk(saved.id)).toEqual(saved);
+      expect(Object.keys(saved)).not.toContain('onlyIfNewSource');
+    });
+
+    it('ignores another household’s recipes', async () => {
+      const other = await seedOtherHousehold();
+      const now = new Date().toISOString();
+      await testEnv.DB.prepare(
+        `INSERT INTO recipes (
+           id, household_id, title, notes, version, write_token, source_kind,
+           source_submitted_url, source_host, source_imported_at, created_at,
+           updated_at
+         ) VALUES (?, ?, 'Theirs', NULL, 1, 'seed', 'website', ?,
+                   'www.budgetbytes.com', ?, ?, ?)`,
+      )
+        .bind(crypto.randomUUID(), other.householdId, A, now, now, now)
+        .run();
+
+      const saved = await createOk(importBody(A));
+      expect(saved.title).toBe('Imported soup');
+    });
+
+    it('saves two concurrent imports of the same link once', async () => {
+      const responses = await Promise.all([
+        create(importBody(A)),
+        create(importBody(`${A}#wprm-recipe`)),
+      ]);
+      const statuses = responses.map((response) => response.status).sort();
+      expect(statuses).toEqual([201, 409]);
+
+      const recipes = await list();
+      expect(recipes).toHaveLength(1);
+      const loser = responses.find((response) => response.status === 409);
+      expect(
+        (await loser!.json<RecipeDuplicateSourceResponse>()).existing,
+      ).toEqual({ id: recipes[0].id, title: 'Imported soup' });
+      expect(await lineCount('recipe_ingredients')).toBe(
+        manual.ingredients.length,
+      );
+    });
+
+    it('still saves a second copy when the request does not ask', async () => {
+      await createOk(importBody(A));
+      await createOk({ ...importBody(A), onlyIfNewSource: undefined });
+      expect(await list()).toHaveLength(2);
+    });
+
+    it('refuses the flag for a manual recipe', async () => {
+      const response = await create({ ...manual, onlyIfNewSource: true });
+      expect(response.status).toBe(400);
+      expect(
+        (await response.json<{ error: { code: string } }>()).error.code,
+      ).toBe('invalid_request');
+      expect(await list()).toEqual([]);
+    });
+
+    it('asks for a retry when the matching recipe is deleted before the refusal is explained', async () => {
+      const existing = await createOk(importBody(A));
+      const householdId = await ownerHouseholdId();
+      // The guarded insert sees the match; the match is gone by the follow-up
+      // read, so neither a duplicate nor the limit explains the refusal.
+      const db = {
+        prepare: (query: string) => testEnv.DB.prepare(query),
+        batch: async (statements: D1PreparedStatement[]) => {
+          const results = await testEnv.DB.batch(statements);
+          await testEnv.DB.prepare('DELETE FROM recipes WHERE id = ?')
+            .bind(existing.id)
+            .run();
+          return results;
+        },
+      } as unknown as D1Database;
+      const valid = validateCreateRecipe(importBody(A));
+      if (!valid.ok) throw new Error('fixture must be valid');
+
+      await expect(
+        createRecipeRow(db, householdId, valid.value),
+      ).rejects.toMatchObject({ status: 409, code: 'state_conflict' });
+      expect(await list()).toEqual([]);
+    });
+
+    it('reports the library limit when the address is new', async () => {
+      const householdId = await ownerHouseholdId();
+      const now = new Date().toISOString();
+      await testEnv.DB.batch(
+        Array.from({ length: RECIPE_LIMIT }, (_unused, index) =>
+          testEnv.DB.prepare(
+            `INSERT INTO recipes (
+               id, household_id, title, notes, version, write_token,
+               source_kind, created_at, updated_at
+             ) VALUES (?, ?, ?, NULL, 1, 'seed', 'manual', ?, ?)`,
+          ).bind(crypto.randomUUID(), householdId, `recipe ${index}`, now, now),
+        ),
+      );
+
+      const response = await create(importBody(A));
+      expect(response.status).toBe(400);
+      expect(
+        (await response.json<{ error: { code: string } }>()).error.code,
+      ).toBe('limit_reached');
     });
   });
 

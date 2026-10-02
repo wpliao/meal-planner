@@ -134,6 +134,12 @@ export interface CreateRecipeRequest {
   link?: string | null;
   /** Omitted means manual entry. */
   source?: RecipeSourceInput;
+  /**
+   * Website sources only (#116): save nothing, and answer `409
+   * duplicate_source`, when a website recipe in the household already has
+   * this submitted or resolved address. Omitted means a copy is always saved.
+   */
+  onlyIfNewSource?: true;
 }
 
 /**
@@ -157,6 +163,15 @@ export interface DeleteRecipeRequest {
 }
 
 /**
+ * Body of a `409 duplicate_source` response (#116): the household's recipe
+ * that already came from the same address.
+ */
+export interface RecipeDuplicateSourceResponse {
+  error: { code: 'duplicate_source'; message: string };
+  existing: { id: string; title: string };
+}
+
+/**
  * Body of a `409 stale_version` response for a recipe update or delete. It
  * carries the household's current recipe so the client can offer comparison
  * before a new save.
@@ -175,6 +190,7 @@ export type RecipeField =
   | 'servings'
   | 'link'
   | 'source'
+  | 'onlyIfNewSource'
   | 'version';
 
 export interface RecipeFieldError {
@@ -207,6 +223,8 @@ export type ValidRecipeSource =
 
 export interface ValidCreateRecipe extends RecipeContent {
   source: ValidRecipeSource;
+  /** True only for a website source whose address must be new (#116). */
+  onlyIfNewSource: boolean;
 }
 
 export interface ValidUpdateRecipe {
@@ -572,6 +590,7 @@ const CREATE_FIELDS = new Set([
   'servings',
   'link',
   'source',
+  'onlyIfNewSource',
 ]);
 const UPDATE_FIELDS = new Set([
   'version',
@@ -639,6 +658,19 @@ export const validateCreateRecipe = (
   if (source?.kind === 'website' && link) {
     errors.push({ field: 'link', message: RECIPE_LINK_IMPORTED_MESSAGE });
   }
+  const onlyIfNewSource = input.onlyIfNewSource !== undefined;
+  if (onlyIfNewSource && input.onlyIfNewSource !== true) {
+    errors.push({
+      field: 'onlyIfNewSource',
+      message: 'onlyIfNewSource must be true when it is sent.',
+    });
+  } else if (onlyIfNewSource && source?.kind === 'manual') {
+    errors.push({
+      field: 'onlyIfNewSource',
+      message:
+        'Only a recipe imported from a website can skip a link already in the library.',
+    });
+  }
 
   if (
     errors.length > 0 ||
@@ -654,7 +686,16 @@ export const validateCreateRecipe = (
   }
   return {
     ok: true,
-    value: { title, notes, ingredients, steps, servings, link, source },
+    value: {
+      title,
+      notes,
+      ingredients,
+      steps,
+      servings,
+      link,
+      source,
+      onlyIfNewSource,
+    },
   };
 };
 
@@ -873,3 +914,54 @@ export interface RecipeImportFailureResponse {
 /** The supported sites, once each, for the screen that lists them. */
 export const recipeImportSites = (): string[] =>
   RECIPE_IMPORT_HOSTS.filter((host) => !host.startsWith('www.'));
+
+// ---------------------------------------------------------------------------
+// Bulk import (#116)
+
+/** The most links one bulk import takes, from the accepted #116 design. */
+export const RECIPE_BULK_IMPORT_MAX_LINKS = 20;
+
+/**
+ * One pasted line, checked before anything is sent. `import` lines are
+ * imported in order; the others already have their result.
+ */
+export type BulkImportLine =
+  | { kind: 'import'; line: string; url: string }
+  | { kind: 'refused'; line: string; problem: RecipeUrlProblem }
+  | { kind: 'repeat'; line: string; url: string };
+
+export type BulkImportPlan =
+  | { ok: true; lines: BulkImportLine[] }
+  | { ok: false; problem: 'empty' }
+  | { ok: false; problem: 'too_many'; count: number };
+
+/**
+ * Splits pasted text into the lines a bulk import shows: blank lines are
+ * dropped, each line is checked with the import's own URL policy, and a link
+ * that repeats an earlier one once its fragment is removed is marked as a
+ * repeat. More than {@link RECIPE_BULK_IMPORT_MAX_LINKS} lines refuses the
+ * whole paste, so nothing starts.
+ */
+export const planBulkImport = (text: string): BulkImportPlan => {
+  const pasted = text
+    .split(/\r\n|[\n\r\u2028\u2029]/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  if (pasted.length === 0) return { ok: false, problem: 'empty' };
+  if (pasted.length > RECIPE_BULK_IMPORT_MAX_LINKS) {
+    return { ok: false, problem: 'too_many', count: pasted.length };
+  }
+
+  const seen = new Set<string>();
+  return {
+    ok: true,
+    lines: pasted.map((line): BulkImportLine => {
+      const parsed = parseRecipeSourceUrl(line);
+      if (!parsed.ok) return { kind: 'refused', line, problem: parsed.problem };
+      const url = parsed.url.href;
+      if (seen.has(url)) return { kind: 'repeat', line, url };
+      seen.add(url);
+      return { kind: 'import', line, url };
+    }),
+  };
+};

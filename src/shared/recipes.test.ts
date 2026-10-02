@@ -7,6 +7,8 @@ import {
   isAllowedRecipeHost,
   parseRecipeLinkUrl,
   parseRecipeSourceUrl,
+  planBulkImport,
+  RECIPE_BULK_IMPORT_MAX_LINKS,
   RECIPE_IMPORT_HOSTS,
   RECIPE_LINK_IMPORTED_MESSAGE,
   RECIPE_INGREDIENT_MAX_LENGTH,
@@ -397,6 +399,7 @@ describe('recipe request validation', () => {
         servings: null,
         link: null,
         source: { kind: 'manual' },
+        onlyIfNewSource: false,
       },
     });
     expect(validateCreateRecipe({ ...valid, servings: 4 })).toMatchObject({
@@ -525,5 +528,182 @@ describe('import draft truncation', () => {
     expect(
       validateCreateRecipe({ ...result.draft, source: undefined }).ok,
     ).toBe(true);
+  });
+});
+
+describe('bulk import (#116)', () => {
+  const website = {
+    kind: 'website',
+    submittedUrl: 'https://www.budgetbytes.com/soup/',
+  } as const;
+  const content = { title: 'Soup', ingredients: ['water'], steps: ['Boil.'] };
+
+  describe('onlyIfNewSource', () => {
+    it('is accepted with a website source and recorded', () => {
+      expect(
+        validateCreateRecipe({
+          ...content,
+          source: website,
+          onlyIfNewSource: true,
+        }),
+      ).toMatchObject({ ok: true, value: { onlyIfNewSource: true } });
+      expect(
+        validateCreateRecipe({ ...content, source: website }),
+      ).toMatchObject({ ok: true, value: { onlyIfNewSource: false } });
+    });
+
+    it('is a field error with a manual recipe', () => {
+      for (const source of [undefined, { kind: 'manual' }]) {
+        expect(
+          validateCreateRecipe({ ...content, source, onlyIfNewSource: true }),
+        ).toEqual({
+          ok: false,
+          errors: [
+            {
+              field: 'onlyIfNewSource',
+              message:
+                'Only a recipe imported from a website can skip a link already in the library.',
+            },
+          ],
+        });
+      }
+    });
+
+    it.each([false, 'true', 1, null])('refuses the value %j', (value) => {
+      expect(
+        validateCreateRecipe({
+          ...content,
+          source: website,
+          onlyIfNewSource: value,
+        }),
+      ).toEqual({
+        ok: false,
+        errors: [
+          {
+            field: 'onlyIfNewSource',
+            message: 'onlyIfNewSource must be true when it is sent.',
+          },
+        ],
+      });
+    });
+  });
+
+  describe('planBulkImport', () => {
+    it('keeps the pasted order, trims lines, and ignores blank ones', () => {
+      expect(
+        planBulkImport(
+          '\n  https://www.budgetbytes.com/a/  \r\n\n\thttps://recipetineats.com/b/\n   \n',
+        ),
+      ).toEqual({
+        ok: true,
+        lines: [
+          {
+            kind: 'import',
+            line: 'https://www.budgetbytes.com/a/',
+            url: 'https://www.budgetbytes.com/a/',
+          },
+          {
+            kind: 'import',
+            line: 'https://recipetineats.com/b/',
+            url: 'https://recipetineats.com/b/',
+          },
+        ],
+      });
+    });
+
+    it('refuses an empty paste', () => {
+      expect(planBulkImport('')).toEqual({ ok: false, problem: 'empty' });
+      expect(planBulkImport(' \n\t\r\n ')).toEqual({
+        ok: false,
+        problem: 'empty',
+      });
+    });
+
+    it(`takes ${RECIPE_BULK_IMPORT_MAX_LINKS} links and refuses more before anything starts`, () => {
+      const links = Array.from(
+        { length: RECIPE_BULK_IMPORT_MAX_LINKS + 3 },
+        (_unused, index) => `https://www.budgetbytes.com/recipe-${index}/`,
+      );
+      const twenty = planBulkImport(
+        links.slice(0, RECIPE_BULK_IMPORT_MAX_LINKS).join('\n\n'),
+      );
+      expect(twenty.ok && twenty.lines).toHaveLength(
+        RECIPE_BULK_IMPORT_MAX_LINKS,
+      );
+      // Every non-blank line counts, including ones that are not links.
+      expect(
+        planBulkImport(
+          [...links.slice(0, RECIPE_BULK_IMPORT_MAX_LINKS), 'soup'].join('\n'),
+        ),
+      ).toEqual({ ok: false, problem: 'too_many', count: 21 });
+      expect(planBulkImport(links.join('\n'))).toEqual({
+        ok: false,
+        problem: 'too_many',
+        count: 23,
+      });
+    });
+
+    it('refuses lines the import itself would refuse, with the reason', () => {
+      const plan = planBulkImport(
+        [
+          'not a link',
+          'https://example.com/soup',
+          'http://www.budgetbytes.com/soup/',
+          'https://user:pass@www.budgetbytes.com/soup/',
+          `https://www.budgetbytes.com/${'a'.repeat(RECIPE_SOURCE_URL_MAX_LENGTH)}`,
+        ].join('\n'),
+      );
+      expect(plan.ok && plan.lines.map((line) => line.kind)).toEqual(
+        Array(5).fill('refused'),
+      );
+      expect(
+        plan.ok &&
+          plan.lines.map((line) => line.kind === 'refused' && line.problem),
+      ).toEqual([
+        'malformed',
+        'not_allowed',
+        'not_allowed',
+        'not_allowed',
+        'too_long',
+      ]);
+    });
+
+    it('marks a link pasted again, once its fragment is removed, as a repeat', () => {
+      const plan = planBulkImport(
+        [
+          'https://www.budgetbytes.com/soup/#wprm-recipe',
+          'https://www.budgetbytes.com/soup/',
+          'https://WWW.BUDGETBYTES.COM/soup/#comments',
+          'https://budgetbytes.com/soup/',
+        ].join('\n'),
+      );
+      expect(plan).toEqual({
+        ok: true,
+        lines: [
+          {
+            kind: 'import',
+            line: 'https://www.budgetbytes.com/soup/#wprm-recipe',
+            url: 'https://www.budgetbytes.com/soup/',
+          },
+          {
+            kind: 'repeat',
+            line: 'https://www.budgetbytes.com/soup/',
+            url: 'https://www.budgetbytes.com/soup/',
+          },
+          {
+            kind: 'repeat',
+            line: 'https://WWW.BUDGETBYTES.COM/soup/#comments',
+            url: 'https://www.budgetbytes.com/soup/',
+          },
+          // A different host is a different address; the Worker's duplicate
+          // check decides whether it is the same recipe.
+          {
+            kind: 'import',
+            line: 'https://budgetbytes.com/soup/',
+            url: 'https://budgetbytes.com/soup/',
+          },
+        ],
+      });
+    });
   });
 });
