@@ -2,6 +2,7 @@ import {
   expect,
   test,
   type APIRequestContext,
+  type Locator,
   type Page,
   type TestInfo,
 } from '@playwright/test';
@@ -835,6 +836,31 @@ test('a member adjusts servings and units on the recipe page', async ({
     '2 eggs',
     'salt to taste',
   ]);
+
+  // Side by side, the two controls line up: labels on one line, and the
+  // stepper centred against the taller segmented control.
+  const boxOf = async (locator: Locator) => {
+    const box = await locator.boundingBox();
+    expect(box, String(locator)).not.toBeNull();
+    return box!;
+  };
+  const servingsLabel = await boxOf(
+    page.getByText('Servings', { exact: true }),
+  );
+  const unitsLabel = await boxOf(page.getByText('Units', { exact: true }));
+  const stepper = await boxOf(servings);
+  const switcher = await boxOf(unit('Metric'));
+  if (unitsLabel.x > stepper.x + stepper.width) {
+    expect(Math.abs(unitsLabel.y - servingsLabel.y)).toBeLessThanOrEqual(1);
+    expect(
+      Math.abs(
+        stepper.y + stepper.height / 2 - (switcher.y + switcher.height / 2),
+      ),
+    ).toBeLessThanOrEqual(1);
+  } else {
+    expect(unitsLabel.y).toBeGreaterThan(stepper.y + stepper.height);
+    expect(Math.abs(unitsLabel.x - servingsLabel.x)).toBeLessThanOrEqual(1);
+  }
 
   // The editor still shows the saved text as written.
   await unit('Metric').click();
