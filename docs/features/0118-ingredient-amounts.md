@@ -5,7 +5,7 @@
 - Issue: https://github.com/wpliao/meal-planner/issues/118
 - Product owner: wpliao
 - Last updated: 2026-10-06
-- Pull requests: [#119](https://github.com/wpliao/meal-planner/pull/119) (design), [#121](https://github.com/wpliao/meal-planner/pull/121) (implementation), [#123](https://github.com/wpliao/meal-planner/pull/123) (layout fix), PR_REC (release record)
+- Pull requests: [#119](https://github.com/wpliao/meal-planner/pull/119) (design), [#121](https://github.com/wpliao/meal-planner/pull/121) (implementation), [#123](https://github.com/wpliao/meal-planner/pull/123) (layout fix), [#127](https://github.com/wpliao/meal-planner/pull/127) (release record)
 
 ## Problem and outcome
 
