@@ -7,6 +7,20 @@ updates:
     groups:
       npm-development-dependencies:
         dependency-type: development
+    # Majors the toolchain cannot take yet. A grouped PR that includes one
+    # fails as a whole, so leave them out until the blocker is gone.
+    ignore:
+      # typescript-eslint supports TypeScript below 6.1 only.
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
+      # @cloudflare/vitest-plugin supports vitest 4 only.
+      - dependency-name: vitest
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@vitest/*'
+        update-types: ['version-update:semver-major']
+      # Types follow the Node major in package.json engines and .nvmrc.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
   - package-ecosystem: github-actions
     directory: /
     schedule:

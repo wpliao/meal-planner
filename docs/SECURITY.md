@@ -53,7 +53,10 @@ resource sharing.
 ## Dependency and delivery security
 
 The pnpm lockfile is committed; CI uses frozen installs. Dependabot monitors npm
-and GitHub Actions dependencies. CI, enabled Sonar checks, review, and protected
+and GitHub Actions dependencies. `.github/dependabot.yml` holds back a few
+majors the toolchain cannot take yet (TypeScript, vitest, and `@types/node`),
+each with its reason; minor and patch updates still arrive. Remove an entry
+once its blocker is gone. CI, enabled Sonar checks, review, and protected
 production approval are required. Investigate security alerts; no known unresolved
 high-severity issue may ship.
 
